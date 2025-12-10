@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { Button } from '../../../components/Button';
-import { Input } from '../../../components/Inputs';
-import { Signatory } from '../../../types/types';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Inputs';
+import type { Signatory } from '@/types/types';
 import { Users, X } from 'lucide-react';
 
 interface SignatoriesStepProps {

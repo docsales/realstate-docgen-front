@@ -1,0 +1,122 @@
+@import 'tailwindcss';
+@plugin 'daisyui';
+
+@theme {
+  /* Cores principais do projeto */
+  --color-primary: #085995;
+  --color-accent: #ef0474;
+  --color-secondary: #ef0474;
+  
+  /* Cores slate personalizadas */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  
+  /* Definir cores blue personalizadas */
+  --color-blue-50: #eff6ff;
+  --color-blue-600: #085995;
+  --color-blue-700: #064775;
+}
+
+/* Sobrescrever classes do daisyUI e Tailwind para usar cores corretas */
+.btn-primary,
+.badge-primary,
+.checkbox-primary:checked {
+  background-color: #085995 !important;
+  border-color: #085995 !important;
+}
+
+.text-primary {
+  color: #085995 !important;
+}
+
+.border-primary {
+  border-color: #085995 !important;
+}
+
+.bg-primary {
+  background-color: #085995 !important;
+}
+
+.bg-blue-50 {
+  background-color: #eff6ff !important;
+}
+
+/* Ajustar selects do daisyUI para combinar com o design */
+.select {
+  background-color: white !important;
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+.select:focus {
+  border-color: #085995 !important;
+  outline: 2px solid transparent !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px rgba(8, 89, 149, 0.1) !important;
+}
+
+/* Ajustar inputs do daisyUI */
+.input {
+  background-color: white !important;
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+.input::placeholder {
+  color: #94a3b8 !important; /* slate-400 */
+}
+
+.input:focus {
+  border-color: #085995 !important;
+  outline: 2px solid transparent !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px rgba(8, 89, 149, 0.1) !important;
+}
+
+/* Ajustar textareas do daisyUI */
+.textarea {
+  background-color: white !important;
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+.textarea::placeholder {
+  color: #94a3b8 !important; /* slate-400 */
+}
+
+.textarea:focus {
+  border-color: #085995 !important;
+  outline: 2px solid transparent !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px rgba(8, 89, 149, 0.1) !important;
+}
+
+/* Ajustar checkboxes do daisyUI */
+.checkbox {
+  border-color: #cbd5e1 !important; /* slate-300 */
+  background-color: white !important;
+}
+
+.checkbox:checked {
+  background-color: #085995 !important;
+  border-color: #085995 !important;
+}
+
+.checkbox:focus {
+  outline: 2px solid transparent !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px rgba(8, 89, 149, 0.1) !important;
+}
+
+.label-text {
+  color: #475569 !important;
+  font-weight: 500 !important;
+}

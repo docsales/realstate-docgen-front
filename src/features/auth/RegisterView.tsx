@@ -3,8 +3,7 @@ import { Button } from '../../components/Button';
 import { Input } from '../../components/Inputs';
 import { useAuth } from '../../hooks/useAuth';
 
-import logoSrc from '../../../public/images/docsales-logo.png';
-const FALLBACK_LOGO = "https://web.docsales.com/assets/docsales-logo-86a4aa303d00a400bb6be00dd5c55a06ee69e33609b4cf1cb562856df74baaa0.png";
+const logoSrc = "/images/docsales-logo.png";
 
 export const RegisterView: React.FC<{ onNavigateToLogin: () => void }> = ({ onNavigateToLogin }) => {
   const { register } = useAuth();
@@ -44,10 +43,6 @@ export const RegisterView: React.FC<{ onNavigateToLogin: () => void }> = ({ onNa
               src={logoSrc} 
               alt="DocSales Logo" 
               className="h-16 object-contain"
-              onError={(e) => {
-                e.currentTarget.onerror = null; 
-                e.currentTarget.src = FALLBACK_LOGO;
-              }}
             />
         </div>
         
@@ -85,14 +80,14 @@ export const RegisterView: React.FC<{ onNavigateToLogin: () => void }> = ({ onNa
 
           {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
-          <Button type="submit" className="w-full h-12 text-lg" isLoading={loading}>
+          <Button type="submit" className="btn-md w-full text-lg" isLoading={loading}>
             Criar Conta
           </Button>
         </form>
         
         <div className="mt-6 text-center text-sm">
           <span className="text-slate-500">Já tem uma conta? </span>
-          <button onClick={onNavigateToLogin} className="text-primary font-semibold hover:underline">
+          <button onClick={onNavigateToLogin} className="cursor-pointer text-primary font-semibold hover:underline">
             Faça Login
           </button>
         </div>
