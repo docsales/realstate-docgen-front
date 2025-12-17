@@ -136,7 +136,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
       
       sections.push(
         <div key={`seller-${seller.id}`} className="mb-4">
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-3 py-2 rounded-lg mb-2">
+          <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-3 py-2 rounded-lg sticky top-0 z-10 mb-2">
             <h4 className="font-bold text-blue-900 text-sm">
               Vendedor {index + 1}
             </h4>
@@ -158,7 +158,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
       
       sections.push(
         <div key={`buyer-${buyer.id}`} className="mb-4">
-          <div className="bg-gradient-to-r from-green-50 to-green-100 px-3 py-2 rounded-lg mb-2">
+          <div className="bg-gradient-to-r from-green-50 to-green-100 px-3 py-2 rounded-lg sticky top-0 z-10 mb-2">
             <h4 className="font-bold text-green-900 text-sm">
               Comprador {index + 1}
             </h4>
@@ -178,7 +178,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
     const propertyOcr = displayOcrData.find(ocr => ocr.personId === 'property');
     sections.push(
       <div key="property" className="mb-4">
-        <div className="bg-gradient-to-r from-purple-50 to-purple-100 px-3 py-2 rounded-lg mb-2">
+        <div className="bg-gradient-to-r from-purple-50 to-purple-100 px-3 py-2 rounded-lg sticky top-0 z-10 mb-2">
           <h4 className="font-bold text-purple-900 text-sm">
             Imóvel
           </h4>

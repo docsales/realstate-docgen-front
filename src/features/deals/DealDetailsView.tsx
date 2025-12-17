@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Circle, FileText, Home, Users, DollarSign, User, XCircle, Edit, Plus, Send, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, FileText, Home, Users, DollarSign, User, XCircle, Edit, Send, Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { useDeal } from './hooks/useDeals';
 import type { DealStatus } from '../../types/types';
+import { mergeDealData, formatCPF } from './utils/extractDealData';
 
 interface DealDetailsProps {
     dealId: string;
@@ -10,72 +11,15 @@ interface DealDetailsProps {
     onEdit?: (dealId: string) => void;
 }
 
-// Mock extra details that aren't in the main list
-const MOCK_DETAILS_MAP: Record<string, any> = {
-    '1': {
-        address: 'Rua das Palmeiras, 500 - Jardim Europa, São Paulo/SP',
-        area: '250m²',
-        matricula: '45.678',
-        cartorio: '10º Cartório de Registro de Imóveis',
-        valor: 'R$ 850.000,00',
-        entrada: 'R$ 170.000,00',
-        financiamento: 'Sim',
-        fgts: 'Sim',
-        consorcio: 'Não',
-        buyers: [{ name: 'João Silva', email: 'joao@email.com', phone: '(11) 99999-0001' }],
-        sellers: [{ name: 'Maria Oliveira', email: 'maria@email.com', phone: '(11) 99999-0002' }],
-        docs: [
-             { name: 'RG Comprador', sent: true, reviewed: true },
-             { name: 'Comprovante de Residência Comprador', sent: true, reviewed: false },
-             { name: 'RG Vendedor', sent: true, reviewed: true },
-             { name: 'Matrícula do Imóvel', sent: true, reviewed: true },
-        ]
-    },
-    '2': {
-        address: 'Av. Morumbi, 1200 - Morumbi, São Paulo/SP',
-        area: '450m²',
-        matricula: '12.345',
-        cartorio: '15º Cartório de Registro de Imóveis',
-        valor: 'R$ 2.500.000,00',
-        entrada: 'R$ 500.000,00',
-        financiamento: 'Sim',
-        fgts: 'Não',
-        consorcio: 'Sim',
-        buyers: [{ name: 'Ana Maria', email: 'ana@email.com', phone: '(11) 98888-0001' }],
-        sellers: [{ name: 'Pedro Santos', email: 'pedro@email.com', phone: '(11) 97777-0002' }],
-        docs: [
-            { name: 'RG Comprador', sent: true, reviewed: true },
-            { name: 'RG Vendedor', sent: true, reviewed: true },
-       ]
-    },
-    '3': {
-        address: 'Rua Industrial, 88 - Galpão 3 - Barra Funda, SP',
-        area: '1000m²',
-        matricula: '99.888',
-        cartorio: '3º Cartório de Registro de Imóveis',
-        valor: 'R$ 15.000,00 (Aluguel)',
-        entrada: 'R$ 45.000,00 (Depósito)',
-        financiamento: 'Não',
-        fgts: 'Não',
-        consorcio: 'Não',
-        buyers: [{ name: 'Empresa XYZ Ltda', email: 'contato@xyz.com', phone: '(11) 3333-4444' }],
-        sellers: [{ name: 'Imobiliária Corporativa', email: 'adm@imobcorp.com', phone: '(11) 3000-5000' }],
-        docs: [
-            { name: 'Contrato Social Locatário', sent: true, reviewed: true },
-            { name: 'Ficha Cadastral', sent: true, reviewed: true },
-       ]
-    }
-};
-
 export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, onEdit }) => {
     // Buscar dados reais do deal
     const { data: dealData, isLoading, isError, error } = useDeal(dealId);
-    
+
     const [activeTab, setActiveTab] = useState<'data' | 'docs' | 'notes'>('data');
     const [notes, setNotes] = useState('');
 
     const getStatusBadge = (status: DealStatus) => {
-        switch(status) {
+        switch (status) {
             case 'SIGNED': return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Assinado</span>;
             case 'SENT': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Enviado para assinatura</span>;
             case 'DRAFT': return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Rascunho</span>;
@@ -110,26 +54,8 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
         );
     }
 
-    // Processar dados do deal
-    const metadata = dealData.metadata || {};
-    const deal = {
-        ...dealData,
-        type: dealData.name?.includes('Aluguel') ? 'Locação' : 'Compra e Venda',
-        date: new Date(dealData.createdAt).toLocaleDateString('pt-BR'),
-        // Dados do metadata ou fallback para mock
-        address: metadata.address || MOCK_DETAILS_MAP['1']?.address || 'Não informado',
-        area: metadata.area || MOCK_DETAILS_MAP['1']?.area || 'Não informado',
-        matricula: metadata.matricula || MOCK_DETAILS_MAP['1']?.matricula || 'Não informado',
-        cartorio: metadata.cartorio || MOCK_DETAILS_MAP['1']?.cartorio || 'Não informado',
-        valor: metadata.valor || MOCK_DETAILS_MAP['1']?.valor || 'Não informado',
-        entrada: metadata.entrada || MOCK_DETAILS_MAP['1']?.entrada || 'Não informado',
-        financiamento: metadata.bankFinancing ? 'Sim' : 'Não',
-        fgts: metadata.useFgts ? 'Sim' : 'Não',
-        consorcio: metadata.consortiumLetter ? 'Sim' : 'Não',
-        buyers: metadata.buyers || [],
-        sellers: metadata.sellers || [],
-        docs: dealData.documents || [],
-    };
+    // Processar dados do deal com extração de documentos
+    const deal = mergeDealData(dealData);
 
     const renderTabs = () => (
         <div className="flex gap-2 mb-6">
@@ -161,7 +87,7 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                 <button onClick={onBack} className="cursor-pointer flex items-center text-slate-500 hover:text-slate-700 text-sm mb-4 transition-colors">
                     <ArrowLeft className="w-4 h-4 mr-1" /> Voltar para listagem
                 </button>
-                
+
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div>
                         <div className="flex flex-col md:flex-row md:items-center gap-4">
@@ -178,26 +104,39 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                     {/* Action Buttons - Only if preparation/draft */}
                     {(deal.status === 'PREPARATION' || deal.status === 'DRAFT') && (
                         <div className="flex flex-wrap gap-3">
-                            <Button 
-                                variant="secondary" 
+                            <Button
+                                variant="secondary"
                                 className="h-10 px-4 text-sm whitespace-nowrap"
                                 onClick={() => onEdit?.(dealId)}
                             >
                                 <Edit className="w-4 h-4 mr-2" /> Editar
                             </Button>
-                            <Button variant="secondary" className="h-10 px-4 text-sm whitespace-nowrap">
-                                <Plus className="w-4 h-4 mr-2" /> Adicionar Doc
-                            </Button>
-                            <Button variant="secondary" className="h-10 px-4 text-sm whitespace-nowrap">
-                                <FileText className="w-4 h-4 mr-2" /> Gerar Doc
-                            </Button>
                             <Button className="h-10 px-4 text-sm whitespace-nowrap">
-                                <Send className="w-4 h-4 mr-2" /> Enviar p/ assinatura
+                                <Send className="w-4 h-4 mr-2" /> Enviar para assinatura
                             </Button>
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Alertas */}
+            {deal.alerts && deal.alerts.length > 0 && (
+                <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <h3 className="font-bold text-amber-900 mb-2">Alertas e Observações</h3>
+                            <ul className="space-y-1">
+                                {deal.alerts.map((alert, idx) => (
+                                    <li key={idx} className="text-sm text-amber-800">
+                                        • {alert}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {renderTabs()}
 
@@ -248,20 +187,20 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                                 <p className="text-slate-800 font-medium text-lg">{deal.entrada}</p>
                             </div>
                         </div>
-                         <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100">
-                             <div>
-                                 <label className="text-xs text-slate-400 block mb-1">Financiamento</label>
-                                 <p className="text-slate-800 font-medium">{deal.financiamento}</p>
-                             </div>
-                             <div>
-                                 <label className="text-xs text-slate-400 block mb-1">FGTS</label>
-                                 <p className="text-slate-800 font-medium">{deal.fgts}</p>
-                             </div>
-                             <div>
-                                 <label className="text-xs text-slate-400 block mb-1">Consórcio</label>
-                                 <p className="text-slate-800 font-medium">{deal.consorcio}</p>
-                             </div>
-                         </div>
+                        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100">
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">Financiamento</label>
+                                <p className="text-slate-800 font-medium">{deal.financiamento}</p>
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">FGTS</label>
+                                <p className="text-slate-800 font-medium">{deal.fgts}</p>
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">Consórcio</label>
+                                <p className="text-slate-800 font-medium">{deal.consorcio}</p>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Comprador */}
@@ -276,18 +215,35 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                             {deal.buyers.length || 0} Pessoa(s)
                         </p>
                         {deal.buyers.length > 0 ? (
-                            deal.buyers.map((buyer: any, idx: number) => (
-                                <div key={idx} className="bg-slate-50 p-3 rounded-lg flex items-start gap-3 mb-2">
-                                    <div className="bg-white p-2 rounded-full border border-slate-200">
-                                        <User className="w-4 h-4 text-slate-400" />
+                            deal.buyers.map((buyer: any, idx: number) => {
+                                // Garantir que temos strings válidas
+                                const buyerName = typeof buyer.name === 'string' ? buyer.name : 'Sem nome';
+                                const buyerEmail = typeof buyer.email === 'string' ? buyer.email : '';
+                                const buyerPhone = typeof buyer.phone === 'string' ? buyer.phone : '';
+                                const buyerCpf = typeof buyer.cpf === 'string' ? buyer.cpf : '';
+                                const buyerDataSource = typeof buyer.dataSource === 'string' ? buyer.dataSource : '';
+
+                                return (
+                                    <div key={idx} className="bg-slate-50 p-3 rounded-lg flex items-start gap-3 mb-2">
+                                        <div className="bg-white p-2 rounded-full border border-slate-200">
+                                            <User className="w-4 h-4 text-slate-400" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-medium text-slate-800">{buyerName}</p>
+                                            {buyerCpf && (
+                                                <p className="text-xs text-slate-600 font-mono">CPF: {formatCPF(buyerCpf)}</p>
+                                            )}
+                                            {buyerEmail && <p className="text-xs text-slate-500">{buyerEmail}</p>}
+                                            {buyerPhone && <p className="text-xs text-slate-500">{buyerPhone}</p>}
+                                            {buyerDataSource && (
+                                                <p className="text-xs text-blue-600 mt-1">
+                                                    📄 Extraído de: {buyerDataSource}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-medium text-slate-800">{buyer.name || 'Sem nome'}</p>
-                                        <p className="text-xs text-slate-500">{buyer.email || 'Sem email'}</p>
-                                        {buyer.phone && <p className="text-xs text-slate-500">{buyer.phone}</p>}
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         ) : (
                             <p className="text-sm text-slate-400 italic">Nenhum comprador cadastrado</p>
                         )}
@@ -305,18 +261,35 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                             {deal.sellers.length || 0} Pessoa(s)
                         </p>
                         {deal.sellers.length > 0 ? (
-                            deal.sellers.map((seller: any, idx: number) => (
-                                <div key={idx} className="bg-slate-50 p-3 rounded-lg flex items-start gap-3 mb-2">
-                                    <div className="bg-white p-2 rounded-full border border-slate-200">
-                                        <User className="w-4 h-4 text-slate-400" />
+                            deal.sellers.map((seller: any, idx: number) => {
+                                // Garantir que temos strings válidas
+                                const sellerName = typeof seller.name === 'string' ? seller.name : 'Sem nome';
+                                const sellerEmail = typeof seller.email === 'string' ? seller.email : '';
+                                const sellerPhone = typeof seller.phone === 'string' ? seller.phone : '';
+                                const sellerCpf = typeof seller.cpf === 'string' ? seller.cpf : '';
+                                const sellerDataSource = typeof seller.dataSource === 'string' ? seller.dataSource : '';
+
+                                return (
+                                    <div key={idx} className="bg-slate-50 p-3 rounded-lg flex items-start gap-3 mb-2">
+                                        <div className="bg-white p-2 rounded-full border border-slate-200">
+                                            <User className="w-4 h-4 text-slate-400" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-medium text-slate-800">{sellerName}</p>
+                                            {sellerCpf && (
+                                                <p className="text-xs text-slate-600 font-mono">CPF: {formatCPF(sellerCpf)}</p>
+                                            )}
+                                            {sellerEmail && <p className="text-xs text-slate-500">{sellerEmail}</p>}
+                                            {sellerPhone && <p className="text-xs text-slate-500">{sellerPhone}</p>}
+                                            {sellerDataSource && (
+                                                <p className="text-xs text-blue-600 mt-1">
+                                                    📄 Extraído de: {sellerDataSource}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-medium text-slate-800">{seller.name || 'Sem nome'}</p>
-                                        <p className="text-xs text-slate-500">{seller.email || 'Sem email'}</p>
-                                        {seller.phone && <p className="text-xs text-slate-500">{seller.phone}</p>}
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         ) : (
                             <p className="text-sm text-slate-400 italic">Nenhum vendedor cadastrado</p>
                         )}
@@ -329,8 +302,8 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                     <div className="p-6 border-b border-slate-100">
                         <h3 className="font-bold text-lg text-slate-800">Documentos do Contrato</h3>
                         <p className="text-sm text-slate-500">
-                            {deal.docs.length > 0 
-                                ? 'Documentos anexados ao contrato' 
+                            {deal.docs.length > 0
+                                ? 'Documentos anexados ao contrato'
                                 : 'Nenhum documento anexado ainda'}
                         </p>
                     </div>
@@ -362,20 +335,19 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                                             ) : (
                                                 <Circle className="w-4 h-4 text-slate-300" />
                                             )}
-                                            <span className={`text-sm ${
-                                                doc.status === 'EXTRACTED' || doc.status === 'OCR_DONE' 
-                                                    ? 'text-green-600' 
+                                            <span className={`text-sm ${doc.status === 'EXTRACTED' || doc.status === 'OCR_DONE'
+                                                    ? 'text-green-600'
                                                     : doc.status === 'OCR_PROCESSING'
-                                                    ? 'text-blue-600'
-                                                    : doc.status === 'ERROR'
-                                                    ? 'text-red-600'
-                                                    : 'text-slate-400'
-                                            }`}>
+                                                        ? 'text-blue-600'
+                                                        : doc.status === 'ERROR'
+                                                            ? 'text-red-600'
+                                                            : 'text-slate-400'
+                                                }`}>
                                                 {doc.status === 'EXTRACTED' ? 'Processado' :
-                                                 doc.status === 'OCR_DONE' ? 'OCR Concluído' :
-                                                 doc.status === 'OCR_PROCESSING' ? 'Processando' :
-                                                 doc.status === 'ERROR' ? 'Erro' :
-                                                 doc.status || 'Pendente'}
+                                                    doc.status === 'OCR_DONE' ? 'OCR Concluído' :
+                                                        doc.status === 'OCR_PROCESSING' ? 'Processando' :
+                                                            doc.status === 'ERROR' ? 'Erro' :
+                                                                doc.status || 'Pendente'}
                                             </span>
                                         </div>
                                     </div>
@@ -395,23 +367,23 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
             )}
 
             {activeTab === 'notes' && (
-                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                     <h3 className="font-bold text-lg text-slate-800 mb-1">Observações</h3>
-                     <p className="text-sm text-slate-500 mb-4">Notas e observações sobre o contrato</p>
-                     
-                     <textarea
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                    <h3 className="font-bold text-lg text-slate-800 mb-1">Observações</h3>
+                    <p className="text-sm text-slate-500 mb-4">Notas e observações sobre o contrato</p>
+
+                    <textarea
                         className="w-full h-32 border border-slate-600 rounded-lg p-3 bg-white text-slate-600 placeholder-slate-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none"
                         placeholder="Adicione observações sobre este contrato..."
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
-                     />
-                     
-                     <div className="flex justify-end mt-4">
-                         <Button onClick={() => alert("Observações salvas!")}>
-                             Salvar Observações
-                         </Button>
-                     </div>
-                 </div>
+                    />
+
+                    <div className="flex justify-end mt-4">
+                        <Button onClick={() => alert("Observações salvas!")}>
+                            Salvar Observações
+                        </Button>
+                    </div>
+                </div>
             )}
         </div>
     );
