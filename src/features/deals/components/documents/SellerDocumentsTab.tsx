@@ -9,6 +9,7 @@ interface SellerDocumentsTabProps {
 	uploadedFiles: UploadedFile[];
 	onFilesChange: (files: UploadedFile[]) => void;
 	onValidate: (files: UploadedFile[]) => void;
+	onRemoveFile: (fileId: string) => void;
 	checklist: ConsolidatedChecklist | null;
 }
 
@@ -17,16 +18,15 @@ export const SellerDocumentsTab: React.FC<SellerDocumentsTabProps> = ({
 	uploadedFiles,
 	onFilesChange,
 	onValidate,
+	onRemoveFile,
 	checklist
-}) => {
+}) => {	
 	const sellerFiles = uploadedFiles.filter(f => f.category === 'sellers');
 	
-	// Obter documentos da API ou fallback para array vazio
 	const requiredDocuments = checklist?.vendedores.documentos || [];
 	const alerts = checklist?.vendedores.alertas || [];
 
 	const handleFileUpload = (files: File[], documentType: string, personId?: string) => {
-		// Criar novos arquivos com type e personId já definidos
 		const newFiles: UploadedFile[] = files.map(file => ({
 			id: `${Date.now()}-${Math.random()}`,
 			file,
@@ -43,10 +43,6 @@ export const SellerDocumentsTab: React.FC<SellerDocumentsTabProps> = ({
 		if (onValidate) {
 			onValidate(newFiles);
 		}
-	};
-
-	const handleRemoveFile = (fileId: string) => {
-		onFilesChange(uploadedFiles.filter(f => f.id !== fileId));
 	};
 
 	return (
@@ -106,7 +102,7 @@ export const SellerDocumentsTab: React.FC<SellerDocumentsTabProps> = ({
 										description={doc.observacao}
 										uploadedFiles={sellerSpecificFiles}
 										onFileUpload={handleFileUpload}
-										onRemoveFile={handleRemoveFile}
+										onRemoveFile={onRemoveFile}
 										personId={seller.id}
 									/>
 								))

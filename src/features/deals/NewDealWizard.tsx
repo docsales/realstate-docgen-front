@@ -22,14 +22,11 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
   const [submissionStatus, setSubmissionStatus] = useState<'editing' | 'sending' | 'success'>('editing');
-  // Se editDealId existe, usar ele diretamente como dealId
   const [dealId, setDealId] = useState<string | null>(editDealId || null);
   const [isLoadingDeal, setIsLoadingDeal] = useState(!!editDealId);
-  
-  // React Query mutation para criar deal
+
   const createDealMutation = useCreateDeal();
-  
-  // Buscar dados do deal se for edição
+
   const { data: existingDeal, isLoading: isDealLoading } = useDeal(editDealId || '', {
     enabled: !!editDealId,
   });
@@ -52,12 +49,8 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
   const [signatories, setSignatories] = useState<Signatory[]>([]);
   const [ocrData, setOcrData] = useState<OcrDataByPerson[]>([]);
 
-  // Carregar dados do deal quando em modo de edição
   useEffect(() => {
     if (existingDeal && editDealId) {
-      console.log('📝 Carregando deal para edição:', existingDeal);
-      
-      // Carregar configurações básicas
       if (existingDeal.name) {
         setConfigData(prev => ({
           ...prev,
@@ -66,48 +59,38 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
           ...(existingDeal.metadata || {}),
         }));
       }
-      
-      // Carregar signatários
+
       if (existingDeal.signers && existingDeal.signers.length > 0) {
-        setSignatories(existingDeal.signers.map(s => ({
-          id: s.id,
-          name: s.name,
-          email: s.email,
-          phone: s.phoneNumber || '',
-          role: s.role as any,
-          signingOrder: s.signingOrder,
+        setSignatories(existingDeal.signers.map(signer => ({
+          id: signer.id,
+          name: signer.name,
+          email: signer.email,
+          phone: signer.phoneNumber || '',
+          role: signer.role as any,
+          signingOrder: signer.signingOrder,
         })));
       }
-      
-      console.log('🔍 Verificando documentos no deal:', existingDeal);
-      console.log('📋 existingDeal.documents:', existingDeal.documents);
-      
-      // Carregar documentos existentes
+
       if (existingDeal.documents && existingDeal.documents.length > 0) {
-        console.log('📄 Carregando documentos existentes:', existingDeal.documents);
-        
         const loadedFiles: UploadedFile[] = existingDeal.documents.map((doc: any) => {
-          // Criar um File mock para documentos já enviados (com tamanho estimado)
           const fileName = doc.originalFilename || 'documento.pdf';
-          const fileSize = doc.fileSize || 1024 * 100; // 100KB default
+          const fileSize = doc.fileSize || 1024 * 100;
           const mockBlob = new Blob([''], { type: doc.mimeType || 'application/pdf' });
-          
-          // Criar file com propriedades customizadas
+
           const mockFile = new File([mockBlob], fileName, {
             type: doc.mimeType || 'application/pdf',
           });
-          
-          // Adicionar size manualmente (workaround para File mock)
+
           Object.defineProperty(mockFile, 'size', {
             value: fileSize,
             writable: false
           });
-          
-          const ocrStatus = doc.status === 'EXTRACTED' ? 'completed' : 
-                           doc.status === 'OCR_PROCESSING' ? 'processing' :
-                           doc.status === 'OCR_DONE' ? 'completed' :
-                           doc.status === 'ERROR' ? 'error' : 'idle';
-          
+
+          const ocrStatus = doc.status === 'EXTRACTED' ? 'completed' :
+            doc.status === 'OCR_PROCESSING' ? 'processing' :
+              doc.status === 'OCR_DONE' ? 'completed' :
+                doc.status === 'ERROR' ? 'error' : 'idle';
+
           return {
             id: doc.id,
             file: mockFile,
@@ -121,42 +104,35 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
             ocrError: doc.status === 'ERROR' ? 'Erro no processamento' : undefined,
           };
         });
-        
-        setDocuments(loadedFiles);
-        console.log('✅ Documentos carregados:', loadedFiles);
 
-        // Agrupar e fazer merge dos dados OCR por personId
-        // Documentos sem personId (null/undefined) são tratados como 'property'
+        setDocuments(loadedFiles);
         const ocrDataMap = new Map<string, any>();
-        
+
         existingDeal.documents
           .filter((doc: any) => doc.variables)
           .forEach((doc: any) => {
-            // Se personId for null/undefined, trata como 'property'
             const personId = doc.personId || 'property';
-            const docData = doc.variables && typeof doc.variables === 'string' 
-              ? JSON.parse(doc.variables) 
+            const docData = doc.variables && typeof doc.variables === 'string'
+              ? JSON.parse(doc.variables)
               : doc.variables;
-            
+
             if (ocrDataMap.has(personId)) {
-              // Merge profundo dos dados existentes com os novos
               const existingData = ocrDataMap.get(personId);
               ocrDataMap.set(personId, { ...existingData, ...docData });
             } else {
               ocrDataMap.set(personId, docData);
             }
           });
-        
+
         const ocrDataFromDocs: OcrDataByPerson[] = Array.from(ocrDataMap.entries()).map(
           ([personId, data]) => ({ personId, data })
         );
-        
+
         if (ocrDataFromDocs.length > 0) {
           setOcrData(ocrDataFromDocs);
-          console.log('✅ Dados OCR carregados (merged):', ocrDataFromDocs);
         }
       }
-      
+
       setIsLoadingDeal(false);
     }
   }, [existingDeal, editDealId]);
@@ -164,18 +140,17 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
   // -- Validation Logic --
   const isStepValid = (stepIndex: number): boolean => {
     switch (stepIndex) {
-      case 1: // Config
-        return configData.name.trim().length > 0 && 
-               configData.sellers.length > 0 && 
-               configData.buyers.length > 0;
-      case 2: // Documents
+      case 1:
+        return configData.name.trim().length > 0 &&
+          configData.sellers.length > 0 &&
+          configData.buyers.length > 0;
+      case 2:
         return documents.length > 0;
-      case 3: // Mapping
-        // Require at least one mapping to proceed
+      case 3:
         return Object.keys(mappings).length > 0;
-      case 4: // Preview
-        return true; // Review step is always valid
-      case 5: // Signatories
+      case 4:
+        return true;
+      case 5:
         return signatories.length > 0;
       default:
         return false;
@@ -185,16 +160,15 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
   const titles = ["Configurações", "Documentos", "Mapear Dados", "Preview", "Signatários"];
 
   const nextStep = async () => {
-    if (!isStepValid(step)) return; // Prevent advance if invalid
-    
-    // Se estiver no Step 1 e ainda não criou o deal E não for modo de edição, criar agora
+    if (!isStepValid(step)) return;
+
     if (step === 1 && !dealId && !editDealId) {
       try {
         const newDeal = await createDealMutation.mutateAsync({
           name: configData.name,
           contractModel: configData.contractModel,
           ownerId: 'dev-user-id',
-          signers: [], // Vazio por enquanto, será preenchido no Step 5
+          signers: [],
           metadata: {
             useFgts: configData.useFgts,
             bankFinancing: configData.bankFinancing,
@@ -206,18 +180,16 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
             deedCount: configData.deedCount,
           },
         });
-        
+
         setDealId(newDeal.id);
-        console.log('✅ Deal DRAFT criado:', newDeal.id);
       } catch (error) {
         console.error('❌ Erro ao criar deal:', error);
-        return; // Não avança se falhar
+        return;
       }
     } else if (editDealId && !dealId) {
-      // Se estiver em modo de edição mas o dealId ainda não foi setado (redundância de segurança)
       setDealId(editDealId);
     }
-    
+
     setDirection(1);
     setStep(s => Math.min(s + 1, 5));
   }
@@ -232,25 +204,19 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
 
     setSubmissionStatus('sending');
 
-    // Sequence: Sending -> Success -> Redirect
     setTimeout(() => {
       setSubmissionStatus('success');
       setTimeout(() => {
         onFinish();
-      }, 2500); // Wait on success screen before redirecting
-    }, 3000); // Sending duration
+      }, 2500);
+    }, 3000);
   }
 
   const handleStepperClick = (targetStep: number) => {
-    // Logic: Can always go back. 
-    // Can only go forward to 'targetStep' if all steps strictly before 'targetStep' are valid.
-
     if (targetStep < step) {
-      // Going back is always allowed
       setDirection(-1);
       setStep(targetStep);
     } else {
-      // Going forward: Check all intermediate steps
       let canProceed = true;
       for (let i = 1; i < targetStep; i++) {
         if (!isStepValid(i)) {
@@ -266,7 +232,6 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
     }
   }
 
-  // Loading state quando estiver carregando deal para edição
   if (isDealLoading || isLoadingDeal) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white">
@@ -330,7 +295,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
       <div className="bg-white border-b border-slate-200 sticky top-16 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={onCancel} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
+            <button onClick={onCancel} className="cursor-pointer p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div>
@@ -344,7 +309,6 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
           {/* Steps Indicator */}
           <div className="hidden md:flex items-center gap-2">
             {[1, 2, 3, 4, 5].map(s => {
-              // Calculate if this specific step button should be clickable/valid
               let isValidUpToHere = true;
               for (let i = 1; i < s; i++) { if (!isStepValid(i)) isValidUpToHere = false; }
 
@@ -405,17 +369,15 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
                   mappings={mappings}
                   onMap={(fieldId, value, source) => {
                     if (value === '') {
-                      // Remove mapping if value is empty
                       setMappings(prev => {
                         const newMappings = { ...prev };
                         delete newMappings[fieldId];
                         return newMappings;
                       });
                     } else {
-                      // Add or update mapping
-                      setMappings(prev => ({ 
-                        ...prev, 
-                        [fieldId]: { value, source } 
+                      setMappings(prev => ({
+                        ...prev,
+                        [fieldId]: { value, source }
                       }));
                     }
                   }}
@@ -448,7 +410,6 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
             {step === 1 ? 'Cancelar' : 'Voltar'}
           </Button>
 
-          {/* Button is disabled if current step validation fails */}
           {step !== 2 && step !== 4 && (
             <Button
               onClick={step === 5 ? handleFinish : nextStep}

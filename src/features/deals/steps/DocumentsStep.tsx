@@ -10,7 +10,7 @@ import type { ConsolidatedChecklist, ChecklistRequestDTO } from '@/types/checkli
 import { ChecklistSummary } from '../components/documents/ChecklistSummary';
 import { useOcr } from '@/hooks/useOcr';
 import { usePollingCountdown } from '@/hooks/usePollingCountdown';
-import { useAddDocumentToDeal } from '../hooks/useDeals';
+import { useAddDocumentToDeal, useRemoveDocumentFromDeal } from '../hooks/useDeals';
 
 interface DocumentsStepProps {
 	files: UploadedFile[];
@@ -28,6 +28,8 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	config,
 	dealId
 }) => {
+	const removeDocumentFromDealMutation = useRemoveDocumentFromDeal();
+	
 	const [activeTab, setActiveTab] = useState<'buyers' | 'sellers' | 'property'>('buyers');
 	const [checklist, setChecklist] = useState<ConsolidatedChecklist | null>(null);
 	const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
@@ -44,28 +46,12 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		manualRefresh,
 	} = useOcr(files, onFilesChange, {
 		autoProcess: true,
-		pollingInterval: 10 * 1000, // 10 segundos - Verificação mais frequente para parser
-		onComplete: (fileId, extractedData) => {
-			console.log('✅ OCR + Parser concluídos:', fileId, extractedData);
-			console.log('🔍 dealId disponível?', dealId);
-			console.log('🔍 fileId disponível?', fileId);
-			
-			// Vincular documento ao deal se dealId estiver disponível
+		pollingInterval: 2 * 60 * 1000, // 2 minutos
+		onComplete: (fileId) => {
 			if (dealId && fileId) {
-				console.log('📎 Iniciando vinculação do documento ao deal...');
 				addDocumentToDealMutation.mutate(
 					{ dealId, documentId: fileId },
-					{
-						onSuccess: () => {
-							console.log('✅ Documento vinculado ao deal:', fileId);
-						},
-						onError: (error) => {
-							console.error('❌ Erro ao vincular documento ao deal:', error);
-						}
-					}
 				);
-			} else {
-				console.warn('⚠️ Não foi possível vincular documento - dealId ou fileId ausente');
 			}
 		},
 		onError: (fileId, error) => {
@@ -73,13 +59,11 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		},
 	});
 
-	// Contador de polling
 	const pollingCountdown = usePollingCountdown(
-		10 * 1000, // 10 segundos - Alinhado com o intervalo de polling
+		2 * 60 * 1000, // 2 minutos
 		ocrStats.processing > 0 // Ativar quando houver arquivos processando
 	);
 
-	// Buscar checklist da API ao carregar o componente
 	useEffect(() => {
 		const loadChecklist = async () => {
 			setIsLoadingChecklist(true);
@@ -137,7 +121,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 
 	// Função para validar documentos no servidor
 	const validateDocuments = async (filesToValidate: UploadedFile[]): Promise<void> => {
-		// Filtrar apenas arquivos pendentes de validação
 		const pendingFiles = filesToValidate.filter(f => f.validated === undefined);
 		
 		if (pendingFiles.length === 0) return;
@@ -221,6 +204,20 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 
 		return { valid: true };
 	};
+
+	const handleRemoveFile = (fileId: string) => {
+		if (!dealId) return;
+
+		onFilesChange(files.filter(f => f.id !== fileId));
+		removeDocumentFromDealMutation.mutate({ dealId, documentId: fileId }, {
+			onSuccess: () => {
+				console.log('✅ Documento removido do deal');
+			},
+			onError: (error) => {
+				console.error('❌ Erro ao remover documento do deal:', error);
+			}
+		});
+	}
 
 	if (isLoadingChecklist) {
 		return (
@@ -386,6 +383,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 							uploadedFiles={files}
 							onFilesChange={onFilesChange}
 							onValidate={validateDocuments}
+							onRemoveFile={handleRemoveFile}
 							checklist={checklist}
 						/>
 					)}
@@ -396,6 +394,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 							uploadedFiles={files}
 							onFilesChange={onFilesChange}
 							onValidate={validateDocuments}
+							onRemoveFile={handleRemoveFile}
 							checklist={checklist}
 						/>
 					)}
@@ -408,6 +407,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 							uploadedFiles={files}
 							onFilesChange={onFilesChange}
 							onValidate={validateDocuments}
+							onRemoveFile={handleRemoveFile}
 							checklist={checklist}
 						/>
 					)}

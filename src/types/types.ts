@@ -1,5 +1,11 @@
 // Deal status (matching backend DealStatus enum)
-export type DealStatus = 'DRAFT' | 'SENT' | 'SIGNED' | 'CANCELED' | 'REJECTED';
+export interface PaginatedResponse<T> {
+  data: T[];
+  next: number | null;
+  total: number;
+}
+
+export type DealStatus = 'DRAFT' | 'PREPARATION' | 'SENT' | 'SIGNED' | 'CANCELED' | 'REJECTED';
 
 export interface Deal {
   id: string;

@@ -1,7 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle2, Circle, FileText, Home, Users, DollarSign, User, XCircle, Edit, Plus, Send, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { MOCK_DEALS } from '../../types/types';
 import { useDeal } from './hooks/useDeals';
 import type { DealStatus } from '../../types/types';
 
@@ -80,6 +79,7 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
             case 'SIGNED': return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Assinado</span>;
             case 'SENT': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Enviado para assinatura</span>;
             case 'DRAFT': return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Rascunho</span>;
+            case 'PREPARATION': return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Preparando</span>;
             case 'CANCELED': return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Cancelado</span>;
             case 'REJECTED': return <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Rejeitado</span>;
             default: return <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">{status}</span>;
@@ -158,7 +158,7 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
         <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header */}
             <div className="mb-6">
-                <button onClick={onBack} className="flex items-center text-slate-500 hover:text-slate-700 text-sm mb-4 transition-colors">
+                <button onClick={onBack} className="cursor-pointer flex items-center text-slate-500 hover:text-slate-700 text-sm mb-4 transition-colors">
                     <ArrowLeft className="w-4 h-4 mr-1" /> Voltar para listagem
                 </button>
                 
@@ -176,7 +176,7 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                     </div>
 
                     {/* Action Buttons - Only if preparation/draft */}
-                    {(deal.status === 'preparation' || deal.status === 'DRAFT') && (
+                    {(deal.status === 'PREPARATION' || deal.status === 'DRAFT') && (
                         <div className="flex flex-wrap gap-3">
                             <Button 
                                 variant="secondary" 

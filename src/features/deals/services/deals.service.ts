@@ -1,5 +1,6 @@
 import { server } from '@/services/api.service';
-import type { Deal, DealStatus } from '@/types/types';
+import { UtilsService } from '@/services/utils.service';
+import type { Deal, DealStatus, PaginatedResponse } from '@/types/types';
 
 export interface CreateDealPayload {
   name?: string;
@@ -20,11 +21,28 @@ export interface UpdateDealStatusPayload {
 }
 
 export class DealsService {
+
+  /**
+   * Lista todos os deals de um owner paginados
+   * @param ownerId The owner ID (query param)
+   * @param page The page number
+   * @param limit The limit of items per page
+   * @param queryParams The query parameters
+   * @returns The paginated response
+   */
+  async paginateDeals(
+    ownerId: string,
+    page: number,
+    limit: number,
+    queryParams?: Record<string, any>
+  ): Promise<PaginatedResponse<Deal>> {
+    return await UtilsService.paginate<Deal>('deal', page, limit, { ownerId, ...queryParams });
+  }
   /**
    * Cria um novo deal
    */
   async createDeal(payload: CreateDealPayload): Promise<Deal> {
-    const response = await server.api.post<Deal>('/deal', payload);
+    const response = await server.api.post<Deal>('/deal', payload, { withCredentials: true });
     return response.data;
   }
 
@@ -32,7 +50,7 @@ export class DealsService {
    * Lista todos os deals de um owner
    */
   async listDeals(ownerId: string): Promise<Deal[]> {
-    const response = await server.api.get<Deal[]>('/deal', {
+    const response = await server.api.get<Deal[]>('/deal', { withCredentials: true,
       params: { ownerId },
     });
     return response.data;
@@ -42,7 +60,7 @@ export class DealsService {
    * Busca um deal específico por ID
    */
   async getDeal(dealId: string): Promise<Deal> {
-    const response = await server.api.get<Deal>(`/deal/${dealId}`);
+    const response = await server.api.get<Deal>(`/deal/${dealId}`, { withCredentials: true });
     return response.data;
   }
 
@@ -50,7 +68,7 @@ export class DealsService {
    * Atualiza o status de um deal
    */
   async updateDealStatus(dealId: string, payload: UpdateDealStatusPayload): Promise<Deal> {
-    const response = await server.api.patch<Deal>(`/deal/${dealId}/status`, payload);
+    const response = await server.api.patch<Deal>(`/deal/${dealId}/status`, payload, { withCredentials: true });
     return response.data;
   }
 
@@ -58,21 +76,14 @@ export class DealsService {
    * Adiciona documento ao deal
    */
   async addDocumentToDeal(dealId: string, documentId: string): Promise<void> {
-    await server.api.post(`/deal/${dealId}/document`, { documentId });
+    await server.api.post(`/deal/${dealId}/document`, { documentId }, { withCredentials: true });
   }
 
   /**
    * Remove documento do deal
    */
   async removeDocumentFromDeal(dealId: string, documentId: string): Promise<void> {
-    await server.api.delete(`/deal/${dealId}/document/${documentId}`);
-  }
-
-  /**
-   * Deleta um deal
-   */
-  async deleteDeal(dealId: string): Promise<void> {
-    await server.api.delete(`/deal/${dealId}`);
+    await server.api.delete(`/deal/${dealId}/document/${documentId}`, { withCredentials: true });
   }
 
   /**

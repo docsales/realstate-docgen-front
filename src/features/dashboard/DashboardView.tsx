@@ -1,27 +1,79 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/Button';
 import { FilePlus, Search, CheckCircle2, History, Clock, Grid, List, Loader2, AlertCircle } from 'lucide-react';
-import type { Deal, DealStatus } from '@/types/types';
-import { useDeals } from '../deals/hooks/useDeals';
+import type { DealStatus } from '@/types/types';
+import { useDealsInfinite } from '../deals/hooks/useDeals';
 
 export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: string) => void }> = ({ onNewDeal, onDealClick }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [serverSearchTerm, setServerSearchTerm] = useState<string | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
-  // Buscar deals reais do backend usando React Query
-  const { data: deals = [], isLoading, isError, error } = useDeals('dev-user-id');
+  // Refs para infinite scroll
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  // Filter logic
-  const filteredDeals = deals.filter(d => {
+  // Hook para infinite scroll - busca com termo do servidor
+  const { 
+    data, 
+    isLoading, 
+    isError, 
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage 
+  } = useDealsInfinite('dev-user-id', serverSearchTerm, 20);
+
+  // Flatten all pages
+  const allDeals = data?.pages.flatMap(page => page.data) ?? [];
+  const totalDeals = data?.pages[0]?.total ?? 0;
+
+  // Filtro local primeiro
+  const localFilteredDeals = allDeals.filter(d => {
+    if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     const nameMatch = d.name?.toLowerCase().includes(searchLower);
-    // Buscar em signatários se existirem
     const signerMatch = d.signers?.some(s => 
       s.name.toLowerCase().includes(searchLower) || 
       s.email.toLowerCase().includes(searchLower)
     );
     return nameMatch || signerMatch;
   });
+
+  // Se não encontrou nada localmente E tem termo de busca, buscar no servidor
+  useEffect(() => {
+    if (searchTerm && localFilteredDeals.length === 0 && allDeals.length > 0) {
+      // Debounce de 500ms antes de buscar no servidor
+      const timer = setTimeout(() => {
+        setServerSearchTerm(searchTerm);
+      }, 500);
+      return () => clearTimeout(timer);
+    } else if (!searchTerm) {
+      // Limpar busca do servidor quando apagar termo
+      setServerSearchTerm(undefined);
+    }
+  }, [searchTerm, localFilteredDeals.length, allDeals.length]);
+
+  // Intersection Observer para infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Deals a exibir: se está buscando no servidor, usa allDeals, senão usa filtrados
+  const dealsToDisplay = serverSearchTerm ? allDeals : localFilteredDeals;
 
   const getStatusBadge = (status: DealStatus) => {
     switch (status) {
@@ -71,18 +123,38 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
         <div className="flex bg-slate-200 p-1 rounded-full border border-slate-300">
           <button
             onClick={() => setViewMode('grid')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`cursor-pointer flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <Grid className="w-4 h-4" /> Cards
           </button>
           <button
             onClick={() => setViewMode('table')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === 'table' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`cursor-pointer flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === 'table' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <List className="w-4 h-4" /> Tabela
           </button>
         </div>
       </div>
+
+      {/* Badge mostrando modo de busca */}
+      {serverSearchTerm && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-2">
+          <Search className="w-4 h-4 text-blue-600" />
+          <span className="text-sm text-blue-700">
+            Buscando no servidor por: <strong>"{serverSearchTerm}"</strong>
+          </span>
+        </div>
+      )}
+
+      {/* Contador de progresso */}
+      {!isLoading && !isError && allDeals.length > 0 && (
+        <p className="text-slate-500 text-sm">
+          {serverSearchTerm 
+            ? `Resultados da busca: ${dealsToDisplay.length} de ${totalDeals} contratos`
+            : `Mostrando ${dealsToDisplay.length} de ${totalDeals} contratos`
+          }
+        </p>
+      )}
 
       {/* Loading State */}
       {isLoading && (
@@ -101,8 +173,17 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
         </div>
       )}
 
+      {/* Empty state quando não encontra localmente */}
+      {searchTerm && localFilteredDeals.length === 0 && !serverSearchTerm && allDeals.length > 0 && (
+        <div className="text-center py-8 text-slate-500 bg-slate-50 border border-slate-200 rounded-lg">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
+          <p>Nenhum contrato encontrado localmente.</p>
+          <p className="text-sm">Buscando no servidor...</p>
+        </div>
+      )}
+
       {/* Empty State */}
-      {!isLoading && !isError && deals.length === 0 && (
+      {!isLoading && !isError && allDeals.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 bg-slate-50 border border-slate-200 rounded-lg">
           <FilePlus className="w-16 h-16 text-slate-300" />
           <p className="text-slate-600 font-semibold text-lg">Nenhum contrato encontrado</p>
@@ -110,12 +191,15 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
         </div>
       )}
 
-      {/* Content */}
-      {!isLoading && !isError && deals.length > 0 && (
-        <>
+      {/* Content com scroll container */}
+      {!isLoading && !isError && allDeals.length > 0 && (
+        <div 
+          ref={scrollContainerRef}
+          className="overflow-y-auto max-h-[calc(100vh-300px)] border border-slate-200 rounded-lg"
+        >
           {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
-              {filteredDeals.map(deal => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4 p-4">
+              {dealsToDisplay.map(deal => (
             <div
               key={deal.id}
               className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
@@ -158,9 +242,9 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
               ))}
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="bg-white overflow-hidden">
               <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                   <tr>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">ID</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Contrato</th>
@@ -170,7 +254,7 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredDeals.map(deal => (
+                  {dealsToDisplay.map(deal => (
                     <tr
                       key={deal.id}
                       className="hover:bg-slate-50 cursor-pointer transition-colors"
@@ -197,7 +281,22 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
               </table>
             </div>
           )}
-        </>
+
+          {/* Loading indicator no final para infinite scroll */}
+          <div ref={loadMoreRef} className="py-4">
+            {isFetchingNextPage && (
+              <div className="flex justify-center items-center gap-2">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                <span className="text-slate-500">Carregando mais...</span>
+              </div>
+            )}
+            {!hasNextPage && dealsToDisplay.length > 0 && !isFetchingNextPage && (
+              <p className="text-center text-slate-400 text-sm">
+                Todos os contratos foram carregados
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

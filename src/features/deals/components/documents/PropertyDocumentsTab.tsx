@@ -11,6 +11,7 @@ interface PropertyDocumentsTabProps {
 	uploadedFiles: UploadedFile[];
 	onFilesChange: (files: UploadedFile[]) => void;
 	onValidate: (files: UploadedFile[]) => void;
+	onRemoveFile: (fileId: string) => void;
 	checklist: ConsolidatedChecklist | null;
 }
 
@@ -21,6 +22,7 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 	uploadedFiles,
 	onFilesChange,
 	onValidate,
+	onRemoveFile,
 	checklist
 }) => {
 	const propertyFiles = uploadedFiles.filter(f => f.category === 'property');
@@ -44,10 +46,6 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 		if (onValidate) {
 			onValidate(newFiles);
 		}
-	};
-
-	const handleRemoveFile = (fileId: string) => {
-		onFilesChange(uploadedFiles.filter(f => f.id !== fileId));
 	};
 
 	return (
@@ -89,7 +87,7 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 							description={doc.observacao}
 							uploadedFiles={propertyFiles}
 							onFileUpload={handleFileUpload}
-							onRemoveFile={handleRemoveFile}
+							onRemoveFile={onRemoveFile}
 						/>
 					))
 				) : (
