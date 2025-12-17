@@ -1,36 +1,83 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/Button';
-import { ArrowRight, AlertTriangle, RefreshCcw } from 'lucide-react';
+import { ArrowRight, AlertTriangle, RefreshCcw, Clock, RotateCw } from 'lucide-react';
 import type { UploadedFile, DealConfig } from '@/types/types';
 import { BuyerDocumentsTab } from '../components/documents/BuyerDocumentsTab';
 import { SellerDocumentsTab } from '../components/documents/SellerDocumentsTab';
 import { PropertyDocumentsTab } from '../components/documents/PropertyDocumentsTab';
-import { GoogleGenAI, Type } from "@google/genai";
 import { documentChecklistService } from '../services/document-checklist.service';
 import type { ConsolidatedChecklist, ChecklistRequestDTO } from '@/types/checklist.types';
 import { ChecklistSummary } from '../components/documents/ChecklistSummary';
+import { useOcr } from '@/hooks/useOcr';
+import { usePollingCountdown } from '@/hooks/usePollingCountdown';
+import { useAddDocumentToDeal } from '../hooks/useDeals';
 
 interface DocumentsStepProps {
 	files: UploadedFile[];
-	onFilesChange: (files: UploadedFile[]) => void;
+	onFilesChange: (files: UploadedFile[] | ((prevFiles: UploadedFile[]) => UploadedFile[])) => void;
 	onNext: () => void;
 	onAnalysisComplete?: (data: any) => void;
 	config: DealConfig;
+	dealId?: string | null;
 }
 
 export const DocumentsStep: React.FC<DocumentsStepProps> = ({ 
 	files, 
 	onFilesChange, 
 	onNext, 
-	onAnalysisComplete,
-	config 
+	config,
+	dealId
 }) => {
-	const [isProcessing, setIsProcessing] = useState(false);
 	const [activeTab, setActiveTab] = useState<'buyers' | 'sellers' | 'property'>('buyers');
 	const [checklist, setChecklist] = useState<ConsolidatedChecklist | null>(null);
 	const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
 	const [checklistError, setChecklistError] = useState<string | null>(null);
 	const [validationError, setValidationError] = useState<string | null>(null);
+
+	// Hook para vincular documentos ao deal
+	const addDocumentToDealMutation = useAddDocumentToDeal();
+
+	// Integração com OCR
+	const { 
+		stats: ocrStats, 
+		isProcessing: isOcrProcessing,
+		manualRefresh,
+	} = useOcr(files, onFilesChange, {
+		autoProcess: true,
+		pollingInterval: 10 * 1000, // 10 segundos - Verificação mais frequente para parser
+		onComplete: (fileId, extractedData) => {
+			console.log('✅ OCR + Parser concluídos:', fileId, extractedData);
+			console.log('🔍 dealId disponível?', dealId);
+			console.log('🔍 fileId disponível?', fileId);
+			
+			// Vincular documento ao deal se dealId estiver disponível
+			if (dealId && fileId) {
+				console.log('📎 Iniciando vinculação do documento ao deal...');
+				addDocumentToDealMutation.mutate(
+					{ dealId, documentId: fileId },
+					{
+						onSuccess: () => {
+							console.log('✅ Documento vinculado ao deal:', fileId);
+						},
+						onError: (error) => {
+							console.error('❌ Erro ao vincular documento ao deal:', error);
+						}
+					}
+				);
+			} else {
+				console.warn('⚠️ Não foi possível vincular documento - dealId ou fileId ausente');
+			}
+		},
+		onError: (fileId, error) => {
+			console.error('❌ Erro no OCR:', fileId, error);
+		},
+	});
+
+	// Contador de polling
+	const pollingCountdown = usePollingCountdown(
+		10 * 1000, // 10 segundos - Alinhado com o intervalo de polling
+		ocrStats.processing > 0 // Ativar quando houver arquivos processando
+	);
 
 	// Buscar checklist da API ao carregar o componente
 	useEffect(() => {
@@ -119,21 +166,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		});
 	};
 
-	const fileToBase64 = (file: File): Promise<string> => {
-		return new Promise((resolve, reject) => {
-			const reader = new FileReader();
-			reader.readAsDataURL(file);
-			reader.onload = () => {
-				const result = reader.result as string;
-				// Remove data URL prefix
-				const base64 = result.split(',')[1];
-				resolve(base64);
-			};
-			reader.onerror = error => reject(error);
-		});
-	};
-
-	const processDocuments = async () => {
+	const processDocuments = () => {
 		setValidationError(null);
 
 		// Validar documentos antes de processar
@@ -145,83 +178,8 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 			}
 		}
 
-		if (files.length === 0) {
-			onNext();
-			return;
-		}
-
-		setIsProcessing(true);
-
-		try {
-			// Process the first file for demonstration, or could loop through all
-			const fileToProcess = files[0].file;
-			const base64Data = await fileToBase64(fileToProcess);
-
-			const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-			const response = await ai.models.generateContent({
-				model: 'gemini-2.5-flash',
-				contents: {
-					parts: [
-						{
-							inlineData: {
-								mimeType: fileToProcess.type || 'image/png',
-								data: base64Data
-							}
-						},
-						{ text: "Extract data from this document in JSON format. Capture personal info, address, and document specific details." }
-					]
-				},
-				config: {
-					responseMimeType: 'application/json',
-					responseSchema: {
-						type: Type.OBJECT,
-						properties: {
-							nome: { type: Type.STRING },
-							cpf_cnpj: { type: Type.STRING },
-							tipo_pessoa: { type: Type.STRING },
-							endereco_completo: { type: Type.STRING },
-							documento: {
-								type: Type.OBJECT,
-								properties: {
-									tipo: { type: Type.STRING },
-									subtipo: { type: Type.STRING },
-									empresa: { type: Type.STRING },
-									cnpj_empresa: { type: Type.STRING },
-									mes_referencia: { type: Type.STRING },
-									valor_total: { type: Type.NUMBER }
-								}
-							},
-							endereco: {
-								type: Type.OBJECT,
-								properties: {
-									logradouro: { type: Type.STRING },
-									numero: { type: Type.STRING },
-									bairro: { type: Type.STRING },
-									cidade: { type: Type.STRING },
-									estado: { type: Type.STRING },
-									cep_formatado: { type: Type.STRING },
-									tipo_imovel: { type: Type.STRING }
-								}
-							}
-						}
-					}
-				}
-			});
-
-			const text = response.text;
-			if (text && onAnalysisComplete) {
-				const data = JSON.parse(text);
-				onAnalysisComplete(data);
-			}
-
-			onNext();
-		} catch (error) {
-			console.error("Error processing documents with Gemini:", error);
-			// Fallback to next step even if error, or handle error UI
-			onNext();
-		} finally {
-			setIsProcessing(false);
-		}
+		// Avançar para próximo passo
+		onNext();
 	};
 
 	// Função para validar se todos os documentos obrigatórios foram enviados
@@ -296,40 +254,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		);
 	}
 
-	if (isProcessing) {
-		return (
-			<div className="flex flex-col items-center justify-center h-96 space-y-8 animate-in fade-in">
-				<div className="relative w-32 h-40 bg-white border-2 border-slate-200 rounded-lg shadow-lg overflow-hidden flex flex-col">
-					{/* Fake Document Content */}
-					<div className="p-4 space-y-2 opacity-30">
-						<div className="h-2 w-1/2 bg-slate-400 rounded"></div>
-						<div className="h-2 w-full bg-slate-300 rounded"></div>
-						<div className="h-2 w-3/4 bg-slate-300 rounded"></div>
-						<div className="h-2 w-full bg-slate-300 rounded"></div>
-						<div className="h-20 w-full bg-slate-100 rounded mt-4"></div>
-					</div>
-
-					{/* Scanning Line */}
-					<div className="absolute left-0 right-0 h-1 bg-accent shadow-[0_0_15px_rgba(239,4,116,0.6)] animate-[scan_2s_ease-in-out_infinite]"></div>
-				</div>
-
-				<div className="text-center space-y-2">
-					<h3 className="text-xl font-bold text-slate-800">Analisando Documentos...</h3>
-					<p className="text-slate-500">Extraindo dados com Inteligência Artificial (Gemini)</p>
-				</div>
-
-				<style>{`
-                @keyframes scan {
-                    0% { top: 0%; opacity: 0; }
-                    10% { opacity: 1; }
-                    90% { opacity: 1; }
-                    100% { top: 100%; opacity: 0; }
-                }
-              `}</style>
-			</div>
-		)
-	}
-
 	return (
 		<div className="space-y-6 animate-in fade-in duration-500">
 			{/* Checklist Summary */}
@@ -340,6 +264,78 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 					numSellers={config.sellers.length}
 					numBuyers={config.buyers.length}
 				/>
+			)}
+
+			{/* OCR Status Panel */}
+			{files.length > 0 && (ocrStats.processing > 0 || ocrStats.uploading > 0 || ocrStats.completed > 0) && (
+				<div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4 shadow-sm">
+					<div className="flex items-center justify-between mb-3">
+						<div className="flex items-center gap-2">
+							<div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
+							<h3 className="font-bold text-purple-900">Status do Processamento OCR</h3>
+						</div>
+						
+						{/* Contador de refresh e botão manual */}
+						<div className="flex items-center gap-2">
+							{ocrStats.processing > 0 && (
+								<div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-purple-300 shadow-sm">
+									<Clock className="w-4 h-4 text-purple-600" />
+									<div className="text-xs">
+										<span className="text-purple-800 font-semibold">Próximo refresh em </span>
+										<span className="text-purple-600 font-bold">{pollingCountdown.formattedTime}</span>
+									</div>
+								</div>
+							)}
+							
+							{/* Botão de refresh manual */}
+							{ocrStats.processing > 0 && (
+								<button
+									onClick={manualRefresh}
+									className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-purple-50 rounded-lg border border-purple-300 shadow-sm transition-colors"
+									title="Verificar status agora"
+								>
+									<RotateCw className="w-4 h-4 text-purple-600" />
+									<span className="text-xs font-semibold text-purple-800">Atualizar Agora</span>
+								</button>
+							)}
+						</div>
+					</div>
+					
+					<div className="grid grid-cols-5 gap-3">
+						<div className="bg-white rounded-lg p-3 text-center border border-slate-200">
+							<div className="text-2xl font-bold text-slate-800">{ocrStats.total}</div>
+							<div className="text-xs text-slate-600">Total</div>
+						</div>
+						<div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+							<div className="text-2xl font-bold text-blue-700">{ocrStats.uploading}</div>
+							<div className="text-xs text-blue-600">Enviando</div>
+						</div>
+						<div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
+							<div className="text-2xl font-bold text-purple-700 flex items-center justify-center gap-1">
+								{ocrStats.processing}
+								{ocrStats.processing > 0 && (
+									<div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+								)}
+							</div>
+							<div className="text-xs text-purple-600">Processando</div>
+						</div>
+						<div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+							<div className="text-2xl font-bold text-green-700">{ocrStats.completed}</div>
+							<div className="text-xs text-green-600">Concluído</div>
+						</div>
+						<div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
+							<div className="text-2xl font-bold text-red-700">{ocrStats.error}</div>
+							<div className="text-xs text-red-600">Erro</div>
+						</div>
+					</div>
+
+					{isOcrProcessing && (
+						<div className="mt-3 flex items-center gap-2 text-sm text-purple-700">
+							<div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+							<span className="font-medium">Processando documentos via LLMWhisperer...</span>
+						</div>
+					)}
+				</div>
 			)}
 
 			{/* Tabs Navigation */}

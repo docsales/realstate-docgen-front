@@ -29,8 +29,7 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 	const requiredDocuments = checklist?.imovel.documentos || [];
 	const alerts = checklist?.imovel.alertas || [];
 
-	const handleFileUpload = (files: File[], documentType: string, personId?: string) => {
-		// Criar novos arquivos com type já definido (property não usa personId)
+	const handleFileUpload = (files: File[], documentType: string) => {
 		const newFiles: UploadedFile[] = files.map(file => ({
 			id: `${Date.now()}-${Math.random()}`,
 			file,
@@ -42,7 +41,6 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 		const updatedFiles = [...uploadedFiles, ...newFiles];
 		onFilesChange(updatedFiles);
 
-		// Disparar validação automaticamente
 		if (onValidate) {
 			onValidate(newFiles);
 		}

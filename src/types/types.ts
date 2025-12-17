@@ -1,18 +1,30 @@
+// Deal status (matching backend DealStatus enum)
+export type DealStatus = 'DRAFT' | 'SENT' | 'SIGNED' | 'CANCELED' | 'REJECTED';
 
 export interface Deal {
   id: string;
-  name: string;
-  status: 'preparation' | 'sent' | 'signed';
+  ownerId: string;
+  name?: string;
+  docTemplateId?: string;
+  status: DealStatus;
+  metadata?: any;
+  contractModel?: string;
   createdAt: string;
-  clientName: string;
+  updatedAt: string;
+  signers?: Signatory[];
+  documents?: any[];
 }
 
 export interface Signatory {
   id: string;
+  dealId?: string;
   name: string;
   email: string;
-  phone: string;
-  role: 'comprador' | 'vendedor' | 'testemunha' | 'corretor';
+  phoneNumber?: string;
+  signingOrder: number;
+  role: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface UploadedFile {
@@ -23,6 +35,13 @@ export interface UploadedFile {
   personId?: string; // Links the document to a specific Person ID
   validated?: boolean; // Whether the document has been validated by the server
   validationError?: string; // Error message if validation failed
+  
+  // OCR Integration fields
+  ocrStatus?: import('./ocr.types').OcrStatus; // Status do processamento OCR
+  ocrWhisperHash?: string; // Hash único do processamento LLMWhisperer
+  ocrExtractedData?: import('./ocr.types').OcrExtractedData; // Dados extraídos pelo OCR
+  ocrError?: string; // Erro no processamento OCR
+  ocrProcessingTime?: number; // Tempo de processamento em ms
 }
 
 // Types for person configuration
@@ -199,8 +218,8 @@ export const CONTRACT_FIELDS = [
 ];
 
 export const MOCK_DEALS: Deal[] = [
-  { id: '1', name: 'Compra Apto Jardins', status: 'preparation', createdAt: '2023-10-25', clientName: 'Roberto Carlos' },
-  { id: '2', name: 'Venda Casa Morumbi', status: 'sent', createdAt: '2023-10-20', clientName: 'Ana Maria' },
-  { id: '3', name: 'Aluguel Galpão', status: 'signed', createdAt: '2023-10-15', clientName: 'Empresa XYZ' },
-  { id: '4', name: 'Terreno Interior', status: 'preparation', createdAt: '2023-10-26', clientName: 'João da Silva' },
+  { id: '1', ownerId: 'dev-user-id', name: 'Compra Apto Jardins', status: 'DRAFT', createdAt: '2023-10-25', updatedAt: '2023-10-25' },
+  { id: '2', ownerId: 'dev-user-id', name: 'Venda Casa Morumbi', status: 'SENT', createdAt: '2023-10-20', updatedAt: '2023-10-21' },
+  { id: '3', ownerId: 'dev-user-id', name: 'Aluguel Galpão', status: 'SIGNED', createdAt: '2023-10-15', updatedAt: '2023-10-16' },
+  { id: '4', ownerId: 'dev-user-id', name: 'Terreno Interior', status: 'DRAFT', createdAt: '2023-10-26', updatedAt: '2023-10-26' },
 ];

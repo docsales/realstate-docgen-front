@@ -11,7 +11,7 @@ const logoSrc = "/images/docsales-logo.png";
 
 export default function App() {
   const { isAuthenticated, user, logout } = useAuth();
-  const [view, setView] = useState<'dashboard' | 'new-deal' | 'deal-details'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'new-deal' | 'edit-deal' | 'deal-details'>('dashboard');
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
@@ -30,6 +30,11 @@ export default function App() {
   const handleBackToDashboard = () => {
     setSelectedDealId(null);
     setView('dashboard');
+  };
+
+  const handleEditDeal = (dealId: string) => {
+    setSelectedDealId(dealId);
+    setView('edit-deal');
   };
 
   // Auth Flow
@@ -77,8 +82,19 @@ export default function App() {
             onFinish={() => setView('dashboard')}
           />
         )}
+        {view === 'edit-deal' && selectedDealId && (
+          <NewDealWizard
+            dealId={selectedDealId}
+            onCancel={handleBackToDashboard}
+            onFinish={handleBackToDashboard}
+          />
+        )}
         {view === 'deal-details' && selectedDealId && (
-          <DealDetailsView dealId={selectedDealId} onBack={handleBackToDashboard} />
+          <DealDetailsView 
+            dealId={selectedDealId} 
+            onBack={handleBackToDashboard}
+            onEdit={handleEditDeal}
+          />
         )}
       </main>
     </div>

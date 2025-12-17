@@ -7,7 +7,6 @@ import type {
   OcrDataByPerson, 
   ContractFieldSection
 } from '../../../types/types';
-import { MOCK_OCR_DATA_BY_PERSON } from '../../../types/types';
 
 interface MappingStepProps {
   mappings: Record<string, MappingValue>;
@@ -78,7 +77,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
 }) => {
   const [activeDropZone, setActiveDropZone] = useState<string | null>(null);
 
-  const displayOcrData = ocrData || MOCK_OCR_DATA_BY_PERSON;
+  const displayOcrData = ocrData || [];
   const contractFieldSections = generateContractFields(dealConfig);
 
   // Recursive function to render JSON tree

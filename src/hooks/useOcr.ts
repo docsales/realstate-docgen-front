@@ -1,14 +1,25 @@
 /**
- * Hook para gerenciar integração com OCR nos documentos
+ * Hook para gerenciar upload e status de documentos OCR
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { ocrService } from '@/services/ocr.service';
 import type { UploadedFile } from '@/types/types';
 import { OcrStatus } from '@/types/ocr.types';
 
+// Tipos de documentos de estado civil que devem ser salvos no localStorage
+const MARITAL_STATE_DOCUMENTS = [
+  'CERTIDAO_CASAMENTO',
+  'CERTIDAO_NASCIMENTO',
+  'CERTIDAO_CASAMENTO_AVERBACAO_OBITO',
+  'CERTIDAO_CASAMENTO_AVERBACAO_DIVORCIO',
+  'CERTIDAO_OBITO',
+  'ESCRITURA_UNIAO_ESTAVEL',
+];
+
 interface UseOcrOptions {
-  autoProcess?: boolean; // Processar automaticamente quando arquivo for adicionado
+  autoProcess?: boolean;
+  pollingInterval?: number; // Intervalo de polling em ms (default: 3000)
   onComplete?: (fileId: string, extractedData: any) => void;
   onError?: (fileId: string, error: string) => void;
 }
@@ -18,101 +29,67 @@ export const useOcr = (
   onFilesChange: (files: UploadedFile[]) => void,
   options: UseOcrOptions = {}
 ) => {
-  const { autoProcess = true, onComplete, onError } = options;
+  const { 
+    autoProcess = true, 
+    pollingInterval = 5 * 60 * 1000, // 5 minutos
+    onComplete, 
+    onError 
+  } = options;
+  
   const [isProcessing, setIsProcessing] = useState(false);
+  const processingRef = useRef<Set<string>>(new Set());
+  const pollingRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const processedFilesRef = useRef<Set<string>>(new Set());
 
   /**
-   * Processa um arquivo específico via OCR
+   * Salva dados extraídos no localStorage se for documento de estado civil
    */
-  const processFile = useCallback(async (file: UploadedFile) => {
-    try {
-      console.log('🚀 Iniciando processamento OCR:', file.file.name);
-
-      // Atualizar status para uploading
-      updateFileOcrStatus(file.id, OcrStatus.UPLOADING, 10);
-
-      // Criar metadata
-      const metadata = ocrService.createMetadata(
-        file.type,
-        file.category,
-        file.personId,
-        file.personId || `${file.category}-${file.type}`
-      );
-
-      // Fazer upload
-      const result = await ocrService.uploadDocument({
-        file: file.file,
-        metadata,
-        tag: file.id,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || 'Erro ao fazer upload');
-      }
-
-      console.log('✅ Upload concluído, whisperHash:', result.whisperHash);
-
-      // Atualizar status para processing
-      updateFileOcrStatus(file.id, OcrStatus.PROCESSING, 50, result.whisperHash);
-
-      // Registrar no serviço
-      ocrService.registerProcessing(file.id, {
-        status: OcrStatus.PROCESSING,
-        whisperHash: result.whisperHash,
-        uploadedAt: new Date(),
-        progress: 50,
-      });
-
-      // Simular progresso enquanto aguarda webhook
-      // (Em produção, o webhook atualizará o status)
-      simulateProgress(file.id);
-
-    } catch (error) {
-      console.error('❌ Erro no processamento OCR:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      updateFileOcrStatus(file.id, OcrStatus.ERROR, 0, undefined, errorMessage);
-      
-      if (onError) {
-        onError(file.id, errorMessage);
+  const saveToLocalStorage = useCallback((
+    fileId: string,
+    documentType: string,
+    extractedData: any
+  ) => {
+    // Verificar se é documento de estado civil
+    if (MARITAL_STATE_DOCUMENTS.includes(documentType)) {
+      try {
+        const dataToSave = {
+          fileId,
+          documentType,
+          extractedData,
+          timestamp: new Date().toISOString(),
+        };
+        
+        const key = `ocr_extracted_data_${fileId}`;
+        localStorage.setItem(key, JSON.stringify(dataToSave));
+        
+        console.log('💾 Dados de estado civil salvos no localStorage:', {
+          fileId,
+          documentType,
+          key,
+        });
+      } catch (error) {
+        console.error('❌ Erro ao salvar no localStorage:', error);
       }
     }
-  }, [onError]);
+  }, []);
 
   /**
-   * Simula progresso enquanto aguarda webhook
-   * Em produção, o webhook real atualizará o status
-   */
-  const simulateProgress = (fileId: string) => {
-    let progress = 50;
-    const interval = setInterval(() => {
-      progress += 5;
-      if (progress >= 90) {
-        clearInterval(interval);
-        // Parar em 90% aguardando o webhook real
-      } else {
-        const file = files.find(f => f.id === fileId);
-        if (file && file.ocrStatus === OcrStatus.PROCESSING) {
-          updateFileOcrStatus(fileId, OcrStatus.PROCESSING, progress);
-        } else {
-          clearInterval(interval);
-        }
-      }
-    }, 500);
-  };
-
-  /**
-   * Atualiza o status OCR de um arquivo
+   * Atualiza status OCR de um arquivo
    */
   const updateFileOcrStatus = useCallback((
     fileId: string,
     status: OcrStatus,
-    progress?: number,
     whisperHash?: string,
     error?: string,
     extractedData?: any
   ) => {
     onFilesChange(files.map(f => {
       if (f.id === fileId) {
+        // Se completou e tem dados extraídos, salvar no localStorage
+        if (status === OcrStatus.COMPLETED && extractedData && f.type) {
+          saveToLocalStorage(fileId, f.type, extractedData);
+        }
+        
         return {
           ...f,
           ocrStatus: status,
@@ -123,16 +100,152 @@ export const useOcr = (
       }
       return f;
     }));
+  }, [files, onFilesChange, saveToLocalStorage]);
 
-    // Atualizar no serviço também
-    ocrService.updateProcessingState(fileId, {
-      status,
-      progress,
-      whisperHash,
-      error,
-      extractedData,
-    });
-  }, [files, onFilesChange]);
+  /**
+   * Verifica status de um arquivo específico
+   */
+  const checkFileStatus = useCallback(async (documentId: string) => {
+    try {
+      const result = await ocrService.getStatus(documentId);
+      
+      // Encontrar o ID local do arquivo (pode ser o mesmo que documentId ou diferente)
+      let localFileId = documentId;
+      for (const [localId, mappedDocId] of fileIdMapRef.current.entries()) {
+        if (mappedDocId === documentId) {
+          localFileId = localId;
+          break;
+        }
+      }
+      
+      if (result.status === 'completed') {
+        updateFileOcrStatus(localFileId, OcrStatus.COMPLETED, undefined, undefined, result.extractedData);
+        stopPolling(documentId);
+        // Usar documentId (do backend) no callback onComplete para vinculação ao deal
+        onComplete?.(documentId, result.extractedData);
+        console.log('✅ Arquivo concluído:', localFileId, '(documentId:', documentId, ')');
+      } else if (result.status === 'error') {
+        updateFileOcrStatus(localFileId, OcrStatus.ERROR, undefined, result.error);
+        stopPolling(documentId);
+        onError?.(localFileId, result.error || 'Erro no processamento');
+        console.log('❌ Erro no arquivo:', localFileId);
+      } else {
+        console.log('⏳ Arquivo ainda processando:', documentId, '- Status:', result.status);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao verificar status:', documentId, error);
+    }
+  }, [updateFileOcrStatus, onComplete, onError]);
+
+  /**
+   * Inicia polling para verificar status de um arquivo
+   */
+  const startPolling = useCallback((fileId: string) => {
+    // Se já está fazendo polling, não iniciar outro
+    if (pollingRef.current.has(fileId)) return;
+
+    const poll = () => checkFileStatus(fileId);
+
+    const intervalId = setInterval(poll, pollingInterval);
+    pollingRef.current.set(fileId, intervalId);
+    
+    // Fazer primeira verificação imediatamente
+    poll();
+  }, [pollingInterval, checkFileStatus]);
+
+  /**
+   * Para polling de um arquivo
+   */
+  const stopPolling = useCallback((fileId: string) => {
+    const intervalId = pollingRef.current.get(fileId);
+    if (intervalId) {
+      clearInterval(intervalId);
+      pollingRef.current.delete(fileId);
+    }
+  }, []);
+
+  // Limpar todos os intervalos quando o componente desmontar
+  useEffect(() => {
+    return () => {
+      pollingRef.current.forEach((intervalId) => {
+        clearInterval(intervalId);
+      });
+      pollingRef.current.clear();
+    };
+  }, []);
+
+  /**
+   * Mapeamento de IDs locais para IDs do backend (documentId)
+   */
+  const fileIdMapRef = useRef<Map<string, string>>(new Map());
+
+  /**
+   * Processa um arquivo via OCR
+   */
+  const processFile = useCallback(async (file: UploadedFile) => {
+    // Evitar processar o mesmo arquivo múltiplas vezes
+    if (processingRef.current.has(file.id)) {
+      console.log('⚠️ Arquivo já está sendo processado, ignorando:', file.id);
+      return;
+    }
+    
+    // Verificar se já foi processado
+    if (processedFilesRef.current.has(file.id)) {
+      console.log('⚠️ Arquivo já foi processado anteriormente, ignorando:', file.id);
+      return;
+    }
+    
+    processingRef.current.add(file.id);
+    processedFilesRef.current.add(file.id);
+
+    try {
+      console.log('🚀 Iniciando OCR:', file.file.name, '- ID:', file.id);
+      updateFileOcrStatus(file.id, OcrStatus.UPLOADING);
+
+      const metadata = ocrService.createMetadata(
+        file.type,
+        file.category,
+        file.personId,
+        file.id
+      );
+
+      const result = await ocrService.uploadDocument({
+        file: file.file,
+        metadata,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao fazer upload');
+      }
+
+      const documentId = result.documentId || result.fileId;
+      
+      // Mapear ID local para documentId do backend (sem atualizar o array files)
+      if (documentId && documentId !== file.id) {
+        console.log(`📝 Mapeando ID: ${file.id} → ${documentId}`);
+        fileIdMapRef.current.set(file.id, documentId);
+        
+        // Adicionar documentId aos registros para evitar reprocessamento
+        processedFilesRef.current.add(documentId);
+      }
+
+      const finalId = documentId || file.id;
+      
+      console.log('✅ Upload OK, aguardando processamento... ID:', finalId);
+      updateFileOcrStatus(file.id, OcrStatus.PROCESSING, result.whisperHash);
+
+      // Iniciar polling usando o documentId do backend
+      startPolling(finalId);
+
+    } catch (error) {
+      console.error('❌ Erro no OCR:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
+      updateFileOcrStatus(file.id, OcrStatus.ERROR, undefined, errorMsg);
+      onError?.(file.id, errorMsg);
+    } finally {
+      processingRef.current.delete(file.id);
+    }
+  }, [updateFileOcrStatus, startPolling, onError]);
 
   /**
    * Processa múltiplos arquivos
@@ -141,11 +254,14 @@ export const useOcr = (
     setIsProcessing(true);
     
     try {
-      for (const file of filesToProcess) {
-        // Processar apenas se ainda não foi processado
-        if (!file.ocrStatus || file.ocrStatus === OcrStatus.IDLE || file.ocrStatus === OcrStatus.ERROR) {
-          await processFile(file);
-        }
+      // Processar arquivos em paralelo (máximo 3 por vez)
+      const chunks = [];
+      for (let i = 0; i < filesToProcess.length; i += 3) {
+        chunks.push(filesToProcess.slice(i, i + 3));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.all(chunk.map(f => processFile(f)));
       }
     } finally {
       setIsProcessing(false);
@@ -153,67 +269,15 @@ export const useOcr = (
   }, [processFile]);
 
   /**
-   * Processa todos os arquivos pendentes
-   */
-  const processAllPending = useCallback(async () => {
-    const pendingFiles = files.filter(
-      f => !f.ocrStatus || f.ocrStatus === OcrStatus.IDLE || f.ocrStatus === OcrStatus.ERROR
-    );
-    
-    if (pendingFiles.length > 0) {
-      await processMultipleFiles(pendingFiles);
-    }
-  }, [files, processMultipleFiles]);
-
-  /**
    * Reprocessa um arquivo com erro
    */
   const retryFile = useCallback(async (fileId: string) => {
     const file = files.find(f => f.id === fileId);
     if (file) {
+      updateFileOcrStatus(fileId, OcrStatus.IDLE);
       await processFile(file);
     }
-  }, [files, processFile]);
-
-  /**
-   * Simula recebimento de webhook (para testes)
-   * Em produção, isso seria chamado pelo endpoint que recebe o webhook
-   */
-  const simulateWebhookResponse = useCallback((fileId: string, success: boolean = true) => {
-    if (success) {
-      // Simular dados extraídos
-      const mockExtractedData = {
-        text: 'Dados extraídos do documento via OCR',
-        confidence: 0.95,
-        fields: {
-          nome: 'João da Silva',
-          cpf: '123.456.789-00',
-          rg: '12.345.678-9',
-        },
-      };
-
-      updateFileOcrStatus(
-        fileId,
-        OcrStatus.COMPLETED,
-        100,
-        undefined,
-        undefined,
-        mockExtractedData
-      );
-
-      if (onComplete) {
-        onComplete(fileId, mockExtractedData);
-      }
-    } else {
-      updateFileOcrStatus(
-        fileId,
-        OcrStatus.ERROR,
-        0,
-        undefined,
-        'Erro ao processar documento no OCR'
-      );
-    }
-  }, [updateFileOcrStatus, onComplete]);
+  }, [files, processFile, updateFileOcrStatus]);
 
   /**
    * Auto-processar novos arquivos
@@ -221,30 +285,52 @@ export const useOcr = (
   useEffect(() => {
     if (!autoProcess) return;
 
-    // Verificar se OCR está habilitado
-    const ocrDisabled = import.meta.env.VITE_OCR_DISABLED === 'true';
-    const ocrBaseUrl = import.meta.env.VITE_OCR_BASE_URL;
-    
-    if (ocrDisabled) {
-      console.log('⚠️ OCR está desabilitado via variável de ambiente');
-      return;
-    }
+    // Filtra arquivos que realmente precisam de processamento
+    const newFiles = files.filter(f => {
+      // Ignorar se já tiver status diferente de IDLE ou undefined
+      const hasStatus = f.ocrStatus && f.ocrStatus !== OcrStatus.IDLE;
+      // Ignorar se já foi processado nesta sessão (evita loop)
+      const alreadyProcessed = processedFilesRef.current.has(f.id);
+      // Ignorar se está sendo processado agora
+      const currentlyProcessing = processingRef.current.has(f.id);
+      
+      return !hasStatus && !alreadyProcessed && !currentlyProcessing;
+    });
 
-    if (!ocrBaseUrl) {
-      console.warn('⚠️ VITE_OCR_BASE_URL não configurada. OCR não será processado.');
-      console.warn('📝 Crie um arquivo .env com as configurações necessárias.');
-      console.warn('📄 Veja .env.template para exemplo.');
-      return;
-    }
-
-    const newFiles = files.filter(
-      f => !f.ocrStatus || f.ocrStatus === OcrStatus.IDLE
-    );
-
-    if (newFiles.length > 0 && !isProcessing) {
+    if (newFiles.length > 0) {
+      console.log(`📋 Detectados ${newFiles.length} novo(s) arquivo(s) para processar`);
       processMultipleFiles(newFiles);
     }
-  }, [files, autoProcess, isProcessing, processMultipleFiles]);
+  }, [files, autoProcess, processMultipleFiles]); // Adicionado processMultipleFiles
+
+  /**
+   * Refresh manual - verifica status de todos os arquivos em processamento
+   */
+  const manualRefresh = useCallback(async () => {
+    const processingFiles = files.filter(f => f.ocrStatus === OcrStatus.PROCESSING);
+    
+    if (processingFiles.length === 0) {
+      console.log('ℹ️ Nenhum arquivo em processamento para verificar');
+      return;
+    }
+
+    console.log(`🔄 Refresh manual iniciado para ${processingFiles.length} arquivo(s)`);
+    
+    await Promise.all(
+      processingFiles.map(f => checkFileStatus(f.id))
+    );
+    
+    console.log('✅ Refresh manual concluído');
+  }, [files, checkFileStatus]);
+
+  /**
+   * Cleanup ao desmontar
+   */
+  useEffect(() => {
+    return () => {
+      pollingRef.current.forEach((_, fileId) => stopPolling(fileId));
+    };
+  }, [stopPolling]);
 
   // Estatísticas
   const stats = {
@@ -259,12 +345,10 @@ export const useOcr = (
   return {
     processFile,
     processMultipleFiles,
-    processAllPending,
     retryFile,
     updateFileOcrStatus,
-    simulateWebhookResponse, // Para testes
+    manualRefresh,
     isProcessing,
     stats,
   };
 };
-

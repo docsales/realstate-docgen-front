@@ -1,25 +1,43 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, CheckCircle2, Send, Mail } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Send, Mail, Loader2 } from 'lucide-react';
 import { Button } from '@/components/Button';
 import type { DealConfig, Signatory, UploadedFile, MappingValue, OcrDataByPerson } from '@/types/types';
-import { MOCK_OCR_DATA_BY_PERSON, createDefaultPerson } from '@/types/types';
+import { createDefaultPerson } from '@/types/types';
 import { ConfigStep } from './steps/ConfigStep';
 import { DocumentsStep } from './steps/DocumentsStep';
 import { MappingStep } from './steps/MappingStep';
 import { PreviewStep } from './steps/PreviewStep';
 import { SignatoriesStep } from './steps/SignatoriesStep';
+import { useCreateDeal, useDeal } from './hooks/useDeals';
 
-export const NewDealWizard: React.FC<{ onCancel: () => void, onFinish: () => void }> = ({ onCancel, onFinish }) => {
+interface NewDealWizardProps {
+  onCancel: () => void;
+  onFinish: () => void;
+  dealId?: string; // Se fornecido, é modo de edição
+}
+
+export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish, dealId: editDealId }) => {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
   const [submissionStatus, setSubmissionStatus] = useState<'editing' | 'sending' | 'success'>('editing');
+  // Se editDealId existe, usar ele diretamente como dealId
+  const [dealId, setDealId] = useState<string | null>(editDealId || null);
+  const [isLoadingDeal, setIsLoadingDeal] = useState(!!editDealId);
+  
+  // React Query mutation para criar deal
+  const createDealMutation = useCreateDeal();
+  
+  // Buscar dados do deal se for edição
+  const { data: existingDeal, isLoading: isDealLoading } = useDeal(editDealId || '', {
+    enabled: !!editDealId,
+  });
 
   // -- Lifted State --
   const [configData, setConfigData] = useState<DealConfig>({
     name: '',
-    contractModel: 'venda_compra_padrao',
+    contractModel: '19diHiHX3OZ9IQPVtOe28629C94kmqYk5', // Financiamento (Google Drive ID)
     useFgts: false,
     bankFinancing: false,
     consortiumLetter: false,
@@ -32,7 +50,116 @@ export const NewDealWizard: React.FC<{ onCancel: () => void, onFinish: () => voi
   const [documents, setDocuments] = useState<UploadedFile[]>([]);
   const [mappings, setMappings] = useState<Record<string, MappingValue>>({});
   const [signatories, setSignatories] = useState<Signatory[]>([]);
-  const [ocrData, setOcrData] = useState<OcrDataByPerson[]>(MOCK_OCR_DATA_BY_PERSON);
+  const [ocrData, setOcrData] = useState<OcrDataByPerson[]>([]);
+
+  // Carregar dados do deal quando em modo de edição
+  useEffect(() => {
+    if (existingDeal && editDealId) {
+      console.log('📝 Carregando deal para edição:', existingDeal);
+      
+      // Carregar configurações básicas
+      if (existingDeal.name) {
+        setConfigData(prev => ({
+          ...prev,
+          name: existingDeal.name || '',
+          contractModel: existingDeal.contractModel || prev.contractModel,
+          ...(existingDeal.metadata || {}),
+        }));
+      }
+      
+      // Carregar signatários
+      if (existingDeal.signers && existingDeal.signers.length > 0) {
+        setSignatories(existingDeal.signers.map(s => ({
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          phone: s.phoneNumber || '',
+          role: s.role as any,
+          signingOrder: s.signingOrder,
+        })));
+      }
+      
+      console.log('🔍 Verificando documentos no deal:', existingDeal);
+      console.log('📋 existingDeal.documents:', existingDeal.documents);
+      
+      // Carregar documentos existentes
+      if (existingDeal.documents && existingDeal.documents.length > 0) {
+        console.log('📄 Carregando documentos existentes:', existingDeal.documents);
+        
+        const loadedFiles: UploadedFile[] = existingDeal.documents.map((doc: any) => {
+          // Criar um File mock para documentos já enviados (com tamanho estimado)
+          const fileName = doc.originalFilename || 'documento.pdf';
+          const fileSize = doc.fileSize || 1024 * 100; // 100KB default
+          const mockBlob = new Blob([''], { type: doc.mimeType || 'application/pdf' });
+          
+          // Criar file com propriedades customizadas
+          const mockFile = new File([mockBlob], fileName, {
+            type: doc.mimeType || 'application/pdf',
+          });
+          
+          // Adicionar size manualmente (workaround para File mock)
+          Object.defineProperty(mockFile, 'size', {
+            value: fileSize,
+            writable: false
+          });
+          
+          const ocrStatus = doc.status === 'EXTRACTED' ? 'completed' : 
+                           doc.status === 'OCR_PROCESSING' ? 'processing' :
+                           doc.status === 'OCR_DONE' ? 'completed' :
+                           doc.status === 'ERROR' ? 'error' : 'idle';
+          
+          return {
+            id: doc.id,
+            file: mockFile,
+            type: doc.documentType || 'UNKNOWN',
+            category: (doc.category || 'property') as 'buyers' | 'sellers' | 'property',
+            personId: doc.personId || undefined,
+            validated: doc.status === 'EXTRACTED',
+            ocrStatus: ocrStatus as any,
+            ocrWhisperHash: doc.whisperHash,
+            ocrExtractedData: doc.variables,
+            ocrError: doc.status === 'ERROR' ? 'Erro no processamento' : undefined,
+          };
+        });
+        
+        setDocuments(loadedFiles);
+        console.log('✅ Documentos carregados:', loadedFiles);
+
+        // Agrupar e fazer merge dos dados OCR por personId
+        // Documentos sem personId (null/undefined) são tratados como 'property'
+        const ocrDataMap = new Map<string, any>();
+        
+        existingDeal.documents
+          .filter((doc: any) => doc.variables)
+          .forEach((doc: any) => {
+            // Se personId for null/undefined, trata como 'property'
+            const personId = doc.personId || 'property';
+            const docData = doc.variables && typeof doc.variables === 'string' 
+              ? JSON.parse(doc.variables) 
+              : doc.variables;
+            
+            if (ocrDataMap.has(personId)) {
+              // Merge profundo dos dados existentes com os novos
+              const existingData = ocrDataMap.get(personId);
+              ocrDataMap.set(personId, { ...existingData, ...docData });
+            } else {
+              ocrDataMap.set(personId, docData);
+            }
+          });
+        
+        const ocrDataFromDocs: OcrDataByPerson[] = Array.from(ocrDataMap.entries()).map(
+          ([personId, data]) => ({ personId, data })
+        );
+        
+        if (ocrDataFromDocs.length > 0) {
+          setOcrData(ocrDataFromDocs);
+          console.log('✅ Dados OCR carregados (merged):', ocrDataFromDocs);
+        }
+      }
+      
+      setIsLoadingDeal(false);
+    }
+  }, [existingDeal, editDealId]);
 
   // -- Validation Logic --
   const isStepValid = (stepIndex: number): boolean => {
@@ -57,8 +184,40 @@ export const NewDealWizard: React.FC<{ onCancel: () => void, onFinish: () => voi
 
   const titles = ["Configurações", "Documentos", "Mapear Dados", "Preview", "Signatários"];
 
-  const nextStep = () => {
+  const nextStep = async () => {
     if (!isStepValid(step)) return; // Prevent advance if invalid
+    
+    // Se estiver no Step 1 e ainda não criou o deal E não for modo de edição, criar agora
+    if (step === 1 && !dealId && !editDealId) {
+      try {
+        const newDeal = await createDealMutation.mutateAsync({
+          name: configData.name,
+          contractModel: configData.contractModel,
+          ownerId: 'dev-user-id',
+          signers: [], // Vazio por enquanto, será preenchido no Step 5
+          metadata: {
+            useFgts: configData.useFgts,
+            bankFinancing: configData.bankFinancing,
+            consortiumLetter: configData.consortiumLetter,
+            sellers: configData.sellers,
+            buyers: configData.buyers,
+            propertyState: configData.propertyState,
+            propertyType: configData.propertyType,
+            deedCount: configData.deedCount,
+          },
+        });
+        
+        setDealId(newDeal.id);
+        console.log('✅ Deal DRAFT criado:', newDeal.id);
+      } catch (error) {
+        console.error('❌ Erro ao criar deal:', error);
+        return; // Não avança se falhar
+      }
+    } else if (editDealId && !dealId) {
+      // Se estiver em modo de edição mas o dealId ainda não foi setado (redundância de segurança)
+      setDealId(editDealId);
+    }
+    
     setDirection(1);
     setStep(s => Math.min(s + 1, 5));
   }
@@ -105,6 +264,16 @@ export const NewDealWizard: React.FC<{ onCancel: () => void, onFinish: () => voi
         setStep(targetStep);
       }
     }
+  }
+
+  // Loading state quando estiver carregando deal para edição
+  if (isDealLoading || isLoadingDeal) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white">
+        <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+        <p className="text-slate-600">Carregando dados do contrato...</p>
+      </div>
+    );
   }
 
   if (submissionStatus !== 'editing') {
@@ -165,7 +334,9 @@ export const NewDealWizard: React.FC<{ onCancel: () => void, onFinish: () => voi
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div>
-              <h2 className="font-bold text-slate-800 leading-tight">Novo Contrato</h2>
+              <h2 className="font-bold text-slate-800 leading-tight">
+                {editDealId ? 'Editar Contrato' : 'Novo Contrato'}
+              </h2>
               <p className="text-xs text-slate-500">Etapa {step}: {titles[step - 1]}</p>
             </div>
           </div>
@@ -226,6 +397,7 @@ export const NewDealWizard: React.FC<{ onCancel: () => void, onFinish: () => voi
                   onFilesChange={setDocuments}
                   onNext={nextStep}
                   onAnalysisComplete={(data) => setOcrData(data)}
+                  dealId={dealId}
                 />
               )}
               {step === 3 && (

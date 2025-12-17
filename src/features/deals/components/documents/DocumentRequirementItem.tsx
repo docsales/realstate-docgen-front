@@ -1,6 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { CheckCircle2, XCircle, Clock, Upload, X } from 'lucide-react';
 import type { UploadedFile } from '@/types/types';
+import { OcrStatusLoader } from './OcrStatusLoader';
+import { OcrStatus } from '@/types/ocr.types';
 
 interface DocumentRequirementItemProps {
 	documentId: string;
@@ -26,16 +28,11 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [isDragging, setIsDragging] = useState(false);
 
-	// Filtrar arquivos relacionados
-	// Para documentos do imóvel, personId é undefined em ambos
-	// Para pessoas (vendedores/compradores), personId deve coincidir
 	const relatedFiles = uploadedFiles.filter(f => {
 		if (f.type !== documentId) return false;
 		
-		// Se ambos são undefined (documentos do imóvel), são relacionados
 		if (personId === undefined && f.personId === undefined) return true;
 		
-		// Caso contrário, devem coincidir exatamente
 		return f.personId === personId;
 	});
 	const isValidated = relatedFiles.length > 0 && relatedFiles.every(f => f.validated === true);
@@ -79,14 +76,12 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 				onFileUpload(filesToUpload, documentId, personId);
 			}
 		}
-		// Reset input
 		if (fileInputRef.current) {
 			fileInputRef.current.value = '';
 		}
 	};
 
 	const handleClick = (e: React.MouseEvent) => {
-		// Don't trigger upload if clicking on remove button
 		if ((e.target as HTMLElement).closest('[data-remove-button]')) {
 			return;
 		}
@@ -170,58 +165,77 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 					{/* Arquivos anexados */}
 					{relatedFiles.length > 0 && (
 						<div className="space-y-2 mb-3">
-							{relatedFiles.map((file) => (
-								<div 
-									key={file.id} 
-									className={`flex items-center justify-between gap-2 p-2 rounded border ${
-										file.validated === true 
-											? 'bg-green-50 border-green-200' 
-											: file.validated === false
-											? 'bg-red-50 border-red-200'
-											: 'bg-yellow-50 border-yellow-200'
-									}`}
-								>
-									<div className="flex-1 min-w-0">
-										<div className="flex items-center gap-2 flex-wrap">
-											<span className="text-xs font-bold text-slate-600 uppercase bg-white px-2 py-0.5 rounded">
-												{file.type}
-											</span>
-											<span className="text-xs text-slate-700 truncate font-medium">
-												{file.file.name}
-											</span>
-											<span className="text-xs text-slate-400">
-												({(file.file.size / 1024 / 1024).toFixed(2)} MB)
-											</span>
-											{file.validated === true && (
-												<span className="text-xs text-green-600 font-semibold">✓ Validado</span>
-											)}
-											{file.validated === false && (
-												<span className="text-xs text-red-600 font-semibold">✗ Erro</span>
-											)}
-											{file.validated === undefined && (
-												<span className="text-xs text-yellow-600 font-semibold animate-pulse">⌛ Validando...</span>
+							{relatedFiles.map((file) => {
+								// Verificar se tem status OCR
+								const hasOcrStatus = file.ocrStatus && file.ocrStatus !== OcrStatus.IDLE;
+								
+								return (
+									<div key={file.id}>
+										{/* Mostrar loader OCR se estiver processando */}
+										{hasOcrStatus && (
+											<div className="mb-2">
+												<OcrStatusLoader
+													status={file.ocrStatus!}
+													fileName={file.file.name}
+													error={file.ocrError}
+													processingTime={file.ocrProcessingTime}
+												/>
+											</div>
+										)}
+										
+										{/* Card do arquivo */}
+										<div 
+											className={`flex items-center justify-between gap-2 p-2 rounded border ${
+												file.validated === true 
+													? 'bg-green-50 border-green-200' 
+													: file.validated === false
+													? 'bg-red-50 border-red-200'
+													: 'bg-yellow-50 border-yellow-200'
+											}`}
+										>
+											<div className="flex-1 min-w-0">
+												<div className="flex items-center gap-2 flex-wrap">
+													<span className="text-xs font-bold text-slate-600 uppercase bg-white px-2 py-0.5 rounded">
+														{file.type}
+													</span>
+													<span className="text-xs text-slate-700 truncate font-medium">
+														{file.file.name}
+													</span>
+													<span className="text-xs text-slate-400">
+														({(file.file.size / 1024 / 1024).toFixed(2)} MB)
+													</span>
+													{file.validated === true && (
+														<span className="text-xs text-green-600 font-semibold">✓ Validado</span>
+													)}
+													{file.validated === false && (
+														<span className="text-xs text-red-600 font-semibold">✗ Erro</span>
+													)}
+													{file.validated === undefined && (
+														<span className="text-xs text-yellow-600 font-semibold animate-pulse">⌛ Validando...</span>
+													)}
+												</div>
+												{file.validationError && (
+													<p className="text-xs text-red-600 mt-1">{file.validationError}</p>
+												)}
+											</div>
+											
+											{onRemoveFile && (
+												<button
+													data-remove-button
+													onClick={(e) => {
+														e.stopPropagation();
+														onRemoveFile(file.id);
+													}}
+													className="p-1 hover:bg-red-100 rounded text-red-500 hover:text-red-700 transition-colors flex-shrink-0"
+													title="Remover arquivo"
+												>
+													<X className="w-4 h-4" />
+												</button>
 											)}
 										</div>
-										{file.validationError && (
-											<p className="text-xs text-red-600 mt-1">{file.validationError}</p>
-										)}
 									</div>
-									
-									{onRemoveFile && (
-										<button
-											data-remove-button
-											onClick={(e) => {
-												e.stopPropagation();
-												onRemoveFile(file.id);
-											}}
-											className="p-1 hover:bg-red-100 rounded text-red-500 hover:text-red-700 transition-colors flex-shrink-0"
-											title="Remover arquivo"
-										>
-											<X className="w-4 h-4" />
-										</button>
-									)}
-								</div>
-							))}
+								);
+							})}
 						</div>
 					)}
 

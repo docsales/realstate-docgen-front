@@ -80,12 +80,9 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 							value={data.contractModel}
 							onChange={(e) => onChange({ contractModel: e.target.value })}
 						>
-							<option value="venda_compra_padrao">Compra e Venda Padrão</option>
-							<option value="locacao_residencial">Locação Residencial</option>
-							<option value="locacao_comercial">Locação Comercial</option>
-							<option value="escritura_publica">Escritura Pública de Compra e Venda</option>
-							<option value="doacao_imovel">Doação de Imóvel</option>
-							<option value="inventario_extrajudicial">Inventário Extrajudicial</option>
+							<option value="19diHiHX3OZ9IQPVtOe28629C94kmqYk5">Financiamento</option>
+							<option value="1uhXPhZYh4n3Hc8Sh62ndZgOHBde185_V">Financiamento + FGTS</option>
+							<option value="1Y0oP62vIY_N43dsiZHCh0jlPf-GeyhnH">À vista</option>
 						</select>
 					</div>
 				</div>
