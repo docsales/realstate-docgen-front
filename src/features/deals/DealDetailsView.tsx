@@ -13,7 +13,7 @@ interface DealDetailsProps {
 
 export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, onEdit }) => {
     // Buscar dados reais do deal
-    const { data: dealData, isLoading, isError, error } = useDeal(dealId);
+    const { data: dealData, isLoading, isError, error } = useDeal(dealId, '00000000-0000-0000-0000-000000000001'); // TODO: Get ownerId from auth session
 
     const [activeTab, setActiveTab] = useState<'data' | 'docs' | 'notes'>('data');
     const [notes, setNotes] = useState('');
@@ -61,19 +61,19 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
         <div className="flex gap-2 mb-6">
             <button
                 onClick={() => setActiveTab('data')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'data' ? 'bg-slate-200 text-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}
+                className={`cursor-pointer px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'data' ? 'bg-slate-200 text-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}
             >
                 Dados Tratados
             </button>
             <button
                 onClick={() => setActiveTab('docs')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'docs' ? 'bg-slate-200 text-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}
+                className={`cursor-pointer px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'docs' ? 'bg-slate-200 text-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}
             >
                 Documentos
             </button>
             <button
                 onClick={() => setActiveTab('notes')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'notes' ? 'bg-slate-200 text-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}
+                className={`cursor-pointer px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'notes' ? 'bg-slate-200 text-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}
             >
                 Observações
             </button>

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { dealsService, type CreateDealPayload, type UpdateDealStatusPayload } from '../services/deals.service';
+import type { UpdateDealDataDto } from '@/types/types';
 
 // Query keys para cache management
 export const dealKeys = {
@@ -58,11 +59,11 @@ export function useDeals(ownerId: string) {
 /**
  * Hook para buscar um deal específico
  */
-export function useDeal(dealId: string, options?: { enabled?: boolean }) {
+export function useDeal(dealId: string, ownerId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: dealKeys.detail(dealId),
     queryFn: async () => {
-      const deal = await dealsService.getDeal(dealId);
+      const deal = await dealsService.getDeal(dealId, ownerId);
       return deal;
     },
     enabled: options?.enabled !== undefined ? options.enabled : !!dealId,
@@ -80,12 +81,28 @@ export function useCreateDeal() {
   return useMutation({
     mutationFn: (payload: CreateDealPayload) => dealsService.createDeal(payload),
     onSuccess: (newDeal) => {
-      // Invalida todas as queries de lista (incluindo paginadas com diferentes searchTerms)
       queryClient.invalidateQueries({ queryKey: dealKeys.lists() });
       queryClient.setQueryData(dealKeys.detail(newDeal.id), newDeal);
     },
     onError: (error) => {
       console.error('❌ Erro ao criar deal:', error);
+    },
+  });
+}
+
+export function useUpdateDeal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ dealId, ownerId, payload }: { dealId: string; ownerId: string; payload: UpdateDealDataDto }) =>
+      dealsService.updateDeal(dealId, ownerId, payload),
+    onSuccess: (updatedDeal) => {
+      queryClient.setQueryData(dealKeys.detail(updatedDeal.id), updatedDeal);
+      queryClient.invalidateQueries({ queryKey: dealKeys.detail(updatedDeal.id) });
+      queryClient.invalidateQueries({ queryKey: dealKeys.lists() });
+    },
+    onError: (error) => {
+      console.error('❌ Erro ao atualizar deal:', error.message);
     },
   });
 }
@@ -101,7 +118,6 @@ export function useUpdateDealStatus() {
       dealsService.updateDealStatus(dealId, payload),
     onSuccess: (updatedDeal) => {
       queryClient.setQueryData(dealKeys.detail(updatedDeal.id), updatedDeal);
-      // Invalida todas as queries de lista (incluindo paginadas)
       queryClient.invalidateQueries({ queryKey: dealKeys.lists() });
     },
     onError: (error) => {
@@ -140,8 +156,57 @@ export function useRemoveDocumentFromDeal() {
     onSuccess: (_, { dealId }) => {
       queryClient.invalidateQueries({ queryKey: dealKeys.detail(dealId) });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('❌ Erro ao remover documento do deal:', error.message);
+    },
+  });
+}
+
+/**
+ * Hook para remover signatário do deal
+ */
+export function useRemoveSignatoryFromDeal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ dealId, signatoryId }: { dealId: string; signatoryId: string }) =>
+      dealsService.removeSignatoryFromDeal(dealId, signatoryId),
+    onSuccess: (_, { dealId }) => {
+      queryClient.invalidateQueries({ queryKey: dealKeys.detail(dealId) });
+    },
+    onError: (error: any) => {
+      console.error('❌ Erro ao remover signatário do deal:', error.message);
+    },
+  });
+}
+
+/**
+ * Hook para gerar preview do contrato
+ */
+export function useGeneratePreview() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ dealId, ownerId }: { dealId: string; ownerId: string }) =>
+      dealsService.generatePreview(dealId, ownerId),
+    onSuccess: (_, { dealId }) => {
+      queryClient.invalidateQueries({ queryKey: dealKeys.detail(dealId) });
+    },
+  });
+}
+
+/**
+ * Hook para enviar contrato para assinatura
+ */
+export function useSendContract() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ dealId, ownerId }: { dealId: string; ownerId: string }) =>
+      dealsService.sendContract(dealId, ownerId),
+    onSuccess: (_, { dealId }) => {
+      queryClient.invalidateQueries({ queryKey: dealKeys.detail(dealId) });
+      queryClient.invalidateQueries({ queryKey: dealKeys.lists() });
     },
   });
 }

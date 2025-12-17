@@ -95,6 +95,15 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 		e.preventDefault();
 		e.stopPropagation();
 		if (canAddMore) {
+			e.dataTransfer.dropEffect = 'copy';
+			setIsDragging(true);
+		}
+	};
+
+	const handleDragEnter = (e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (canAddMore) {
 			setIsDragging(true);
 		}
 	};
@@ -102,6 +111,14 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 	const handleDragLeave = (e: React.DragEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
+		
+		// Verificar se ainda está dentro da área de drop
+		// Se o relatedTarget (para onde o mouse foi) ainda está dentro do currentTarget,
+		// significa que só mudou de elemento filho, não saiu da área
+		if (e.currentTarget.contains(e.relatedTarget as Node)) {
+			return;
+		}
+		
 		setIsDragging(false);
 	};
 
@@ -139,6 +156,7 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 			`}
 			onClick={handleClick}
 			onDragOver={handleDragOver}
+			onDragEnter={handleDragEnter}
 			onDragLeave={handleDragLeave}
 			onDrop={handleDrop}
 		>

@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
-import { LogOut } from 'lucide-react';
+import { LogOut, Settings, ChevronDown } from 'lucide-react';
 import { LoginView } from './features/auth/LoginView';
 import { RegisterView } from './features/auth/RegisterView';
 import { DashboardView } from './features/dashboard/DashboardView';
 import { NewDealWizard } from './features/deals/NewDealWizard';
 import { DealDetailsView } from './features/deals/DealDetailsView';
+import { SettingsView } from './features/settings/SettingsView';
 import { useAuth } from './hooks/useAuth';
 
 const logoSrc = "/images/docsales-logo.png";
 
 export default function App() {
   const { isAuthenticated, user, logout } = useAuth();
-  const [view, setView] = useState<'dashboard' | 'new-deal' | 'edit-deal' | 'deal-details'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'new-deal' | 'edit-deal' | 'deal-details' | 'settings'>('dashboard');
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
@@ -63,12 +64,37 @@ export default function App() {
               <span className="text-sm font-semibold text-slate-700">{user?.name}</span>
               <span className="text-xs text-slate-500">Imobiliária Premium</span>
             </div>
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white border-2 border-white bg-gradient-to-br from-[#ef0474] to-[#085995] shadow-md">
-              {user?.name?.charAt(0) || 'U'}
+            
+            {/* User Menu Dropdown com daisyUI */}
+            <div className="cursor-pointer dropdown dropdown-end">
+              <div tabIndex={0} role="button" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white border-2 border-white bg-gradient-to-br from-[#ef0474] to-[#085995] shadow-md">
+                  {user?.name?.charAt(0) || 'U'}
+                </div>
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              </div>
+              <ul tabIndex={0} className="dropdown-content menu bg-white rounded-box z-[1] w-52 p-2 shadow-lg border border-slate-100 mt-2">
+                <li>
+                  <button
+                    onClick={() => setView('settings')}
+                    className="flex items-center gap-3 px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-md"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>Configurações</span>
+                  </button>
+                </li>
+                <div className="divider my-0"></div>
+                <li>
+                  <button
+                    onClick={logout}
+                    className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-slate-100 rounded-md"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sair</span>
+                  </button>
+                </li>
+              </ul>
             </div>
-            <button onClick={logout} className="text-slate-400 hover:text-slate-600 ml-2">
-              <LogOut className="w-5 h-5" />
-            </button>
           </div>
         </div>
       </nav>
@@ -95,6 +121,9 @@ export default function App() {
             onBack={handleBackToDashboard}
             onEdit={handleEditDeal}
           />
+        )}
+        {view === 'settings' && (
+          <SettingsView onBack={handleBackToDashboard} />
         )}
       </main>
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Calendar, TrendingUp, CheckCircle2, Users } from 'lucide-react';
+import { FileText, Calendar, TrendingUp, CheckCircle2 } from 'lucide-react';
 import type { ConsolidatedChecklist } from '@/types/checklist.types';
 import type { UploadedFile } from '@/types/types';
 
@@ -66,7 +66,7 @@ export const ChecklistSummary: React.FC<ChecklistSummaryProps> = ({
   return (
     <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl border border-primary/20 p-6 mb-6">
       <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-        <FileText className="w-5 h-5 text-primary" />
+        <FileText className="w-5 h-5 text-secondary" />
         Resumo do Checklist
       </h3>
 
@@ -153,5 +153,3 @@ export const ChecklistSummary: React.FC<ChecklistSummaryProps> = ({
     </div>
   );
 };
-
-

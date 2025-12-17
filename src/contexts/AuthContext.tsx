@@ -1,8 +1,13 @@
 import React, { createContext, useState, type ReactNode } from 'react';
+import type { UserSettings } from '@/types/settings.types';
 
 interface User {
   name: string;
   email: string;
+  docsalesApiKey?: string;
+  folderId?: string;
+  docsalesAccountId?: string;
+  settings?: UserSettings;
 }
 
 export interface AuthContextType {

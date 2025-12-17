@@ -15,11 +15,9 @@ interface MappingStepProps {
   ocrData?: OcrDataByPerson[];
 }
 
-// Generate contract fields dynamically based on DealConfig
 const generateContractFields = (dealConfig: DealConfig): ContractFieldSection[] => {
   const sections: ContractFieldSection[] = [];
 
-  // Generate fields for each seller
   dealConfig.sellers.forEach((seller, index) => {
     sections.push({
       section: `Vendedor ${index + 1}`,
@@ -36,7 +34,6 @@ const generateContractFields = (dealConfig: DealConfig): ContractFieldSection[] 
     });
   });
 
-  // Generate fields for each buyer
   dealConfig.buyers.forEach((buyer, index) => {
     sections.push({
       section: `Comprador ${index + 1}`,
@@ -53,7 +50,6 @@ const generateContractFields = (dealConfig: DealConfig): ContractFieldSection[] 
     });
   });
 
-  // Add property section
   sections.push({
     section: 'Imóvel',
     fields: [
@@ -80,7 +76,6 @@ export const MappingStep: React.FC<MappingStepProps> = ({
   const displayOcrData = ocrData || [];
   const contractFieldSections = generateContractFields(dealConfig);
 
-  // Recursive function to render JSON tree
   const renderJsonTree = (data: any, prefix = '') => {
     return Object.entries(data).map(([key, value]) => {
       const fullKey = prefix ? `${prefix}.${key}` : key;
@@ -101,7 +96,6 @@ export const MappingStep: React.FC<MappingStepProps> = ({
         )
       }
 
-      // Skip arrays for now (could be enhanced later)
       if (Array.isArray(value)) {
         return null;
       }
@@ -126,11 +120,9 @@ export const MappingStep: React.FC<MappingStepProps> = ({
     })
   }
 
-  // Render OCR data grouped by person
   const renderOcrSections = () => {
     const sections: React.ReactElement[] = [];
 
-    // Render sellers
     dealConfig.sellers.forEach((seller, index) => {
       const ocrForPerson = displayOcrData.find(ocr => ocr.personId === seller.id);
       
@@ -152,7 +144,6 @@ export const MappingStep: React.FC<MappingStepProps> = ({
       );
     });
 
-    // Render buyers
     dealConfig.buyers.forEach((buyer, index) => {
       const ocrForPerson = displayOcrData.find(ocr => ocr.personId === buyer.id);
       
@@ -174,7 +165,6 @@ export const MappingStep: React.FC<MappingStepProps> = ({
       );
     });
 
-    // Render property section
     const propertyOcr = displayOcrData.find(ocr => ocr.personId === 'property');
     sections.push(
       <div key="property" className="mb-4">
@@ -196,7 +186,6 @@ export const MappingStep: React.FC<MappingStepProps> = ({
     return sections;
   };
 
-  // Render contract field with editable input
   const renderContractField = (fieldId: string, label: string) => {
     const mapping = mappings[fieldId];
     const isActive = activeDropZone === fieldId;
@@ -281,7 +270,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
       <div className="flex-1 flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 bg-slate-50 border-b border-slate-200">
           <h3 className="font-bold text-slate-700 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-accent" />
+            <FileText className="w-5 h-5 text-secondary" />
             Dados Extraídos (OCR)
           </h3>
         </div>
@@ -294,7 +283,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
       <div className="flex-1 flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 bg-slate-50 border-b border-slate-200">
           <h3 className="font-bold text-slate-700 flex items-center gap-2">
-            <FileCheck className="w-5 h-5 text-primary" />
+            <FileCheck className="w-5 h-5 text-secondary" />
             Campos do Contrato
           </h3>
         </div>

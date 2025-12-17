@@ -70,17 +70,22 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 							placeholder="Ex: Compra e Venda - Apto 32B Ed. Horizon"
 							value={data.name}
 							maxLength={80}
-							onChange={(e) => onChange({ name: e.target.value as string })}
+							onChange={(e) => {
+								onChange({ name: e.target.value as string } as any);
+							}}
 						/>
 					</div>
 					<div>
 						<label className="text-slate-700 font-medium">Modelo de Minuta</label>
 						<select
 							className="select select-bordered w-full"
-							value={data.contractModel}
-							onChange={(e) => onChange({ contractModel: e.target.value })}
+							value={data.docTemplateId}
+							onChange={(e) => {
+								onChange({ docTemplateId: e.target.value as string } as any);
+							}}
 						>
-							<option value="19diHiHX3OZ9IQPVtOe28629C94kmqYk5">Financiamento</option>
+							{/* TODO: Get contract models from API */}
+							<option value="1zPOguNqO2UmM7pS4ZkCWlhcG5kXLZChRFOiow-RTJZM">Financiamento</option>
 							<option value="1uhXPhZYh4n3Hc8Sh62ndZgOHBde185_V">Financiamento + FGTS</option>
 							<option value="1Y0oP62vIY_N43dsiZHCh0jlPf-GeyhnH">À vista</option>
 						</select>
@@ -99,19 +104,25 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 						icon={<PiggyBank className="w-6 h-6" />}
 						title="Utilizar FGTS"
 						checked={data.useFgts}
-						onChange={(c) => onChange({ useFgts: c })}
+						onChange={(c) => {
+							onChange({ useFgts: c } as any);
+						}}
 					/>
 					<ToggleCard
 						icon={<Landmark className="w-6 h-6" />}
 						title="Financiamento Bancário"
 						checked={data.bankFinancing}
-						onChange={(c) => onChange({ bankFinancing: c })}
+						onChange={(c) => {
+							onChange({ bankFinancing: c } as any);
+						}}
 					/>
 					<ToggleCard
 						icon={<Banknote className="w-6 h-6" />}
 						title="Carta de Consórcio"
 						checked={data.consortiumLetter}
-						onChange={(c) => onChange({ consortiumLetter: c })}
+						onChange={(c) => {
+							onChange({ consortiumLetter: c } as any);
+						}}
 					/>
 				</div>
 			</section>
@@ -119,7 +130,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 			{/* 3. Parties Involved with Tabs */}
 			<section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
 				<div className="bg-slate-50/50 p-4 border-b border-slate-100 flex items-center gap-2">
-					<Users2 className="w-5 h-5 text-slate-600" />
+					<Users2 className="w-5 h-5 text-primary" />
 					<h3 className="font-bold text-slate-800">Partes & Imóvel</h3>
 				</div>
 
@@ -167,7 +178,9 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 							<PersonList
 								title="Vendedores"
 								people={data.sellers || []}
-								onChange={handleSellersChange}
+								onChange={(s) => {
+									handleSellersChange(s);
+								}}
 							/>
 						</div>
 					)}
@@ -178,7 +191,9 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 							<PersonList
 								title="Compradores"
 								people={data.buyers || []}
-								onChange={handleBuyersChange}
+								onChange={(b) => {
+									handleBuyersChange(b);
+								}}
 							/>
 						</div>
 					)}
@@ -190,9 +205,15 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 								propertyState={data.propertyState}
 								propertyType={data.propertyType}
 								deedCount={data.deedCount}
-								onPropertyStateChange={(s) => onChange({ propertyState: s })}
-								onPropertyTypeChange={(t) => onChange({ propertyType: t })}
-								onDeedCountChange={(c) => onChange({ deedCount: c })}
+								onPropertyStateChange={(s) => {
+									onChange({ propertyState: s } as any);
+								}}
+								onPropertyTypeChange={(t) => {
+									onChange({ propertyType: t } as any);
+								}}
+								onDeedCountChange={(c) => {
+									onChange({ deedCount: c } as any);
+								}}
 							/>
 						</div>
 					)}

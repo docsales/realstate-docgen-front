@@ -20,7 +20,7 @@ const MARITAL_STATE_DOCUMENTS = [
 interface UseOcrOptions {
   autoProcess?: boolean;
   pollingInterval?: number; // Intervalo de polling em ms (default: 3000)
-  onComplete?: (fileId: string, extractedData: any) => void;
+  onComplete?: (documentId: string, extractedData: any, localFileId: string) => void;
   onError?: (fileId: string, error: string) => void;
 }
 
@@ -83,7 +83,7 @@ export const useOcr = (
     error?: string,
     extractedData?: any
   ) => {
-    onFilesChange(files.map(f => {
+    onFilesChange(prevFiles => prevFiles.map(f => {
       if (f.id === fileId) {
         // Se completou e tem dados extraídos, salvar no localStorage
         if (status === OcrStatus.COMPLETED && extractedData && f.type) {
@@ -100,7 +100,7 @@ export const useOcr = (
       }
       return f;
     }));
-  }, [files, onFilesChange, saveToLocalStorage]);
+  }, [onFilesChange, saveToLocalStorage]);
 
   /**
    * Verifica status de um arquivo específico
@@ -121,8 +121,7 @@ export const useOcr = (
       if (result.status === 'completed') {
         updateFileOcrStatus(localFileId, OcrStatus.COMPLETED, undefined, undefined, result.extractedData);
         stopPolling(documentId);
-        // Usar documentId (do backend) no callback onComplete para vinculação ao deal
-        onComplete?.(documentId, result.extractedData);
+        onComplete?.(documentId, result.extractedData, localFileId);
         console.log('✅ Arquivo concluído:', localFileId, '(documentId:', documentId, ')');
       } else if (result.status === 'error') {
         updateFileOcrStatus(localFileId, OcrStatus.ERROR, undefined, result.error);
@@ -271,13 +270,13 @@ export const useOcr = (
   /**
    * Reprocessa um arquivo com erro
    */
-  const retryFile = useCallback(async (fileId: string) => {
-    const file = files.find(f => f.id === fileId);
+  const retryFile = useCallback(async (fileId: string, currentFiles: UploadedFile[]) => {
+    const file = currentFiles.find(f => f.id === fileId);
     if (file) {
       updateFileOcrStatus(fileId, OcrStatus.IDLE);
       await processFile(file);
     }
-  }, [files, processFile, updateFileOcrStatus]);
+  }, [processFile, updateFileOcrStatus]);
 
   /**
    * Auto-processar novos arquivos
@@ -306,8 +305,8 @@ export const useOcr = (
   /**
    * Refresh manual - verifica status de todos os arquivos em processamento
    */
-  const manualRefresh = useCallback(async () => {
-    const processingFiles = files.filter(f => f.ocrStatus === OcrStatus.PROCESSING);
+  const manualRefresh = useCallback(async (currentFiles: UploadedFile[]) => {
+    const processingFiles = currentFiles.filter(f => f.ocrStatus === OcrStatus.PROCESSING);
     
     if (processingFiles.length === 0) {
       console.log('ℹ️ Nenhum arquivo em processamento para verificar');
@@ -316,12 +315,17 @@ export const useOcr = (
 
     console.log(`🔄 Refresh manual iniciado para ${processingFiles.length} arquivo(s)`);
     
+    // Para cada arquivo em processamento, buscar o documentId do mapeamento
     await Promise.all(
-      processingFiles.map(f => checkFileStatus(f.id))
+      processingFiles.map(f => {
+        // Tentar obter o documentId do backend, senão usar o ID local
+        const documentId = fileIdMapRef.current.get(f.id) || f.id;
+        return checkFileStatus(documentId);
+      })
     );
     
     console.log('✅ Refresh manual concluído');
-  }, [files, checkFileStatus]);
+  }, [checkFileStatus]);
 
   /**
    * Cleanup ao desmontar

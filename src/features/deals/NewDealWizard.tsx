@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, CheckCircle2, Send, Mail, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Send, Loader2, Save } from 'lucide-react';
 import { Button } from '@/components/Button';
 import type { DealConfig, Signatory, UploadedFile, MappingValue, OcrDataByPerson } from '@/types/types';
 import { createDefaultPerson } from '@/types/types';
@@ -10,7 +10,8 @@ import { DocumentsStep } from './steps/DocumentsStep';
 import { MappingStep } from './steps/MappingStep';
 import { PreviewStep } from './steps/PreviewStep';
 import { SignatoriesStep } from './steps/SignatoriesStep';
-import { useCreateDeal, useDeal } from './hooks/useDeals';
+import { useCreateDeal, useDeal, useUpdateDeal, useSendContract } from './hooks/useDeals';
+import { ContractSendingLoader } from './components/ContractSendingLoader';
 
 interface NewDealWizardProps {
   onCancel: () => void;
@@ -24,17 +25,23 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
   const [submissionStatus, setSubmissionStatus] = useState<'editing' | 'sending' | 'success'>('editing');
   const [dealId, setDealId] = useState<string | null>(editDealId || null);
   const [isLoadingDeal, setIsLoadingDeal] = useState(!!editDealId);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const createDealMutation = useCreateDeal();
+  const updateDealMutation = useUpdateDeal();
+  const sendContractMutation = useSendContract();
 
-  const { data: existingDeal, isLoading: isDealLoading } = useDeal(editDealId || '', {
+  // TODO: Get ownerId from auth session
+  const { data: existingDeal, isLoading: isDealLoading } = useDeal(editDealId || '', '00000000-0000-0000-0000-000000000001', {
     enabled: !!editDealId,
   });
 
   // -- Lifted State --
   const [configData, setConfigData] = useState<DealConfig>({
     name: '',
-    contractModel: '19diHiHX3OZ9IQPVtOe28629C94kmqYk5', // Financiamento (Google Drive ID)
+    docTemplateId: '1zPOguNqO2UmM7pS4ZkCWlhcG5kXLZChRFOiow-RTJZM', // Financiamento (Google Drive ID)
     useFgts: false,
     bankFinancing: false,
     consortiumLetter: false,
@@ -55,7 +62,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
         setConfigData(prev => ({
           ...prev,
           name: existingDeal.name || '',
-          contractModel: existingDeal.contractModel || prev.contractModel,
+          docTemplateId: existingDeal.docTemplateId || prev.docTemplateId,
           ...(existingDeal.metadata || {}),
         }));
       }
@@ -65,10 +72,31 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
           id: signer.id,
           name: signer.name,
           email: signer.email,
-          phone: signer.phoneNumber || '',
+          phoneNumber: signer.phoneNumber || '',
           role: signer.role as any,
           signingOrder: signer.signingOrder,
         })));
+      }
+
+      // Carregar contractFields nos mappings
+      if (existingDeal.contractFields) {
+        const contractFieldsData = typeof existingDeal.contractFields === 'string'
+          ? JSON.parse(existingDeal.contractFields)
+          : existingDeal.contractFields;
+
+        const loadedMappings: Record<string, MappingValue> = {};
+        Object.entries(contractFieldsData).forEach(([fieldId, value]) => {
+          if (typeof value === 'string') {
+            loadedMappings[fieldId] = {
+              value: value,
+              source: 'manual', // Default to manual for loaded data
+            };
+          }
+        });
+
+        if (Object.keys(loadedMappings).length > 0) {
+          setMappings(loadedMappings);
+        }
       }
 
       if (existingDeal.documents && existingDeal.documents.length > 0) {
@@ -137,6 +165,126 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
     }
   }, [existingDeal, editDealId]);
 
+  // -- Save Functions --
+  const handleSaveStep1 = async () => {
+    if (!dealId) {
+      setSaveError('ID do deal não encontrado');
+      setTimeout(() => setSaveError(null), 3000);
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveSuccess(false);
+    setSaveError(null);
+
+    try {
+      await updateDealMutation.mutateAsync({
+        dealId,
+        ownerId: '00000000-0000-0000-0000-000000000001',
+        payload: {
+          name: configData.name,
+          docTemplateId: configData.docTemplateId,
+          metadata: {
+            useFgts: configData.useFgts,
+            bankFinancing: configData.bankFinancing,
+            consortiumLetter: configData.consortiumLetter,
+            sellers: configData.sellers,
+            buyers: configData.buyers,
+            propertyState: configData.propertyState,
+            propertyType: configData.propertyType,
+            deedCount: configData.deedCount,
+          },
+        },
+      });
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (error: any) {
+      console.error('❌ Erro ao salvar configurações:', error);
+      setSaveError(error?.message || 'Erro ao salvar configurações');
+      setTimeout(() => setSaveError(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveStep3 = async () => {
+    if (!dealId) {
+      setSaveError('ID do deal não encontrado');
+      setTimeout(() => setSaveError(null), 3000);
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveSuccess(false);
+    setSaveError(null);
+
+    try {
+      // Converter mappings para o formato JSON simples (apenas valores)
+      const contractFieldsJson: Record<string, string> = {};
+      Object.entries(mappings).forEach(([fieldId, mapping]) => {
+        contractFieldsJson[fieldId] = mapping.value;
+      });
+
+      await updateDealMutation.mutateAsync({
+        dealId,
+        ownerId: '00000000-0000-0000-0000-000000000001',
+        payload: {
+          contractFields: contractFieldsJson,
+        },
+      });
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (error: any) {
+      console.error('❌ Erro ao salvar campos do contrato:', error);
+      setSaveError(error?.message || 'Erro ao salvar campos do contrato');
+      setTimeout(() => setSaveError(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveStep5 = async () => {
+    if (!dealId) {
+      setSaveError('ID do deal não encontrado');
+      setTimeout(() => setSaveError(null), 3000);
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveSuccess(false);
+    setSaveError(null);
+
+    try {
+      const signersToSave = signatories.map(sig => ({
+        id: sig.id,
+        name: sig.name,
+        email: sig.email,
+        phoneNumber: sig.phoneNumber,
+        signingOrder: 0,
+        role: sig.role,
+      }));
+
+      await updateDealMutation.mutateAsync({
+        dealId,
+        ownerId: '00000000-0000-0000-0000-000000000001',
+        payload: {
+          signers: signersToSave as any,
+        },
+      });
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (error: any) {
+      console.error('❌ Erro ao salvar signatários:', error);
+      setSaveError(error?.message || 'Erro ao salvar signatários');
+      setTimeout(() => setSaveError(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // -- Validation Logic --
   const isStepValid = (stepIndex: number): boolean => {
     switch (stepIndex) {
@@ -166,8 +314,8 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
       try {
         const newDeal = await createDealMutation.mutateAsync({
           name: configData.name,
-          contractModel: configData.contractModel,
-          ownerId: 'dev-user-id',
+          docTemplateId: configData.docTemplateId, // Financiamento (Google Drive ID)
+          ownerId: '00000000-0000-0000-0000-000000000001', // TODO: Get ownerId from auth session
           signers: [],
           metadata: {
             useFgts: configData.useFgts,
@@ -199,17 +347,30 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
     setStep(s => Math.max(s - 1, 1));
   }
 
-  const handleFinish = () => {
-    if (!isStepValid(step)) return;
+  const handleFinish = async () => {
+    if (!isStepValid(step) || !dealId) return;
 
     setSubmissionStatus('sending');
 
+    try {
+      await sendContractMutation.mutateAsync({
+        dealId,
+        ownerId: '00000000-0000-0000-0000-000000000001', // TODO: Get ownerId from auth session
+      });
+
+      setSaveSuccess(true);
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar contrato:', error);
+      setSaveError(error.response?.data?.message || 'Erro ao enviar contrato');
+      setTimeout(() => setSaveError(null), 3000);
+      setSubmissionStatus('editing');
+      return;
+    }
+
+    setSubmissionStatus('success');
     setTimeout(() => {
-      setSubmissionStatus('success');
-      setTimeout(() => {
-        onFinish();
-      }, 2500);
-    }, 3000);
+      onFinish();
+    }, 2500);
   }
 
   const handleStepperClick = (targetStep: number) => {
@@ -248,20 +409,11 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
           {submissionStatus === 'sending' && (
             <motion.div
               key="sending"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               exit={{ opacity: 0, y: -20 }}
-              style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem' }}
             >
-              <div className="relative w-24 h-24 mx-auto">
-                <div className="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
-                <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                <Mail className="absolute inset-0 m-auto text-primary w-8 h-8 animate-pulse" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-slate-800">Enviando Contrato...</h2>
-                <p className="text-slate-500 mt-2">Disparando emails para os signatários</p>
-              </div>
+              <ContractSendingLoader />
             </motion.div>
           )}
 
@@ -387,6 +539,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
               )}
               {step === 4 && (
                 <PreviewStep
+                  dealId={dealId ?? ''}
                   dealName={configData.name}
                   mappedCount={Object.keys(mappings).length}
                   onGenerate={nextStep}
@@ -396,6 +549,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
                 <SignatoriesStep
                   signatories={signatories}
                   onChange={setSignatories}
+                  dealId={dealId}
                 />
               )}
             </motion.div>
@@ -405,22 +559,65 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
 
       {/* Footer Actions - Fixed at bottom */}
       <div className="bg-white border-t border-slate-200 p-4 fixed bottom-0 left-0 right-0 z-40">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <Button variant="ghost" onClick={step === 1 ? onCancel : prevStep}>
-            {step === 1 ? 'Cancelar' : 'Voltar'}
-          </Button>
-
-          {step !== 2 && step !== 4 && (
-            <Button
-              onClick={step === 5 ? handleFinish : nextStep}
-              disabled={!currentStepValid}
-              className={!currentStepValid ? 'opacity-50 grayscale' : ''}
-            >
-              {step === 5 ? 'Finalizar e Enviar' : 'Continuar'}
-              {step !== 5 && <ArrowRight className="w-4 h-4" />}
-              {step === 5 && <Send className="w-4 h-4" />}
-            </Button>
+        <div className="max-w-6xl mx-auto">
+          {/* Error message */}
+          {saveError && (
+            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+              <span className="font-medium">❌ {saveError}</span>
+            </div>
           )}
+
+          <div className="flex justify-between items-center">
+            <Button variant="ghost" onClick={step === 1 ? onCancel : prevStep}>
+              {step === 1 ? 'Cancelar' : 'Voltar'}
+            </Button>
+
+            <div className="flex items-center gap-3">
+              {/* Botão Salvar - apenas em modo de edição e nos steps 1, 3, 5 */}
+              {editDealId && (step === 1 || step === 3 || step === 5) && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    if (step === 1) handleSaveStep1();
+                    if (step === 3) handleSaveStep3();
+                    if (step === 5) handleSaveStep5();
+                  }}
+                  disabled={isSaving || !currentStepValid}
+                  className={`${isSaving ? 'opacity-50' : ''} ${saveSuccess ? '!bg-green-50 !border-green-500 !text-green-700' : ''}`}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : saveSuccess ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Salvo!
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Salvar
+                    </>
+                  )}
+                </Button>
+              )}
+
+              {/* Botão Continuar/Finalizar */}
+              {step !== 2 && step !== 4 && (
+                <Button
+                  onClick={step === 5 ? handleFinish : nextStep}
+                  disabled={!currentStepValid}
+                  className={!currentStepValid ? 'opacity-50 grayscale' : ''}
+                >
+                  {step === 5 ? 'Finalizar e Enviar' : 'Continuar'}
+                  {step !== 5 && <ArrowRight className="w-4 h-4" />}
+                  {step === 5 && <Send className="w-4 h-4" />}
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

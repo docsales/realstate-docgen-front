@@ -22,7 +22,7 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage 
-  } = useDealsInfinite('dev-user-id', serverSearchTerm, 20);
+  } = useDealsInfinite('00000000-0000-0000-0000-000000000001', serverSearchTerm, 20);
 
   // Flatten all pages
   const allDeals = data?.pages.flatMap(page => page.data) ?? [];
@@ -195,10 +195,10 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
       {!isLoading && !isError && allDeals.length > 0 && (
         <div 
           ref={scrollContainerRef}
-          className="overflow-y-auto max-h-[calc(100vh-300px)] border border-slate-200 rounded-lg"
+          className="overflow-y-auto max-h-[calc(100vh-300px)]"
         >
           {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
               {dealsToDisplay.map(deal => (
             <div
               key={deal.id}
@@ -289,11 +289,6 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
                 <span className="text-slate-500">Carregando mais...</span>
               </div>
-            )}
-            {!hasNextPage && dealsToDisplay.length > 0 && !isFetchingNextPage && (
-              <p className="text-center text-slate-400 text-sm">
-                Todos os contratos foram carregados
-              </p>
             )}
           </div>
         </div>

@@ -3,12 +3,12 @@ import type { Person, UploadedFile } from '@/types/types';
 import { DocumentRequirementItem } from './DocumentRequirementItem';
 import { AlertBanner } from './AlertBanner';
 import type { ConsolidatedChecklist } from '@/types/checklist.types';
+import { generateFileId } from '@/utils/generateFileId';
 
 interface BuyerDocumentsTabProps {
 	buyers: Person[];
 	uploadedFiles: UploadedFile[];
 	onFilesChange: (files: UploadedFile[]) => void;
-	onValidate: (files: UploadedFile[]) => void;
 	onRemoveFile: (fileId: string) => void;
 	checklist: ConsolidatedChecklist | null;
 }
@@ -17,7 +17,6 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 	buyers,
 	uploadedFiles,
 	onFilesChange,
-	onValidate,
 	onRemoveFile,
 	checklist
 }) => {
@@ -29,7 +28,7 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 
 	const handleFileUpload = (files: File[], documentType: string, personId?: string) => {
 		const newFiles: UploadedFile[] = files.map(file => ({
-			id: `${Date.now()}-${Math.random()}`,
+			id: generateFileId(),
 			file,
 			type: documentType,
 			category: 'buyers',
@@ -39,11 +38,8 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 
 		const updatedFiles = [...uploadedFiles, ...newFiles];
 		onFilesChange(updatedFiles);
-
-		// Disparar validação automaticamente
-		if (onValidate) {
-			onValidate(newFiles);
-		}
+		
+		// A validação agora é automática via OCR quando o processamento completar
 	};
 
 	return (

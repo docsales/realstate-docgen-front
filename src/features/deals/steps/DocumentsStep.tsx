@@ -47,12 +47,41 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	} = useOcr(files, onFilesChange, {
 		autoProcess: true,
 		pollingInterval: 2 * 60 * 1000, // 2 minutos
-		onComplete: (fileId) => {
-			if (dealId && fileId) {
-				addDocumentToDealMutation.mutate(
-					{ dealId, documentId: fileId },
-				);
+		onComplete: (documentId, extractedData, localFileId) => {
+			console.log('🎉 OCR Completo - LocalID:', localFileId, 'DocumentID:', documentId, 'Validação:', extractedData?.validationPassed);
+			
+			if (!dealId || !documentId) {
+				console.warn('⚠️ dealId ou documentId ausente, não é possível vincular documento');
+				return;
 			}
+			
+			// Vincular documento ao deal usando documentId do backend
+			addDocumentToDealMutation.mutate(
+				{ dealId, documentId: documentId },
+				{
+					onSuccess: () => {
+						console.log('✅ Documento vinculado ao deal com sucesso - DocumentID:', documentId, 'LocalID:', localFileId);
+						
+						// Atualizar arquivo com validação real do parsing usando o ID local
+						onFilesChange(prevFiles => prevFiles.map(f => {
+							if (f.id === localFileId) {
+								console.log('📝 Atualizando validação do arquivo:', localFileId);
+								return {
+									...f,
+									validated: extractedData?.validationPassed ?? true,
+									validationError: !extractedData?.validationPassed 
+										? 'Documento não passou na validação do parsing' 
+										: undefined
+								};
+							}
+							return f;
+						}));
+					},
+					onError: (error) => {
+						console.error('❌ Erro ao vincular documento ao deal - DocumentID:', documentId, error);
+					}
+				}
+			);
 		},
 		onError: (fileId, error) => {
 			console.error('❌ Erro no OCR:', fileId, error);
@@ -63,6 +92,11 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		2 * 60 * 1000, // 2 minutos
 		ocrStats.processing > 0 // Ativar quando houver arquivos processando
 	);
+
+	// Wrapper para o manualRefresh que passa os arquivos atuais
+	const handleManualRefresh = () => {
+		manualRefresh(files);
+	};
 
 	useEffect(() => {
 		const loadChecklist = async () => {
@@ -119,35 +153,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		loadChecklist();
 	}, [config]);
 
-	// Função para validar documentos no servidor
-	const validateDocuments = async (filesToValidate: UploadedFile[]): Promise<void> => {
-		const pendingFiles = filesToValidate.filter(f => f.validated === undefined);
-		
-		if (pendingFiles.length === 0) return;
-
-		// TODO: Implementar chamada à API para validação
-		// Por enquanto, apenas simula validação
-		pendingFiles.forEach((file, index) => {
-			// Simulação: valida após um delay escalonado
-			setTimeout(() => {
-				// IMPORTANTE: Usar função de callback para obter o estado mais recente
-				// Evita problemas de closure com setTimeout
-				onFilesChange((currentFiles) => {
-					return currentFiles.map(f => 
-						f.id === file.id 
-							? { 
-								...f, 
-								validated: Math.random() > 0.2,  // 80% de sucesso
-								// Mantém o type original (já foi definido corretamente no upload)
-								type: f.type,
-								validationError: Math.random() > 0.2 ? undefined : 'Documento ilegível ou fora do padrão' 
-							}
-							: f
-					);
-				});
-			}, (index + 1) * 1000); // Delay escalonado para cada arquivo
-		});
-	};
 
 	const processDocuments = () => {
 		setValidationError(null);
@@ -287,7 +292,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 							{/* Botão de refresh manual */}
 							{ocrStats.processing > 0 && (
 								<button
-									onClick={manualRefresh}
+									onClick={handleManualRefresh}
 									className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-purple-50 rounded-lg border border-purple-300 shadow-sm transition-colors"
 									title="Verificar status agora"
 								>
@@ -382,7 +387,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 							buyers={config.buyers || []}
 							uploadedFiles={files}
 							onFilesChange={onFilesChange}
-							onValidate={validateDocuments}
 							onRemoveFile={handleRemoveFile}
 							checklist={checklist}
 						/>
@@ -393,7 +397,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 							sellers={config.sellers || []}
 							uploadedFiles={files}
 							onFilesChange={onFilesChange}
-							onValidate={validateDocuments}
 							onRemoveFile={handleRemoveFile}
 							checklist={checklist}
 						/>
@@ -406,7 +409,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 							deedCount={config.deedCount}
 							uploadedFiles={files}
 							onFilesChange={onFilesChange}
-							onValidate={validateDocuments}
 							onRemoveFile={handleRemoveFile}
 							checklist={checklist}
 						/>

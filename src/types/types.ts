@@ -13,12 +13,35 @@ export interface Deal {
   name?: string;
   docTemplateId?: string;
   status: DealStatus;
+  consolidated?: ConsolidatedDealData;
   metadata?: any;
   contractModel?: string;
+  contractFields?: any;
   createdAt: string;
   updatedAt: string;
   signers?: Signatory[];
   documents?: any[];
+}
+
+export interface GeneratePreviewResponse {
+  edit_url: string;
+  id: string;
+  status_code: number;
+}
+
+export interface UpdateDealDataDto {
+  name?: string;
+  docTemplateId?: string;
+  metadata?: any;
+  contractFields?: any;
+  consolidated?: ConsolidatedDealData;
+  signers?: Signatory[];
+}
+
+export interface ConsolidatedDealData {
+  draftPreviewUrl: string;
+  generatedDocId: string;
+  docsalesPdfUrl: string;
 }
 
 export interface Signatory {
@@ -92,7 +115,7 @@ export interface ContractFieldSection {
 
 export interface DealConfig {
   name: string;
-  contractModel: string;
+  docTemplateId: string;
   useFgts: boolean;
   bankFinancing: boolean;
   consortiumLetter: boolean;
@@ -112,108 +135,6 @@ export const createDefaultPerson = (id?: string): Person => ({
   isSpouse: false,
 });
 
-// Mock OCR Data Structure based on prompt
-export const MOCK_OCR_DATA = {
-  "nome": "ALCINO ALVES DA SILVA",
-  "cpf_cnpj": "1*.. ***-71",
-  "cpf_cnpj_formatado": "CPF parcialmente mascarado (últimos dígitos: 71)",
-  "tipo_pessoa": "FÍSICA",
-  "endereco_completo": "RUA 123, 27, SÃO PAULO, 12345-543 - SANTANA - SP",
-  "documento": {
-    "tipo": "CONTA DE LUZ",
-    "subtipo": "Energia Elétrica",
-    "empresa": "Enel Eletropaulo",
-    "cnpj_empresa": "12.234567/0001-11",
-    "mes_referencia": "02/2025",
-    "valor_total": 236.86
-  },
-  "endereco": {
-    "logradouro": "Rua Diogo Lara de Moraes",
-    "numero": "27",
-    "bairro": "Jardim São Luiz",
-    "cidade": "Santana de Parnaíba",
-    "estado": "SP",
-    "cep_formatado": "12345-567",
-    "tipo_imovel": "RESIDENCIAL"
-  }
-};
-
-// Mock OCR data grouped by person (for testing)
-// Note: These personIds should match the default sellers/buyers created in NewDealWizard
-export const MOCK_OCR_DATA_BY_PERSON: OcrDataByPerson[] = [
-  {
-    personId: 'default-seller-1',
-    data: {
-      "nome": "ALCINO ALVES DA SILVA",
-      "cpf_cnpj": "123.456.789-71",
-      "rg": "12.345.678-9",
-      "tipo_pessoa": "FÍSICA",
-      "endereco_completo": "RUA DIOGO LARA DE MORAES, 27, JARDIM SÃO LUIZ, 06500-999 - SANTANA DE PARNAÍBA - SP",
-      "documento": {
-        "tipo": "CONTA DE LUZ",
-        "subtipo": "Energia Elétrica",
-        "empresa": "Enel Eletropaulo",
-        "cnpj_empresa": "61.695.227/0001-93",
-        "mes_referencia": "02/2025",
-        "valor_total": 236.86
-      },
-      "endereco": {
-        "logradouro": "Rua Diogo Lara de Moraes",
-        "numero": "27",
-        "bairro": "Jardim São Luiz",
-        "cidade": "Santana de Parnaíba",
-        "estado": "SP",
-        "cep_formatado": "06500-999",
-        "tipo_imovel": "RESIDENCIAL"
-      }
-    }
-  },
-  {
-    personId: 'default-buyer-1',
-    data: {
-      "nome": "MARIA SANTOS OLIVEIRA",
-      "cpf_cnpj": "987.654.321-00",
-      "rg": "98.765.432-1",
-      "tipo_pessoa": "FÍSICA",
-      "endereco_completo": "AV PAULISTA, 1000, BELA VISTA, 01310-100 - SÃO PAULO - SP",
-      "documento": {
-        "tipo": "COMPROVANTE DE RESIDÊNCIA",
-        "subtipo": "Conta de Água",
-        "empresa": "SABESP",
-        "mes_referencia": "03/2025",
-        "valor_total": 89.50
-      },
-      "endereco": {
-        "logradouro": "Avenida Paulista",
-        "numero": "1000",
-        "bairro": "Bela Vista",
-        "cidade": "São Paulo",
-        "estado": "SP",
-        "cep_formatado": "01310-100",
-        "tipo_imovel": "RESIDENCIAL"
-      }
-    }
-  },
-  {
-    personId: 'property',
-    data: {
-      "endereco_completo": "RUA DAS FLORES, 123, JARDIM EUROPA, 01234-567 - SÃO PAULO - SP",
-      "endereco": {
-        "logradouro": "Rua das Flores",
-        "numero": "123",
-        "bairro": "Jardim Europa",
-        "cidade": "São Paulo",
-        "estado": "SP",
-        "cep_formatado": "01234-567",
-        "tipo_imovel": "RESIDENCIAL"
-      },
-      "matricula": "12345",
-      "area_total": "250m²",
-      "area_construida": "180m²"
-    }
-  }
-];
-
 export const CONTRACT_FIELDS = [
   { id: 'seller_name', label: 'Nome do Vendedor' },
   { id: 'seller_cpf', label: 'CPF do Vendedor' },
@@ -221,11 +142,4 @@ export const CONTRACT_FIELDS = [
   { id: 'property_city', label: 'Cidade do Imóvel' },
   { id: 'property_zip', label: 'CEP do Imóvel' },
   { id: 'doc_ref_month', label: 'Mês Referência (Comp. Res.)' }
-];
-
-export const MOCK_DEALS: Deal[] = [
-  { id: '1', ownerId: 'dev-user-id', name: 'Compra Apto Jardins', status: 'DRAFT', createdAt: '2023-10-25', updatedAt: '2023-10-25' },
-  { id: '2', ownerId: 'dev-user-id', name: 'Venda Casa Morumbi', status: 'SENT', createdAt: '2023-10-20', updatedAt: '2023-10-21' },
-  { id: '3', ownerId: 'dev-user-id', name: 'Aluguel Galpão', status: 'SIGNED', createdAt: '2023-10-15', updatedAt: '2023-10-16' },
-  { id: '4', ownerId: 'dev-user-id', name: 'Terreno Interior', status: 'DRAFT', createdAt: '2023-10-26', updatedAt: '2023-10-26' },
 ];

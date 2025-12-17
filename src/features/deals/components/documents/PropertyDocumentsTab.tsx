@@ -3,6 +3,7 @@ import type { PropertyState, PropertyType, UploadedFile } from '@/types/types';
 import { DocumentRequirementItem } from './DocumentRequirementItem';
 import { AlertBanner } from './AlertBanner';
 import type { ConsolidatedChecklist } from '@/types/checklist.types';
+import { generateFileId } from '@/utils/generateFileId';
 
 interface PropertyDocumentsTabProps {
 	propertyState: PropertyState;
@@ -10,7 +11,6 @@ interface PropertyDocumentsTabProps {
 	deedCount: number;
 	uploadedFiles: UploadedFile[];
 	onFilesChange: (files: UploadedFile[]) => void;
-	onValidate: (files: UploadedFile[]) => void;
 	onRemoveFile: (fileId: string) => void;
 	checklist: ConsolidatedChecklist | null;
 }
@@ -21,7 +21,6 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 	deedCount,
 	uploadedFiles,
 	onFilesChange,
-	onValidate,
 	onRemoveFile,
 	checklist
 }) => {
@@ -33,7 +32,7 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 
 	const handleFileUpload = (files: File[], documentType: string) => {
 		const newFiles: UploadedFile[] = files.map(file => ({
-			id: `${Date.now()}-${Math.random()}`,
+			id: generateFileId(),
 			file,
 			type: documentType,
 			category: 'property',
@@ -42,10 +41,8 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 
 		const updatedFiles = [...uploadedFiles, ...newFiles];
 		onFilesChange(updatedFiles);
-
-		if (onValidate) {
-			onValidate(newFiles);
-		}
+		
+		// A validação agora é automática via OCR quando o processamento completar
 	};
 
 	return (
