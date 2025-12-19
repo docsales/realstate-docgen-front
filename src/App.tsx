@@ -11,7 +11,7 @@ import { useAuth } from './hooks/useAuth';
 const logoSrc = "/images/docsales-logo.png";
 
 export default function App() {
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user, logout, isLoading } = useAuth();
   const [view, setView] = useState<'dashboard' | 'new-deal' | 'edit-deal' | 'deal-details' | 'settings'>('dashboard');
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
@@ -37,6 +37,18 @@ export default function App() {
     setSelectedDealId(dealId);
     setView('edit-deal');
   };
+
+  // Loading state - verificando sessão
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ef0474] mx-auto mb-4"></div>
+          <p className="text-slate-600">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Auth Flow
   if (!isAuthenticated) {

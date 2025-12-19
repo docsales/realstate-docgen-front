@@ -7,18 +7,20 @@ const logoSrc = "/images/docsales-logo.png";
 
 export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNavigateToRegister }) => {
   const { login } = useAuth();
-  const [email, setEmail] = useState('corretor@docsales.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
     try {
       await login(email, password);
-    } catch (error) {
-      console.error("Login failed", error);
+    } catch (err: any) {
+      console.error("Login failed", err);
+      setError(err.message || 'Erro ao fazer login. Verifique suas credenciais.');
     } finally {
       setLoading(false);
     }
@@ -52,6 +54,9 @@ export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNa
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+
+          {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+
           <Button type="submit" className="btn-md w-full text-lg" isLoading={loading}>Entrar</Button>
         </form>
 

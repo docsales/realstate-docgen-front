@@ -16,22 +16,23 @@ export const RegisterView: React.FC<{ onNavigateToLogin: () => void }> = ({ onNa
     setError('');
 
     if (!formData.name || !formData.email || !formData.password) {
-        setError('Preencha todos os campos obrigatórios.');
-        return;
+      setError('Preencha todos os campos obrigatórios.');
+      return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-        setError('As senhas não coincidem.');
-        return;
+      setError('As senhas não coincidem.');
+      return;
     }
 
     setLoading(true);
     try {
-        await register(formData.name, formData.email, formData.password);
-    } catch (err) {
-        setError('Erro ao criar conta. Tente novamente.');
+      await register(formData.name, formData.email, formData.password);
+      onNavigateToLogin();
+    } catch (err: any) {
+      setError(err.message || 'Erro ao criar conta. Tente novamente.');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -39,43 +40,43 @@ export const RegisterView: React.FC<{ onNavigateToLogin: () => void }> = ({ onNa
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 animate-in fade-in duration-500">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 border border-slate-100">
         <div className="flex justify-center mb-6">
-            <img 
-              src={logoSrc} 
-              alt="DocSales Logo" 
-              className="h-16 object-contain"
-            />
+          <img
+            src={logoSrc}
+            alt="DocSales Logo"
+            className="h-16 object-contain"
+          />
         </div>
-        
+
         <h2 className="text-2xl font-semibold text-center text-slate-800 mb-2">Crie sua conta</h2>
         <p className="text-center text-slate-500 mb-6">Comece a gerar contratos inteligentes hoje mesmo.</p>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input 
-            label="Nome Completo" 
-            placeholder="Ex: João da Silva" 
+          <Input
+            label="Nome Completo"
+            placeholder="Ex: João da Silva"
             value={formData.name}
-            onChange={(e) => setFormData({...formData, name: e.target.value})}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           />
-          <Input 
-            label="Email" 
-            type="email" 
-            placeholder="seu@email.com" 
+          <Input
+            label="Email"
+            type="email"
+            placeholder="seu@email.com"
             value={formData.email}
-            onChange={(e) => setFormData({...formData, email: e.target.value})}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           />
-          <Input 
-            label="Senha" 
-            type="password" 
-            placeholder="••••••••" 
+          <Input
+            label="Senha"
+            type="password"
+            placeholder="••••••••"
             value={formData.password}
-            onChange={(e) => setFormData({...formData, password: e.target.value})}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
           />
-          <Input 
-            label="Confirmar Senha" 
-            type="password" 
-            placeholder="••••••••" 
+          <Input
+            label="Confirmar Senha"
+            type="password"
+            placeholder="••••••••"
             value={formData.confirmPassword}
-            onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
           />
 
           {error && <p className="text-sm text-red-500 text-center">{error}</p>}
@@ -84,7 +85,7 @@ export const RegisterView: React.FC<{ onNavigateToLogin: () => void }> = ({ onNa
             Criar Conta
           </Button>
         </form>
-        
+
         <div className="mt-6 text-center text-sm">
           <span className="text-slate-500">Já tem uma conta? </span>
           <button onClick={onNavigateToLogin} className="cursor-pointer text-primary font-semibold hover:underline">

@@ -6,19 +6,19 @@ import type { UpdateDealDataDto } from '@/types/types';
 export const dealKeys = {
   all: ['deals'] as const,
   lists: () => [...dealKeys.all, 'list'] as const,
-  list: (ownerId: string) => [...dealKeys.lists(), ownerId] as const,
-  paginated: (ownerId: string) => [...dealKeys.lists(), 'paginated', ownerId] as const,
+  list: () => [...dealKeys.lists()] as const,
+  paginated: () => [...dealKeys.lists(), 'paginated'] as const,
   details: () => [...dealKeys.all, 'detail'] as const,
   detail: (id: string) => [...dealKeys.details(), id] as const,
 };
 
 /**
- * Hook para listar deals de um owner paginados
+ * Hook para listar deals paginados
  */
-export function useDealsPaginated(ownerId: string, page: number, limit: number, queryParams?: Record<string, any>) {
+export function useDealsPaginated(page: number, limit: number, queryParams?: Record<string, any>) {
   return useQuery({
-    queryKey: dealKeys.paginated(ownerId),
-    queryFn: () => dealsService.paginateDeals(ownerId, page, limit, queryParams),
+    queryKey: dealKeys.paginated(),
+    queryFn: () => dealsService.paginateDeals(page, limit, queryParams),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -28,14 +28,13 @@ export function useDealsPaginated(ownerId: string, page: number, limit: number, 
  * Hook para infinite scroll com paginação de deals
  */
 export function useDealsInfinite(
-  ownerId: string, 
   searchTerm?: string,
   limit: number = 20
 ) {
   return useInfiniteQuery({
-    queryKey: [...dealKeys.paginated(ownerId), searchTerm, limit],
+    queryKey: [...dealKeys.paginated(), searchTerm, limit],
     queryFn: ({ pageParam = 0 }) => 
-      dealsService.paginateDeals(ownerId, pageParam, limit, { searchTerm }),
+      dealsService.paginateDeals(pageParam, limit, { searchTerm }),
     getNextPageParam: (lastPage) => lastPage.next,
     initialPageParam: 0,
     enabled: true,
@@ -45,12 +44,12 @@ export function useDealsInfinite(
 }
 
 /**
- * Hook para listar deals de um owner
+ * Hook para listar deals
  */
-export function useDeals(ownerId: string) {
+export function useDeals() {
   return useQuery({
-    queryKey: dealKeys.list(ownerId),
-    queryFn: () => dealsService.listDeals(ownerId),
+    queryKey: dealKeys.list(),
+    queryFn: () => dealsService.listDeals(),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -59,11 +58,11 @@ export function useDeals(ownerId: string) {
 /**
  * Hook para buscar um deal específico
  */
-export function useDeal(dealId: string, ownerId: string, options?: { enabled?: boolean }) {
+export function useDeal(dealId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: dealKeys.detail(dealId),
     queryFn: async () => {
-      const deal = await dealsService.getDeal(dealId, ownerId);
+      const deal = await dealsService.getDeal(dealId);
       return deal;
     },
     enabled: options?.enabled !== undefined ? options.enabled : !!dealId,
@@ -94,8 +93,8 @@ export function useUpdateDeal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ dealId, ownerId, payload }: { dealId: string; ownerId: string; payload: UpdateDealDataDto }) =>
-      dealsService.updateDeal(dealId, ownerId, payload),
+    mutationFn: ({ dealId, payload }: { dealId: string; payload: UpdateDealDataDto }) =>
+      dealsService.updateDeal(dealId, payload),
     onSuccess: (updatedDeal) => {
       queryClient.setQueryData(dealKeys.detail(updatedDeal.id), updatedDeal);
       queryClient.invalidateQueries({ queryKey: dealKeys.detail(updatedDeal.id) });
@@ -187,8 +186,8 @@ export function useGeneratePreview() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ dealId, ownerId }: { dealId: string; ownerId: string }) =>
-      dealsService.generatePreview(dealId, ownerId),
+    mutationFn: ({ dealId }: { dealId: string }) =>
+      dealsService.generatePreview(dealId),
     onSuccess: (_, { dealId }) => {
       queryClient.invalidateQueries({ queryKey: dealKeys.detail(dealId) });
     },
@@ -202,12 +201,11 @@ export function useSendContract() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ dealId, ownerId }: { dealId: string; ownerId: string }) =>
-      dealsService.sendContract(dealId, ownerId),
+    mutationFn: ({ dealId }: { dealId: string }) =>
+      dealsService.sendContract(dealId),
     onSuccess: (_, { dealId }) => {
       queryClient.invalidateQueries({ queryKey: dealKeys.detail(dealId) });
       queryClient.invalidateQueries({ queryKey: dealKeys.lists() });
     },
   });
 }
-

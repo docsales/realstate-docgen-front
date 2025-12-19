@@ -13,7 +13,7 @@ interface PreviewStepProps {
 }
 
 export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mappedCount, onGenerate }) => {
-	const { data: deal, isLoading } = useDeal(dealId, '00000000-0000-0000-0000-000000000001');
+	const { data: deal, isLoading } = useDeal(dealId);
 	const generatePreviewMutation = useGeneratePreview();
 	const [status, setStatus] = useState<'idle' | 'generating' | 'done'>('idle');
 	const [preview, setPreview] = useState<GeneratePreviewResponse | null>(null);
@@ -27,10 +27,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 
 		setStatus('generating');
 		try {
-			const generatedPreview = await generatePreviewMutation.mutateAsync({
-				dealId,
-				ownerId: '00000000-0000-0000-0000-000000000001', // TODO: Get ownerId from auth session
-			});
+			const generatedPreview = await generatePreviewMutation.mutateAsync({ dealId });
 			setPreview(generatedPreview);
 			setStatus('done');
 		} catch (error) {

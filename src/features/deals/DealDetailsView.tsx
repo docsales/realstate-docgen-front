@@ -13,7 +13,7 @@ interface DealDetailsProps {
 
 export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, onEdit }) => {
     // Buscar dados reais do deal
-    const { data: dealData, isLoading, isError, error } = useDeal(dealId, '00000000-0000-0000-0000-000000000001'); // TODO: Get ownerId from auth session
+    const { data: dealData, isLoading, isError, error } = useDeal(dealId);
 
     const [activeTab, setActiveTab] = useState<'data' | 'docs' | 'notes'>('data');
     const [notes, setNotes] = useState('');

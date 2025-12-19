@@ -42,7 +42,7 @@ export function TemplatesSection({
         </div>
         <Button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-[#ef0474] text-white border-none rounded-md hover:bg-[#d00366] transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-[#ef0474] text-white border-none rounded-sm hover:bg-[#d00366] transition-colors"
           variant="primary"
         >
           <Plus className="w-4 h-4" />

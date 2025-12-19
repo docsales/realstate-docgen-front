@@ -5,7 +5,6 @@ import type { Deal, DealStatus, GeneratePreviewResponse, PaginatedResponse, Upda
 export interface CreateDealPayload {
   name?: string;
   docTemplateId?: string;
-  ownerId: string;
   signers?: Array<{
     name: string;
     email: string;
@@ -23,58 +22,49 @@ export interface UpdateDealStatusPayload {
 export class DealsService {
 
   /**
-   * Lista todos os deals de um owner paginados
-   * @param ownerId The owner ID (query param)
+   * Lista todos os deals paginados
    * @param page The page number
    * @param limit The limit of items per page
    * @param queryParams The query parameters
    * @returns The paginated response
    */
   async paginateDeals(
-    ownerId: string,
     page: number,
     limit: number,
     queryParams?: Record<string, any>
   ): Promise<PaginatedResponse<Deal>> {
-    return await UtilsService.paginate<Deal>('deal', page, limit, { ownerId, ...queryParams });
+    return await UtilsService.paginate<Deal>('deal', page, limit, queryParams);
   }
+
   /**
    * Cria um novo deal
    */
   async createDeal(payload: CreateDealPayload): Promise<Deal> {
-    const response = await server.api.post<Deal>('/deal', payload, { withCredentials: true });
+    const response = await server.api.post<Deal>('/deal', payload);
     return response.data;
   }
 
   /**
    * Atualiza dados do deal
    */
-  async updateDeal(dealId: string, ownerId: string, payload: UpdateDealDataDto): Promise<Deal> {
-    const params = new URLSearchParams();
-    params.append('ownerId', ownerId);
-    const response = await server.api.put<Deal>(`/deal/${dealId}`, payload, { withCredentials: true, params });
+  async updateDeal(dealId: string, payload: UpdateDealDataDto): Promise<Deal> {
+    const response = await server.api.put<Deal>(`/deal/${dealId}`, payload);
     return response.data;
   }
 
   /**
-   * Lista todos os deals de um owner
+   * Lista todos os deals
    */
-  async listDeals(ownerId: string): Promise<Deal[]> {
-    const response = await server.api.get<Deal[]>('/deal', {
-      withCredentials: true,
-      params: { ownerId },
-    });
+  async listDeals(): Promise<Deal[]> {
+    const response = await server.api.get<Deal[]>('/deal');
     return response.data;
   }
 
   /**
    * Busca um deal específico por ID
    */
-  async getDeal(dealId: string, ownerId: string): Promise<Deal> {
-    const params = new URLSearchParams();
-    params.append('ownerId', ownerId);
-
-    const { data }: { data: Deal } = await server.api.get<Deal>(`/deal/${dealId}`, { withCredentials: true, params });
+  async getDeal(dealId: string): Promise<Deal> {
+    const { data }: { data: Deal } = await server.api.get<Deal>(`/deal/${dealId}`);
     return data;
   }
 
@@ -82,7 +72,7 @@ export class DealsService {
    * Atualiza o status de um deal
    */
   async updateDealStatus(dealId: string, payload: UpdateDealStatusPayload): Promise<Deal> {
-    const response = await server.api.patch<Deal>(`/deal/${dealId}/status`, payload, { withCredentials: true });
+    const response = await server.api.patch<Deal>(`/deal/${dealId}/status`, payload);
     return response.data;
   }
 
@@ -90,21 +80,21 @@ export class DealsService {
    * Adiciona documento ao deal
    */
   async addDocumentToDeal(dealId: string, documentId: string): Promise<void> {
-    await server.api.post(`/deal/${dealId}/document`, { documentId }, { withCredentials: true });
+    await server.api.post(`/deal/${dealId}/document`, { documentId });
   }
 
   /**
    * Remove documento do deal
    */
   async removeDocumentFromDeal(dealId: string, documentId: string): Promise<void> {
-    await server.api.delete(`/deal/${dealId}/document/${documentId}`, { withCredentials: true });
+    await server.api.delete(`/deal/${dealId}/document/${documentId}`);
   }
 
   /**
    * Remove signatário do deal
    */
   async removeSignatoryFromDeal(dealId: string, signatoryId: string): Promise<void> {
-    await server.api.delete(`/deal/${dealId}/signatory/${signatoryId}`, { withCredentials: true });
+    await server.api.delete(`/deal/${dealId}/signatory/${signatoryId}`);
   }
 
   /**
@@ -123,13 +113,9 @@ export class DealsService {
   /**
    * Gera preview do contrato
    */
-  async generatePreview(dealId: string, ownerId: string): Promise<GeneratePreviewResponse> {
-    const params = new URLSearchParams();
-    params.append('ownerId', ownerId);
+  async generatePreview(dealId: string): Promise<GeneratePreviewResponse> {
     const { data }: { data: GeneratePreviewResponse } = await server.api.post<GeneratePreviewResponse>(
-      `/deal/${dealId}/preview`,
-      undefined,
-      { withCredentials: true, params }
+      `/deal/${dealId}/preview`
     );
     return data;
   }
@@ -137,10 +123,8 @@ export class DealsService {
   /**
    * Envia contrato para assinatura
    */
-  async sendContract(dealId: string, ownerId: string): Promise<any> {
-    const params = new URLSearchParams();
-    params.append('ownerId', ownerId);
-    const { data }: { data: any } = await server.api.post(`/deal/${dealId}/send`, undefined, { withCredentials: true, params });
+  async sendContract(dealId: string): Promise<any> {
+    const { data }: { data: any } = await server.api.post(`/deal/${dealId}/send`);
     return data;
   }
 }

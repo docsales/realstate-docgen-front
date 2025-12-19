@@ -33,8 +33,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
   const updateDealMutation = useUpdateDeal();
   const sendContractMutation = useSendContract();
 
-  // TODO: Get ownerId from auth session
-  const { data: existingDeal, isLoading: isDealLoading } = useDeal(editDealId || '', '00000000-0000-0000-0000-000000000001', {
+  const { data: existingDeal, isLoading: isDealLoading } = useDeal(editDealId || '', {
     enabled: !!editDealId,
   });
 
@@ -180,7 +179,6 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
     try {
       await updateDealMutation.mutateAsync({
         dealId,
-        ownerId: '00000000-0000-0000-0000-000000000001',
         payload: {
           name: configData.name,
           docTemplateId: configData.docTemplateId,
@@ -228,7 +226,6 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
 
       await updateDealMutation.mutateAsync({
         dealId,
-        ownerId: '00000000-0000-0000-0000-000000000001',
         payload: {
           contractFields: contractFieldsJson,
         },
@@ -268,7 +265,6 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
 
       await updateDealMutation.mutateAsync({
         dealId,
-        ownerId: '00000000-0000-0000-0000-000000000001',
         payload: {
           signers: signersToSave as any,
         },
@@ -314,8 +310,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
       try {
         const newDeal = await createDealMutation.mutateAsync({
           name: configData.name,
-          docTemplateId: configData.docTemplateId, // Financiamento (Google Drive ID)
-          ownerId: '00000000-0000-0000-0000-000000000001', // TODO: Get ownerId from auth session
+          docTemplateId: configData.docTemplateId,
           signers: [],
           metadata: {
             useFgts: configData.useFgts,
@@ -353,10 +348,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
     setSubmissionStatus('sending');
 
     try {
-      await sendContractMutation.mutateAsync({
-        dealId,
-        ownerId: '00000000-0000-0000-0000-000000000001', // TODO: Get ownerId from auth session
-      });
+      await sendContractMutation.mutateAsync({ dealId });
 
       setSaveSuccess(true);
     } catch (error: any) {
