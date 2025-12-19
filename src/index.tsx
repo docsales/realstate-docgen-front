@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 
-import App from './App';
+import { AppRouter } from './routes/Router';
 import { AuthProvider } from './contexts/AuthContext';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -18,10 +19,12 @@ const queryClient = new QueryClient();
 
 root.render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </QueryClientProvider>
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AppRouter />
+        </AuthProvider>
+      </QueryClientProvider>
+    </BrowserRouter>
   </StrictMode>
 );

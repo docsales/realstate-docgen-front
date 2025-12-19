@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Circle, FileText, Home, Users, DollarSign, User, XCircle, Edit, Send, Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { useDeal } from './hooks/useDeals';
 import type { DealStatus } from '../../types/types';
 import { mergeDealData, formatCPF } from './utils/extractDealData';
 
-interface DealDetailsProps {
-    dealId: string;
-    onBack: () => void;
-    onEdit?: (dealId: string) => void;
-}
-
-export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, onEdit }) => {
+export const DealDetailsView: React.FC = () => {
+    const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
+    const dealId = id || '';
+    
     // Buscar dados reais do deal
     const { data: dealData, isLoading, isError, error } = useDeal(dealId);
 
@@ -47,7 +46,7 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                 <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
                 <p className="text-red-700 font-semibold">Erro ao carregar contrato</p>
                 <p className="text-red-600 text-sm">{error instanceof Error ? error.message : 'Contrato não encontrado'}</p>
-                <Button onClick={onBack} className="mt-4" variant="secondary">
+                <Button onClick={() => navigate('/dashboard')} className="mt-4" variant="secondary">
                     <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
                 </Button>
             </div>
@@ -84,7 +83,7 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
         <div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header */}
             <div className="mb-6">
-                <button onClick={onBack} className="cursor-pointer flex items-center text-slate-500 hover:text-slate-700 text-sm mb-4 transition-colors">
+                <button onClick={() => navigate('/dashboard')} className="cursor-pointer flex items-center text-slate-500 hover:text-slate-700 text-sm mb-4 transition-colors">
                     <ArrowLeft className="w-4 h-4 mr-1" /> Voltar para listagem
                 </button>
 
@@ -107,7 +106,7 @@ export const DealDetailsView: React.FC<DealDetailsProps> = ({ dealId, onBack, on
                             <Button
                                 variant="secondary"
                                 className="h-10 px-4 text-sm whitespace-nowrap"
-                                onClick={() => onEdit?.(dealId)}
+                                onClick={() => navigate(`/deals/${dealId}/edit`)}
                             >
                                 <Edit className="w-4 h-4 mr-2" /> Editar
                             </Button>

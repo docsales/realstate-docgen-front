@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, CheckCircle2, Send, Loader2, Save } from 'lucide-react';
 import { Button } from '@/components/Button';
@@ -13,13 +14,10 @@ import { SignatoriesStep } from './steps/SignatoriesStep';
 import { useCreateDeal, useDeal, useUpdateDeal, useSendContract } from './hooks/useDeals';
 import { ContractSendingLoader } from './components/ContractSendingLoader';
 
-interface NewDealWizardProps {
-  onCancel: () => void;
-  onFinish: () => void;
-  dealId?: string; // Se fornecido, é modo de edição
-}
-
-export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish, dealId: editDealId }) => {
+export const NewDealWizard: React.FC = () => {
+  const { id } = useParams<{ id?: string }>();
+  const navigate = useNavigate();
+  const editDealId = id; // Se id existe na URL, está em modo de edição
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
   const [submissionStatus, setSubmissionStatus] = useState<'editing' | 'sending' | 'success'>('editing');
@@ -361,7 +359,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
 
     setSubmissionStatus('success');
     setTimeout(() => {
-      onFinish();
+      navigate('/dashboard');
     }, 2500);
   }
 
@@ -439,7 +437,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
       <div className="bg-white border-b border-slate-200 sticky top-16 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={onCancel} className="cursor-pointer p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
+            <button onClick={() => navigate('/dashboard')} className="cursor-pointer p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div>
@@ -560,7 +558,7 @@ export const NewDealWizard: React.FC<NewDealWizardProps> = ({ onCancel, onFinish
           )}
 
           <div className="flex justify-between items-center">
-            <Button variant="ghost" onClick={step === 1 ? onCancel : prevStep}>
+            <Button variant="ghost" onClick={step === 1 ? () => navigate('/dashboard') : prevStep}>
               {step === 1 ? 'Cancelar' : 'Voltar'}
             </Button>
 

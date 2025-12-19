@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { FilePlus, Search, CheckCircle2, History, Clock, Grid, List, Loader2, AlertCircle } from 'lucide-react';
 import type { DealStatus } from '@/types/types';
 import { useDealsInfinite } from '../deals/hooks/useDeals';
 import { useAuth } from '@/hooks/useAuth';
 
-export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: string) => void }> = ({ onNewDeal, onDealClick }) => {
+export const DashboardView: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [serverSearchTerm, setServerSearchTerm] = useState<string | undefined>(undefined);
@@ -102,7 +104,7 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
           <h1 className="text-3xl font-bold text-slate-800">Meus Contratos</h1>
           <p className="text-slate-500">Gerencie e acompanhe o status de suas negociações.</p>
         </div>
-        <Button onClick={onNewDeal} className="btn btn-md">
+        <Button onClick={() => navigate('/deals/new')} className="btn btn-md">
           <FilePlus className="w-5 h-5" />
           Novo Contrato
         </Button>
@@ -205,7 +207,7 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
             <div
               key={deal.id}
               className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
-              onClick={() => onDealClick(deal.id)}
+              onClick={() => navigate(`/deals/${deal.id}`)}
             >
               <div className="flex justify-between items-start mb-2">
                 <span className="text-xs font-mono text-slate-400">#{deal.id.padStart(5, '0')}</span>
@@ -260,7 +262,7 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
                     <tr
                       key={deal.id}
                       className="hover:bg-slate-50 cursor-pointer transition-colors"
-                      onClick={() => onDealClick(deal.id)}
+                      onClick={() => navigate(`/deals/${deal.id}`)}
                     >
                       <td className="px-6 py-4 text-xs font-mono text-slate-400">
                         #{deal.id.substring(0, 8)}

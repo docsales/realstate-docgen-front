@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings as SettingsIcon } from 'lucide-react';
 import { settingsService } from '../../services/settings.service';
 import { useAuth } from '../../hooks/useAuth';
@@ -15,11 +16,8 @@ import { DocsalesEmailSection } from './components/DocsalesEmailSection';
 import { TemplatesSection } from './components/TemplatesSection';
 import { TemplateForm } from './components/TemplateForm';
 
-interface SettingsViewProps {
-  onBack: () => void;
-}
-
-export function SettingsView({ onBack }: SettingsViewProps) {
+export function SettingsView() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
@@ -113,7 +111,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         {/* Header */}
         <div className="mb-8">
           <button
-            onClick={onBack}
+            onClick={() => navigate('/dashboard')}
             className="cursor-pointer flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-4 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
