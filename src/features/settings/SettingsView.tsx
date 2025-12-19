@@ -27,11 +27,8 @@ export function SettingsView({ onBack }: SettingsViewProps) {
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | undefined>(undefined);
 
-  // Dados do usuário (API Key e Folder ID estão na tabela User)
   const [apiKey, setApiKey] = useState<string>('');
   const [folderId, setFolderId] = useState<string>('');
-
-  const userId = '00000000-0000-0000-0000-000000000000001'; // TODO: Get user ID from context
 
   useEffect(() => {
     loadData();
@@ -39,11 +36,11 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
   const loadData = async () => {
     setIsLoading(true);
-    try {
-      const settings = await settingsService.getUserSettings(userId);
+    try {      
+      const settings = await settingsService.getUserSettings()
       setUserSettings(settings);
 
-      const templatesData = await settingsService.getDocumentTemplates(userId);
+      const templatesData = await settingsService.getDocumentTemplates()
       setTemplates(templatesData);
 
       setApiKey(user?.docsalesApiKey || '');
@@ -56,17 +53,17 @@ export function SettingsView({ onBack }: SettingsViewProps) {
   };
 
   const handleSaveApiKey = async (value: string) => {
-    await settingsService.updateUser(userId, { docsalesApiKey: value });
+    await settingsService.updateUser({ docsalesApiKey: value });
     setApiKey(value);
   };
 
   const handleSaveFolderId = async (value: string) => {
-    await settingsService.updateUser(userId, { folderId: value });
+    await settingsService.updateUser({ folderId: value });
     setFolderId(value);
   };
 
   const handleSaveDocsalesEmail = async (value: string) => {
-    const updated = await settingsService.updateUserSettings(userId, {
+    const updated = await settingsService.updateUserSettings({
       docsalesUserEmail: value,
     });
     setUserSettings(updated);

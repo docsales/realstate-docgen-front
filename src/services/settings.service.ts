@@ -9,33 +9,30 @@ import type {
 } from '../types/settings.types';
 
 export class SettingsService {
-  // User Settings endpoints
-  async getUserSettings(userId: string): Promise<UserSettings> {
-    const response = await server.api.get<UserSettings>(`/user-settings?userId=${userId}`);
+  async getUserSettings(): Promise<UserSettings> {
+    const response = await server.api.get<UserSettings>(`/user-settings`, { withCredentials: true });
     return response.data;
   }
 
   async updateUserSettings(
-    userId: string,
     data: UpdateUserSettingsDto,
   ): Promise<UserSettings> {
     const response = await server.api.put<UserSettings>(
-      `/user-settings?userId=${userId}`,
-      data,
+      `/user-settings`, data, { withCredentials: true },
     );
     return response.data;
   }
 
   // User endpoints (for docsalesApiKey and folderId)
-  async updateUser(userId: string, data: UpdateUserDto): Promise<any> {
-    const response = await server.api.put(`/user/${userId}`, data);
+  async updateUser(data: UpdateUserDto): Promise<any> {
+    const response = await server.api.put(`/user`, data, { withCredentials: true });
     return response.data;
   }
 
   // Document Templates endpoints
-  async getDocumentTemplates(userId: string): Promise<DocumentTemplate[]> {
+  async getDocumentTemplates(): Promise<DocumentTemplate[]> {
     const response = await server.api.get<DocumentTemplate[]>(
-      `/document-templates?userId=${userId}`,
+      `/document-templates`, { withCredentials: true },
     );
     return response.data;
   }

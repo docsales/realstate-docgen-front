@@ -3,8 +3,10 @@ import { Button } from '@/components/Button';
 import { FilePlus, Search, CheckCircle2, History, Clock, Grid, List, Loader2, AlertCircle } from 'lucide-react';
 import type { DealStatus } from '@/types/types';
 import { useDealsInfinite } from '../deals/hooks/useDeals';
+import { useAuth } from '@/hooks/useAuth';
 
 export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: string) => void }> = ({ onNewDeal, onDealClick }) => {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [serverSearchTerm, setServerSearchTerm] = useState<string | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -22,7 +24,7 @@ export const DashboardView: React.FC<{ onNewDeal: () => void, onDealClick: (id: 
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage 
-  } = useDealsInfinite('00000000-0000-0000-0000-000000000001', serverSearchTerm, 20);
+  } = useDealsInfinite(serverSearchTerm, 20);
 
   // Flatten all pages
   const allDeals = data?.pages.flatMap(page => page.data) ?? [];
