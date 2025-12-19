@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, type ReactNode } from 'react
 import { supabase } from '../lib/supabase';
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import type { UserSettings } from '@/types/settings.types';
+import { server } from '@/services/api.service';
 
 export interface User {
   id: string;
@@ -25,14 +26,19 @@ export interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const mapSupabaseUserToUser = (supabaseUser: SupabaseUser): User => {
+const mapSupabaseUserToUser = (
+  supabaseUser: SupabaseUser & {
+    docsalesApiKey?: string,
+    folderId?: string,
+    docsalesAccountId?: string,
+  }): User => {
   return {
     id: supabaseUser.id,
     name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'Usuário',
     email: supabaseUser.email || '',
-    docsalesApiKey: supabaseUser.user_metadata?.docsalesApiKey,
-    folderId: supabaseUser.user_metadata?.folderId,
-    docsalesAccountId: supabaseUser.user_metadata?.docsalesAccountId,
+    docsalesApiKey: supabaseUser.docsalesApiKey || '',
+    folderId: supabaseUser.folderId || '',
+    docsalesAccountId: supabaseUser.docsalesAccountId || '',
   };
 };
 
@@ -42,14 +48,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Verificar sessão existente no mount
     const initializeAuth = async () => {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
-        
+
         if (currentSession?.user) {
           setSession(currentSession);
-          setUser(mapSupabaseUserToUser(currentSession.user));
+          fetchUser(currentSession);
         }
       } catch (error) {
         console.error('Erro ao inicializar autenticação:', error);
@@ -62,15 +67,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Escutar mudanças de estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_, newSession) => {        
+      async (_, newSession) => {
         if (newSession?.user) {
           setSession(newSession);
-          setUser(mapSupabaseUserToUser(newSession.user));
+          fetchUser(newSession);
         } else {
           setSession(null);
           setUser(null);
         }
-        
+
         setIsLoading(false);
       }
     );
@@ -79,6 +84,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       subscription.unsubscribe();
     };
   }, []);
+
+  const fetchUser = async (currentSession: Session | null) => {
+    if (!currentSession) return;
+    const { data: User }: { data: User } = await server.api.get('/users/me', { withCredentials: true })
+    const payload = { ...currentSession.user, ...User }
+    setUser(mapSupabaseUserToUser(payload));
+  }
 
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -119,11 +131,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
-    
+
     if (error) {
       console.error('Erro ao fazer logout:', error);
     }
-    
+
     setSession(null);
     setUser(null);
   };

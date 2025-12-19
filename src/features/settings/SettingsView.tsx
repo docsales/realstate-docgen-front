@@ -36,7 +36,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
   const loadData = async () => {
     setIsLoading(true);
-    try {      
+    try {
       const settings = await settingsService.getUserSettings()
       setUserSettings(settings);
 
