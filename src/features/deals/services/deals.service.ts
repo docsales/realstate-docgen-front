@@ -5,6 +5,8 @@ import type { Deal, DealStatus, GeneratePreviewResponse, PaginatedResponse, Upda
 export interface CreateDealPayload {
   name?: string;
   docTemplateId?: string;
+  expirationDate?: string; // YYYY-MM-DD format
+  contractEnd?: string; // YYYY-MM-DD format
   signers?: Array<{
     name: string;
     email: string;
@@ -64,7 +66,7 @@ export class DealsService {
    * Busca um deal específico por ID
    */
   async getDeal(dealId: string): Promise<Deal> {
-    const { data }: { data: Deal } = await server.api.get<Deal>(`/deal/${dealId}`);
+    const { data } = await server.api.get<Deal>(`/deal/${dealId}`);
     return data;
   }
 

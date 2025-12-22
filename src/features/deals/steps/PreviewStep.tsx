@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Button } from '../../../components/Button';
-import { ArrowRight, CheckCircle2, ExternalLink, FilePenLine, FileText } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ExternalLink, FilePenLine, FileText, RefreshCw } from 'lucide-react';
 import type { GeneratePreviewResponse } from '@/types/types';
 import { useDeal, useGeneratePreview } from '../hooks/useDeals';
 import { DocumentWritingLoader } from '../components/DocumentWritingLoader';
@@ -13,10 +13,12 @@ interface PreviewStepProps {
 }
 
 export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mappedCount, onGenerate }) => {
-	const { data: deal, isLoading } = useDeal(dealId);
+	const { data: deal, isLoading, refetch: refetchDeal } = useDeal(dealId);
 	const generatePreviewMutation = useGeneratePreview();
 	const [status, setStatus] = useState<'idle' | 'generating' | 'done'>('idle');
 	const [preview, setPreview] = useState<GeneratePreviewResponse | null>(null);
+	const previousMappedCountRef = useRef<number>(mappedCount);
+	const previousContractFieldsRef = useRef<string | null>(null);
 
 	const handleGenerate = async () => {
 		if (!dealId) {
@@ -27,28 +29,89 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 
 		setStatus('generating');
 		try {
+			// Gerar novo preview - o servidor atualiza o deal com os novos valores
+			// O servidor substitui o documento antigo por um novo no Google Docs
+			// e atualiza o deal com o novo ID e URL
 			const generatedPreview = await generatePreviewMutation.mutateAsync({ dealId });
-			setPreview(generatedPreview);
+			
+			// Aguardar um pouco para garantir que o deal foi atualizado no servidor
+			await new Promise(resolve => setTimeout(resolve, 300));
+			
+			// Forçar recarregamento do deal para garantir que temos os valores mais recentes
+			await refetchDeal();
+			
+			// Atualizar o preview com os dados retornados pela API
+			// Isso garante que temos o ID e URL mais recentes do novo documento gerado
+			const newPreview = {
+				edit_url: generatedPreview.edit_url,
+				id: generatedPreview.id,
+				status_code: generatedPreview.status_code,
+			};
+			
+			setPreview(newPreview);
 			setStatus('done');
+			
+			console.log('✅ Preview regenerado com sucesso:', {
+				id: newPreview.id,
+				url: newPreview.edit_url,
+				message: 'Novo documento criado no Google Docs e deal atualizado no servidor'
+			});
 		} catch (error) {
-			console.error(error);
-			setStatus('idle');
+			console.error('❌ Erro ao regenerar preview:', error);
+			setStatus('done'); // Manter status 'done' para não perder o preview anterior
 		}
 	};
 
 	useEffect(() => {
 		if (dealId && !isLoading) {
-			if (deal?.consolidated && deal.consolidated.draftPreviewUrl) {
-				setPreview({
-					edit_url: deal.consolidated.draftPreviewUrl,
-					id: deal.consolidated.generatedDocId,
-					status_code: 200,
-				});
+			// Verificar se o mapeamento mudou (número de campos ou conteúdo dos contractFields)
+			const currentContractFields = deal?.contractFields 
+				? (typeof deal.contractFields === 'string' 
+					? deal.contractFields 
+					: JSON.stringify(deal.contractFields))
+				: null;
+			
+			const mappingChanged = 
+				previousMappedCountRef.current !== mappedCount ||
+				previousContractFieldsRef.current !== currentContractFields;
 
-				setStatus('done');
+			if (deal?.consolidated && deal.consolidated.draftPreviewUrl) {
+				// Se o mapeamento mudou, resetar para permitir regeneração
+				if (mappingChanged && status === 'done') {
+					console.log('🔄 Mapeamento alterado - permitindo regeneração do preview');
+					setStatus('idle');
+					setPreview(null);
+				} else {
+					// Atualizar preview com os valores mais recentes do deal
+					// Isso garante que após regeneração, temos o ID e URL atualizados
+					const newPreview = {
+						edit_url: deal.consolidated.draftPreviewUrl,
+						id: deal.consolidated.generatedDocId,
+						status_code: 200,
+					};
+					
+					// Só atualizar se os valores mudaram (evitar loops)
+					if (!preview || 
+						preview.edit_url !== newPreview.edit_url || 
+						preview.id !== newPreview.id) {
+						console.log('📝 Atualizando preview com valores do deal:', {
+							id: newPreview.id,
+							url: newPreview.edit_url
+						});
+						setPreview(newPreview);
+					}
+					
+					if (status !== 'done') {
+						setStatus('done');
+					}
+				}
 			}
+
+			// Atualizar refs
+			previousMappedCountRef.current = mappedCount;
+			previousContractFieldsRef.current = currentContractFields;
 		}
-	}, [dealId, isLoading, deal]);
+	}, [dealId, isLoading, deal, mappedCount, status, preview]);
 
 	return (
 		<div className="flex flex-col items-center justify-center space-y-8 py-10 animate-in fade-in duration-500">
@@ -107,6 +170,15 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 						<Button variant="secondary" className="w-full flex items-center gap-2 justify-center" onClick={() => window.open(preview?.edit_url, '_blank')}>
 							<ExternalLink className="w-4 h-4" />
 							<span>Abrir no Google Docs</span>
+						</Button>
+						<Button 
+							variant="secondary" 
+							className="w-full flex items-center gap-2 justify-center" 
+							onClick={handleGenerate}
+							disabled={generatePreviewMutation.isPending}
+						>
+							<RefreshCw className={`w-4 h-4 ${generatePreviewMutation.isPending ? 'animate-spin' : ''}`} />
+							<span>Regerar Preview</span>
 						</Button>
 						<Button onClick={onGenerate} className="w-full justify-center flex items-center gap-2">
 							<span>Avançar para Signatários</span>

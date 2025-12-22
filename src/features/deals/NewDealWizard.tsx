@@ -14,6 +14,39 @@ import { SignatoriesStep } from './steps/SignatoriesStep';
 import { useCreateDeal, useDeal, useUpdateDeal, useSendContract } from './hooks/useDeals';
 import { ContractSendingLoader } from './components/ContractSendingLoader';
 
+/**
+ * Gera ocrData a partir dos arquivos (UploadedFile[])
+ */
+const generateOcrDataFromFiles = (files: UploadedFile[]): OcrDataByPerson[] => {
+  // Validação: garantir que files é um array
+  if (!Array.isArray(files)) {
+    console.warn('generateOcrDataFromFiles: files não é um array', files);
+    return [];
+  }
+
+  const ocrDataMap = new Map<string, any>();
+
+  files
+    .filter((file) => file && file.ocrExtractedData && file.ocrStatus === 'completed')
+    .forEach((file) => {
+      const personId = file.personId || 'property';
+      const docData = file.ocrExtractedData;
+
+      if (docData) {
+        if (ocrDataMap.has(personId)) {
+          const existingData = ocrDataMap.get(personId);
+          ocrDataMap.set(personId, { ...existingData, ...docData });
+        } else {
+          ocrDataMap.set(personId, docData);
+        }
+      }
+    });
+
+  return Array.from(ocrDataMap.entries()).map(
+    ([personId, data]) => ({ personId, data })
+  );
+};
+
 export const NewDealWizard: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
@@ -38,7 +71,9 @@ export const NewDealWizard: React.FC = () => {
   // -- Lifted State --
   const [configData, setConfigData] = useState<DealConfig>({
     name: '',
-    docTemplateId: '1zPOguNqO2UmM7pS4ZkCWlhcG5kXLZChRFOiow-RTJZM', // Financiamento (Google Drive ID)
+    docTemplateId: '',
+    expiration_date: undefined,
+    contract_end: undefined,
     useFgts: false,
     bankFinancing: false,
     consortiumLetter: false,
@@ -60,6 +95,8 @@ export const NewDealWizard: React.FC = () => {
           ...prev,
           name: existingDeal.name || '',
           docTemplateId: existingDeal.docTemplateId || prev.docTemplateId,
+          expiration_date: existingDeal.expirationDate ?? undefined,
+          contract_end: existingDeal.contractEnd ?? undefined,
           ...(existingDeal.metadata || {}),
         }));
       }
@@ -131,28 +168,9 @@ export const NewDealWizard: React.FC = () => {
         });
 
         setDocuments(loadedFiles);
-        const ocrDataMap = new Map<string, any>();
-
-        existingDeal.documents
-          .filter((doc: any) => doc.variables)
-          .forEach((doc: any) => {
-            const personId = doc.personId || 'property';
-            const docData = doc.variables && typeof doc.variables === 'string'
-              ? JSON.parse(doc.variables)
-              : doc.variables;
-
-            if (ocrDataMap.has(personId)) {
-              const existingData = ocrDataMap.get(personId);
-              ocrDataMap.set(personId, { ...existingData, ...docData });
-            } else {
-              ocrDataMap.set(personId, docData);
-            }
-          });
-
-        const ocrDataFromDocs: OcrDataByPerson[] = Array.from(ocrDataMap.entries()).map(
-          ([personId, data]) => ({ personId, data })
-        );
-
+        
+        // Gerar ocrData a partir dos documentos carregados
+        const ocrDataFromDocs = generateOcrDataFromFiles(loadedFiles);
         if (ocrDataFromDocs.length > 0) {
           setOcrData(ocrDataFromDocs);
         }
@@ -174,12 +192,14 @@ export const NewDealWizard: React.FC = () => {
     setSaveSuccess(false);
     setSaveError(null);
 
-    try {
-      await updateDealMutation.mutateAsync({
+    try {      
+      const updatedDeal = await updateDealMutation.mutateAsync({
         dealId,
         payload: {
           name: configData.name,
           docTemplateId: configData.docTemplateId,
+          expirationDate: configData.expiration_date,
+          contractEnd: configData.contract_end,
           metadata: {
             useFgts: configData.useFgts,
             bankFinancing: configData.bankFinancing,
@@ -192,6 +212,12 @@ export const NewDealWizard: React.FC = () => {
           },
         },
       });
+
+      setConfigData(prev => ({
+        ...prev,
+        expiration_date: updatedDeal.expirationDate ?? prev.expiration_date,
+        contract_end: updatedDeal.contractEnd ?? prev.contract_end,
+      }));
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
@@ -310,6 +336,8 @@ export const NewDealWizard: React.FC = () => {
           name: configData.name,
           docTemplateId: configData.docTemplateId,
           signers: [],
+          expirationDate: configData.expiration_date,
+          contractEnd: configData.contract_end,
           metadata: {
             useFgts: configData.useFgts,
             bankFinancing: configData.bankFinancing,
@@ -331,6 +359,27 @@ export const NewDealWizard: React.FC = () => {
       setDealId(editDealId);
     }
 
+    // Salvar campos mapeados ao avançar da etapa 3
+    if (step === 3 && dealId) {
+      try {
+        const contractFieldsJson: Record<string, string> = {};
+        Object.entries(mappings).forEach(([fieldId, mapping]) => {
+          contractFieldsJson[fieldId] = mapping.value;
+        });
+
+        await updateDealMutation.mutateAsync({
+          dealId,
+          payload: {
+            contractFields: contractFieldsJson,
+          },
+        });
+        console.log('✅ Campos mapeados salvos automaticamente');
+      } catch (error: any) {
+        console.error('❌ Erro ao salvar campos do contrato:', error);
+        // Não bloquear a navegação, apenas logar o erro
+      }
+    }
+
     setDirection(1);
     setStep(s => Math.min(s + 1, 5));
   }
@@ -346,6 +395,26 @@ export const NewDealWizard: React.FC = () => {
     setSubmissionStatus('sending');
 
     try {
+      // Salvar signatários antes de enviar
+      const signersToSave = signatories.map(sig => ({
+        id: sig.id,
+        name: sig.name,
+        email: sig.email,
+        phoneNumber: sig.phoneNumber,
+        signingOrder: 0,
+        role: sig.role,
+      }));
+
+      await updateDealMutation.mutateAsync({
+        dealId,
+        payload: {
+          signers: signersToSave as any,
+        },
+      });
+
+      console.log('✅ Signatários salvos antes de enviar');
+
+      // Enviar contrato após salvar signatários
       await sendContractMutation.mutateAsync({ dealId });
 
       setSaveSuccess(true);
@@ -500,8 +569,29 @@ export const NewDealWizard: React.FC = () => {
                 <DocumentsStep
                   config={configData}
                   files={documents}
-                  onFilesChange={setDocuments}
-                  onNext={nextStep}
+                  onFilesChange={(newFilesOrUpdater) => {
+                    // Lidar com função updater ou array direto
+                    if (typeof newFilesOrUpdater === 'function') {
+                      setDocuments((prevFiles) => {
+                        const updatedFiles = newFilesOrUpdater(prevFiles);
+                        // Atualizar ocrData sempre que os arquivos mudarem
+                        const updatedOcrData = generateOcrDataFromFiles(updatedFiles);
+                        setOcrData(updatedOcrData);
+                        return updatedFiles;
+                      });
+                    } else {
+                      setDocuments(newFilesOrUpdater);
+                      // Atualizar ocrData sempre que os arquivos mudarem
+                      const updatedOcrData = generateOcrDataFromFiles(newFilesOrUpdater);
+                      setOcrData(updatedOcrData);
+                    }
+                  }}
+                  onNext={() => {
+                    // Garantir que ocrData está atualizado antes de navegar
+                    const updatedOcrData = generateOcrDataFromFiles(documents);
+                    setOcrData(updatedOcrData);
+                    nextStep();
+                  }}
                   onAnalysisComplete={(data) => setOcrData(data)}
                   dealId={dealId}
                 />

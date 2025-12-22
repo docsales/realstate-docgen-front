@@ -28,6 +28,11 @@ export class Server {
           if (session?.access_token) {
             config.headers.Authorization = `${this.tokenPrefix} ${session.access_token}`;
           }
+
+          // Se for FormData, remove Content-Type para o browser definir automaticamente com boundary
+          if (config.data instanceof FormData) {
+            delete config.headers['Content-Type'];
+          }
         } catch (error) {
           console.error('Erro ao obter token de autenticação:', error);
         }
@@ -39,12 +44,10 @@ export class Server {
       }
     );
 
-    // Response interceptor - trata erros de autenticação
     this.api.interceptors.response.use(
       (response) => response,
       async (error) => {
         if (error.response?.status === 401) {
-          // Token expirado ou inválido - fazer logout
           await supabase.auth.signOut();
         }
         return Promise.reject(error);

@@ -13,7 +13,7 @@ interface SignatoriesStepProps {
 }
 
 export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, onChange, dealId }) => {
-  const [form, setForm] = useState({ name: '', email: '', phoneNumber: '', role: 'comprador' });
+  const [form, setForm] = useState({ name: '', email: '', phoneNumber: '', role: 'buyer_part' });
   const removeSignatoryMutation = useRemoveSignatoryFromDeal();
 
   const addSignatory = () => {
@@ -25,7 +25,7 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
         signingOrder: 0,
       };
       onChange([...signatories, newSignatory]);
-      setForm({ name: '', email: '', phoneNumber: '', role: 'comprador' });
+      setForm({ name: '', email: '', phoneNumber: '', role: 'buyer_part' });
     }
   };
 

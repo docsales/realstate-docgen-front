@@ -23,6 +23,7 @@ export interface OcrMetadata {
   customId?: string;
   category?: 'buyers' | 'sellers' | 'property';
   personId?: string;
+  dealId?: string;
 }
 
 /**

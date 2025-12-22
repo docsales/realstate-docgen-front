@@ -25,7 +25,7 @@ export class SettingsService {
 
   // User endpoints (for docsalesApiKey and folderId)
   async updateUser(data: UpdateUserDto): Promise<any> {
-    const response = await server.api.put(`/user`, data, { withCredentials: true });
+    const response = await server.api.put(`/users/me`, data, { withCredentials: true });
     return response.data;
   }
 

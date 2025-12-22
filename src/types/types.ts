@@ -17,6 +17,8 @@ export interface Deal {
   metadata?: any;
   contractModel?: string;
   contractFields?: any;
+  expirationDate?: string;
+  contractEnd?: string;
   createdAt: string;
   updatedAt: string;
   signers?: Signatory[];
@@ -32,6 +34,8 @@ export interface GeneratePreviewResponse {
 export interface UpdateDealDataDto {
   name?: string;
   docTemplateId?: string;
+  expirationDate?: string;
+  contractEnd?: string;
   metadata?: any;
   contractFields?: any;
   consolidated?: ConsolidatedDealData;
@@ -116,6 +120,8 @@ export interface ContractFieldSection {
 export interface DealConfig {
   name: string;
   docTemplateId: string;
+  expiration_date?: string;
+  contract_end?: string;
   useFgts: boolean;
   bankFinancing: boolean;
   consortiumLetter: boolean;

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/Button';
-import { ArrowRight, AlertTriangle, RefreshCcw, Clock, RotateCw } from 'lucide-react';
+import { AlertTriangle, RefreshCcw, RotateCw } from 'lucide-react';
 import type { UploadedFile, DealConfig } from '@/types/types';
 import { BuyerDocumentsTab } from '../components/documents/BuyerDocumentsTab';
 import { SellerDocumentsTab } from '../components/documents/SellerDocumentsTab';
@@ -9,94 +9,84 @@ import { documentChecklistService } from '../services/document-checklist.service
 import type { ConsolidatedChecklist, ChecklistRequestDTO } from '@/types/checklist.types';
 import { ChecklistSummary } from '../components/documents/ChecklistSummary';
 import { useOcr } from '@/hooks/useOcr';
-import { usePollingCountdown } from '@/hooks/usePollingCountdown';
-import { useAddDocumentToDeal, useRemoveDocumentFromDeal } from '../hooks/useDeals';
+import { useRemoveDocumentFromDeal } from '../hooks/useDeals';
 
 interface DocumentsStepProps {
 	files: UploadedFile[];
 	onFilesChange: (files: UploadedFile[] | ((prevFiles: UploadedFile[]) => UploadedFile[])) => void;
-	onNext: () => void;
+	onNext?: () => void;
 	onAnalysisComplete?: (data: any) => void;
 	config: DealConfig;
 	dealId?: string | null;
 }
 
-export const DocumentsStep: React.FC<DocumentsStepProps> = ({ 
-	files, 
-	onFilesChange, 
-	onNext, 
+export const DocumentsStep: React.FC<DocumentsStepProps> = ({
+	files,
+	onFilesChange,
 	config,
 	dealId
 }) => {
 	const removeDocumentFromDealMutation = useRemoveDocumentFromDeal();
-	
+
 	const [activeTab, setActiveTab] = useState<'buyers' | 'sellers' | 'property'>('buyers');
 	const [checklist, setChecklist] = useState<ConsolidatedChecklist | null>(null);
 	const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
 	const [checklistError, setChecklistError] = useState<string | null>(null);
-	const [validationError, setValidationError] = useState<string | null>(null);
-
-	// Hook para vincular documentos ao deal
-	const addDocumentToDealMutation = useAddDocumentToDeal();
+	const hasCheckedOnMountRef = useRef(false);
 
 	// Integração com OCR
-	const { 
-		stats: ocrStats, 
+	const {
+		stats: ocrStats,
 		isProcessing: isOcrProcessing,
+		isCheckingStatus,
 		manualRefresh,
 	} = useOcr(files, onFilesChange, {
 		autoProcess: true,
-		pollingInterval: 2 * 60 * 1000, // 2 minutos
-		onComplete: (documentId, extractedData, localFileId) => {
-			console.log('🎉 OCR Completo - LocalID:', localFileId, 'DocumentID:', documentId, 'Validação:', extractedData?.validationPassed);
-			
-			if (!dealId || !documentId) {
-				console.warn('⚠️ dealId ou documentId ausente, não é possível vincular documento');
-				return;
-			}
-			
-			// Vincular documento ao deal usando documentId do backend
-			addDocumentToDealMutation.mutate(
-				{ dealId, documentId: documentId },
-				{
-					onSuccess: () => {
-						console.log('✅ Documento vinculado ao deal com sucesso - DocumentID:', documentId, 'LocalID:', localFileId);
-						
-						// Atualizar arquivo com validação real do parsing usando o ID local
-						onFilesChange(prevFiles => prevFiles.map(f => {
-							if (f.id === localFileId) {
-								console.log('📝 Atualizando validação do arquivo:', localFileId);
-								return {
-									...f,
-									validated: extractedData?.validationPassed ?? true,
-									validationError: !extractedData?.validationPassed 
-										? 'Documento não passou na validação do parsing' 
-										: undefined
-								};
-							}
-							return f;
-						}));
-					},
-					onError: (error) => {
-						console.error('❌ Erro ao vincular documento ao deal - DocumentID:', documentId, error);
-					}
+		dealId: dealId || undefined,
+		onComplete: (_documentId, extractedData, localFileId) => {
+			onFilesChange(prevFiles => prevFiles.map(f => {
+				if (f.id === localFileId) {
+					return {
+						...f,
+						validated: true,
+						ocrExtractedData: extractedData, // Garantir que extractedData está salvo no arquivo
+					};
 				}
-			);
+				return f;
+			}));
 		},
 		onError: (fileId, error) => {
 			console.error('❌ Erro no OCR:', fileId, error);
 		},
 	});
 
-	const pollingCountdown = usePollingCountdown(
-		2 * 60 * 1000, // 2 minutos
-		ocrStats.processing > 0 // Ativar quando houver arquivos processando
-	);
-
-	// Wrapper para o manualRefresh que passa os arquivos atuais
-	const handleManualRefresh = () => {
+	const handleManualRefresh = useCallback(() => {
 		manualRefresh(files);
-	};
+	}, [manualRefresh, files]);
+
+	useEffect(() => {
+		return () => {
+			hasCheckedOnMountRef.current = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		const processingFiles = files.filter(f =>
+			f.ocrStatus === 'processing' ||
+			f.ocrStatus === 'uploading'
+		);
+
+		if (processingFiles.length > 0 && !isCheckingStatus && !hasCheckedOnMountRef.current) {
+			console.log(`🔄 DocumentsStep montado: ${processingFiles.length} arquivo(s) em processamento - verificando status`);
+			hasCheckedOnMountRef.current = true;
+
+			const timeoutId = setTimeout(() => {
+				handleManualRefresh();
+			}, 1500);
+
+			return () => clearTimeout(timeoutId);
+		}
+	}, [files, isCheckingStatus, handleManualRefresh]);
 
 	useEffect(() => {
 		const loadChecklist = async () => {
@@ -106,7 +96,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 			try {
 				const checklists = [];
 
-				// Gerar checklist para cada combinação vendedor x comprador
 				for (const seller of config.sellers) {
 					for (const buyer of config.buyers) {
 						const requestData: ChecklistRequestDTO = {
@@ -128,7 +117,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 						};
 
 						const response = await documentChecklistService.generateChecklist(requestData);
-						
+
 						if (response && response.sucesso) {
 							checklists.push(response.dados);
 						}
@@ -136,7 +125,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 				}
 
 				if (checklists.length > 0) {
-					// Consolidar todos os checklists
 					const consolidated = documentChecklistService.consolidateMultipleChecklists(checklists);
 					setChecklist(consolidated);
 				} else {
@@ -152,63 +140,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 
 		loadChecklist();
 	}, [config]);
-
-
-	const processDocuments = () => {
-		setValidationError(null);
-
-		// Validar documentos antes de processar
-		if (checklist) {
-			const validation = validateRequiredDocuments();
-			if (!validation.valid) {
-				setValidationError(validation.error ?? 'Erro ao validar documentos');
-				return;
-			}
-		}
-
-		// Avançar para próximo passo
-		onNext();
-	};
-
-	// Função para validar se todos os documentos obrigatórios foram enviados
-	const validateRequiredDocuments = (): { valid: boolean; error?: string } => {
-		if (!checklist) {
-			return { valid: true };
-		}
-
-		// Verificar alertas de bloqueio
-		const blockingAlerts = checklist.alertasGerais.filter(
-			alert => alert.tipo === 'BLOQUEIO'
-		);
-
-		if (blockingAlerts.length > 0) {
-			return {
-				valid: false,
-				error: `Existem ${blockingAlerts.length} impedimento(s) que bloqueiam a continuidade. Por favor, resolva-os antes de continuar.`
-			};
-		}
-
-		// Coletar todos os documentos obrigatórios
-		const allRequiredDocs = [
-			...checklist.vendedores.documentos.filter(d => d.obrigatorio),
-			...checklist.compradores.documentos.filter(d => d.obrigatorio),
-			...checklist.imovel.documentos.filter(d => d.obrigatorio)
-		];
-
-		// Verificar quais documentos obrigatórios ainda não foram enviados
-		const missingDocs = allRequiredDocs.filter(doc => {
-			return !files.some(f => f.type === doc.id && f.validated !== false);
-		});
-
-		if (missingDocs.length > 0) {
-			return {
-				valid: false,
-				error: `Faltam ${missingDocs.length} documento(s) obrigatório(s). Por favor, envie todos os documentos necessários antes de continuar.`
-			};
-		}
-
-		return { valid: true };
-	};
 
 	const handleRemoveFile = (fileId: string) => {
 		if (!dealId) return;
@@ -246,7 +177,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 					<h3 className="text-xl font-bold text-slate-800">Erro ao Carregar Checklist</h3>
 					<p className="text-slate-500">{checklistError}</p>
 					<div className="flex justify-center">
-					<Button onClick={() => window.location.reload()} className="btn-md">
+						<Button onClick={() => window.location.reload()} className="btn-md">
 							<RefreshCcw className="w-5 h-5" />
 							Tentar Novamente
 						</Button>
@@ -260,8 +191,8 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		<div className="space-y-6 animate-in fade-in duration-500">
 			{/* Checklist Summary */}
 			{checklist && (
-				<ChecklistSummary 
-					checklist={checklist} 
+				<ChecklistSummary
+					checklist={checklist}
 					uploadedFiles={files}
 					numSellers={config.sellers.length}
 					numBuyers={config.buyers.length}
@@ -276,33 +207,23 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 							<div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
 							<h3 className="font-bold text-purple-900">Status do Processamento OCR</h3>
 						</div>
-						
-						{/* Contador de refresh e botão manual */}
-						<div className="flex items-center gap-2">
-							{ocrStats.processing > 0 && (
-								<div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-purple-300 shadow-sm">
-									<Clock className="w-4 h-4 text-purple-600" />
-									<div className="text-xs">
-										<span className="text-purple-800 font-semibold">Próximo refresh em </span>
-										<span className="text-purple-600 font-bold">{pollingCountdown.formattedTime}</span>
-									</div>
-								</div>
-							)}
-							
-							{/* Botão de refresh manual */}
-							{ocrStats.processing > 0 && (
-								<button
-									onClick={handleManualRefresh}
-									className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-purple-50 rounded-lg border border-purple-300 shadow-sm transition-colors"
-									title="Verificar status agora"
-								>
-									<RotateCw className="w-4 h-4 text-purple-600" />
-									<span className="text-xs font-semibold text-purple-800">Atualizar Agora</span>
-								</button>
-							)}
-						</div>
+
+						{/* Botão de refresh manual */}
+						{ocrStats.processing > 0 && (
+							<button
+								onClick={handleManualRefresh}
+								disabled={isCheckingStatus}
+								className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-purple-50 rounded-lg border border-purple-300 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								title="Verificar status manualmente"
+							>
+								<RotateCw className={`w-4 h-4 text-purple-600 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+								<span className="text-xs font-semibold text-purple-800">
+									{isCheckingStatus ? 'Verificando...' : 'Verificar Status'}
+								</span>
+							</button>
+						)}
 					</div>
-					
+
 					<div className="grid grid-cols-5 gap-3">
 						<div className="bg-white rounded-lg p-3 text-center border border-slate-200">
 							<div className="text-2xl font-bold text-slate-800">{ocrStats.total}</div>
@@ -347,33 +268,30 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 						<button
 							type="button"
 							onClick={() => setActiveTab('buyers')}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${
-								activeTab === 'buyers'
-									? 'text-primary border-b-2 border-primary bg-white'
-									: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-							}`}
+							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === 'buyers'
+								? 'text-primary border-b-2 border-primary bg-white'
+								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+								}`}
 						>
 							Compradores
 						</button>
 						<button
 							type="button"
 							onClick={() => setActiveTab('sellers')}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${
-								activeTab === 'sellers'
-									? 'text-primary border-b-2 border-primary bg-white'
-									: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-							}`}
+							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === 'sellers'
+								? 'text-primary border-b-2 border-primary bg-white'
+								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+								}`}
 						>
 							Vendedores
 						</button>
 						<button
 							type="button"
 							onClick={() => setActiveTab('property')}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${
-								activeTab === 'property'
-									? 'text-primary border-b-2 border-primary bg-white'
-									: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-							}`}
+							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === 'property'
+								? 'text-primary border-b-2 border-primary bg-white'
+								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+								}`}
 						>
 							Imóvel
 						</button>
@@ -415,26 +333,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 					)}
 				</div>
 			</div>
-
-			{/* Validation Error */}
-			{validationError && (
-				<div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-					<AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-					<div>
-						<h4 className="font-semibold text-red-800 mb-1">Validação Falhou</h4>
-						<p className="text-red-700 text-sm">{validationError}</p>
-					</div>
-				</div>
-			)}
-
-			{/* Process Button */}
-			{files.length > 0 && (
-				<div className="flex justify-end pt-6">
-					<Button onClick={processDocuments} className="w-full md:w-auto text-lg px-8 py-3 h-auto">
-						Processar Documentos <ArrowRight className="w-5 h-5 ml-2" />
-					</Button>
-				</div>
-			)}
 		</div>
 	);
 };

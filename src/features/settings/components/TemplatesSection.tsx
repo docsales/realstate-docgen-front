@@ -87,7 +87,7 @@ export function TemplatesSection({
               <div className="flex items-center gap-2 ml-4">
                 <button
                   onClick={() => onEdit(template)}
-                  className="p-2 text-slate-600 hover:text-[#085995] hover:bg-slate-50 rounded-lg transition-colors"
+                  className="cursor-pointer p-2 text-slate-600 hover:text-[#085995] hover:bg-slate-50 rounded-lg transition-colors"
                   title="Editar template"
                 >
                   <Edit2 className="w-4 h-4" />
@@ -95,7 +95,7 @@ export function TemplatesSection({
                 <button
                   onClick={() => handleDelete(template.id)}
                   disabled={deletingId === template.id}
-                  className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  className="cursor-pointer p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                   title="Deletar template"
                 >
                   <Trash2 className="w-4 h-4" />
