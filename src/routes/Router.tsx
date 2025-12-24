@@ -35,7 +35,7 @@ const AuthenticatedLayout = () => {
             <div className="flex items-center gap-4">
               <div className="hidden md:flex flex-col text-right">
                 <span className="text-sm font-semibold text-slate-700">{user?.name}</span>
-                <span className="text-xs text-slate-500">Imobiliária Premium</span>
+                <span className="text-xs text-slate-500">{user?.email}</span>
               </div>
               
               {/* User Menu Dropdown com daisyUI */}

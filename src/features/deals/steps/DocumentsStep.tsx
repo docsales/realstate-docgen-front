@@ -33,6 +33,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
 	const [checklistError, setChecklistError] = useState<string | null>(null);
 	const hasCheckedOnMountRef = useRef(false);
+	const mountTimestampRef = useRef<number>(Date.now());
 
 	// Integração com OCR
 	const {
@@ -64,29 +65,41 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		manualRefresh(files);
 	}, [manualRefresh, files]);
 
+	// Resetar flag ao montar o componente
 	useEffect(() => {
+		hasCheckedOnMountRef.current = false;
+		mountTimestampRef.current = Date.now();
+		console.log('📍 DocumentsStep montado');
+		
 		return () => {
-			hasCheckedOnMountRef.current = false;
+			console.log('📍 DocumentsStep desmontado');
 		};
 	}, []);
 
+	// Verificar status de arquivos em processamento ao montar ou quando arquivos mudarem
 	useEffect(() => {
 		const processingFiles = files.filter(f =>
 			f.ocrStatus === 'processing' ||
 			f.ocrStatus === 'uploading'
 		);
 
-		if (processingFiles.length > 0 && !isCheckingStatus && !hasCheckedOnMountRef.current) {
-			console.log(`🔄 DocumentsStep montado: ${processingFiles.length} arquivo(s) em processamento - verificando status`);
-			hasCheckedOnMountRef.current = true;
+		if (processingFiles.length > 0 && !isCheckingStatus) {
+			// Verificar se já passou tempo suficiente desde a última verificação (evitar spam)
+			const timeSinceMount = Date.now() - mountTimestampRef.current;
+			
+			if (!hasCheckedOnMountRef.current || timeSinceMount < 2000) {
+				console.log(`🔄 DocumentsStep: ${processingFiles.length} arquivo(s) em processamento - verificando status`);
+				hasCheckedOnMountRef.current = true;
 
-			const timeoutId = setTimeout(() => {
-				handleManualRefresh();
-			}, 1500);
+				const timeoutId = setTimeout(() => {
+					handleManualRefresh();
+				}, 1000);
 
-			return () => clearTimeout(timeoutId);
+				return () => clearTimeout(timeoutId);
+			}
 		}
-	}, [files, isCheckingStatus, handleManualRefresh]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [files.length, isCheckingStatus]); // Usar files.length ao invés de files para evitar loops
 
 	useEffect(() => {
 		const loadChecklist = async () => {

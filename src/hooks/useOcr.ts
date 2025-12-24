@@ -162,13 +162,21 @@ export const useOcr = (
 
       const documentId = result.documentId || result.fileId;
       
-      // Mapear ID local para documentId do backend (sem atualizar o array files)
+      // Mapear ID local para documentId do backend
       if (documentId && documentId !== file.id) {
         console.log(`📝 Mapeando ID: ${file.id} → ${documentId}`);
         fileIdMapRef.current.set(file.id, documentId);
         
         // Adicionar documentId aos registros para evitar reprocessamento
         processedFilesRef.current.add(documentId);
+        
+        // Salvar documentId no arquivo para uso posterior
+        onFilesChange((prevFiles: any[]) => prevFiles.map(f => {
+          if (f.id === file.id) {
+            return { ...f, documentId };
+          }
+          return f;
+        }));
       }
 
       const finalId = documentId || file.id;
@@ -273,11 +281,18 @@ export const useOcr = (
     setIsCheckingStatus(true);
     
     try {
-      // Coletar todos os documentIds
+      // Coletar todos os documentIds (priorizar documentId salvo no arquivo)
       const documentIds = processingFiles.map(f => {
-        // Tentar obter o documentId do backend, senão usar o ID local
-        return fileIdMapRef.current.get(f.id) || f.id;
+        // 1. Tentar pegar do arquivo
+        if (f.documentId) return f.documentId;
+        // 2. Tentar pegar do mapeamento em memória
+        const mappedId = fileIdMapRef.current.get(f.id);
+        if (mappedId) return mappedId;
+        // 3. Usar ID local como fallback
+        return f.id;
       });
+      
+      console.log('📋 DocumentIds para verificar:', documentIds);
 
       // Processar todos em batch no backend
       const batchResult = await ocrService.processBatch(documentIds);
@@ -315,7 +330,7 @@ export const useOcr = (
     let isMounted = true;
 
     const connectWebSocket = async () => {
-      // Conectar apenas se houver arquivos processando ou se houver arquivos em geral
+      // Conectar apenas se houver arquivos
       if (files.length === 0) {
         return;
       }
@@ -412,7 +427,8 @@ export const useOcr = (
       // Não limpar processingRef aqui para não interromper requisições em andamento
       // processingRef.current.clear();
     };
-  }, [files.length, updateFileOcrStatus, onComplete, onError, checkFileStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files.length]); // Usar apenas files.length para evitar reconexões desnecessárias
 
   // Estatísticas
   const stats = {

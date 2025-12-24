@@ -78,6 +78,7 @@ export interface UploadedFile {
   ocrExtractedData?: import('./ocr.types').OcrExtractedData; // Dados extraídos pelo OCR
   ocrError?: string; // Erro no processamento OCR
   ocrProcessingTime?: number; // Tempo de processamento em ms
+  documentId?: string; // ID do documento no backend (diferente do ID local)
 }
 
 // Types for person configuration

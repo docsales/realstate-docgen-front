@@ -4,6 +4,8 @@ import { ArrowRight, CheckCircle2, ExternalLink, FilePenLine, FileText, RefreshC
 import type { GeneratePreviewResponse } from '@/types/types';
 import { useDeal, useGeneratePreview } from '../hooks/useDeals';
 import { DocumentWritingLoader } from '../components/DocumentWritingLoader';
+import { SuccessModal } from '../components/SuccessModal';
+import { fireConfetti, fireQuickConfetti } from '@/utils/confetti';
 
 interface PreviewStepProps {
 	dealId: string;
@@ -19,14 +21,17 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 	const [preview, setPreview] = useState<GeneratePreviewResponse | null>(null);
 	const previousMappedCountRef = useRef<number>(mappedCount);
 	const previousContractFieldsRef = useRef<string | null>(null);
+	const [showSuccessModal, setShowSuccessModal] = useState(false);
+	const [isRegeneration, setIsRegeneration] = useState(false);
 
-	const handleGenerate = async () => {
+	const handleGenerate = async (isRegen = false) => {
 		if (!dealId) {
 			console.error('Deal ID is required');
 			setStatus('idle');
 			return;
 		}
 
+		setIsRegeneration(isRegen);
 		setStatus('generating');
 		try {
 			// Gerar novo preview - o servidor atualiza o deal com os novos valores
@@ -51,18 +56,35 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 			setPreview(newPreview);
 			setStatus('done');
 			
-			console.log('✅ Preview regenerado com sucesso:', {
+			console.log('✅ Preview gerado com sucesso:', {
 				id: newPreview.id,
 				url: newPreview.edit_url,
-				message: 'Novo documento criado no Google Docs e deal atualizado no servidor'
+				message: 'Documento criado no Google Docs e deal atualizado no servidor'
 			});
+
+			// Disparar confetti e mostrar modal de sucesso
+			if (isRegen) {
+				fireQuickConfetti();
+			} else {
+				fireConfetti();
+			}
+			
+			// Mostrar modal após um pequeno delay para o confetti iniciar
+			setTimeout(() => {
+				setShowSuccessModal(true);
+			}, 500);
 		} catch (error) {
-			console.error('❌ Erro ao regenerar preview:', error);
+			console.error('❌ Erro ao gerar preview:', error);
 			setStatus('done'); // Manter status 'done' para não perder o preview anterior
 		}
 	};
 
 	useEffect(() => {
+		// Não atualizar status se estiver gerando (evita sobrescrever o loader)
+		if (status === 'generating') {
+			return;
+		}
+
 		if (dealId && !isLoading) {
 			// Verificar se o mapeamento mudou (número de campos ou conteúdo dos contractFields)
 			const currentContractFields = deal?.contractFields 
@@ -142,7 +164,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 							<span className="font-medium text-slate-800">{preview.edit_url}</span>
 						</div>
 					)}
-					<Button onClick={handleGenerate} className="w-full text-lg py-3">
+					<Button onClick={() => handleGenerate(false)} className="w-full text-lg py-3">
 						<FilePenLine className="w-4 h-4" />
 						Gerar Preview
 					</Button>
@@ -151,8 +173,10 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 
 			{status === 'generating' && (
 				<DocumentWritingLoader 
-					title="Gerando seu Documento..."
-					description="O sistema está aplicando as variáveis no modelo e criando o link no Drive."
+					title={isRegeneration ? "Regerando seu Documento..." : "Gerando seu Documento..."}
+					description={isRegeneration 
+						? "Atualizando o documento com as novas informações..."
+						: "O sistema está aplicando as variáveis no modelo e criando o link no Drive."}
 				/>
 			)}
 
@@ -174,7 +198,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 						<Button 
 							variant="secondary" 
 							className="w-full flex items-center gap-2 justify-center" 
-							onClick={handleGenerate}
+							onClick={() => handleGenerate(true)}
 							disabled={generatePreviewMutation.isPending}
 						>
 							<RefreshCw className={`w-4 h-4 ${generatePreviewMutation.isPending ? 'animate-spin' : ''}`} />
@@ -188,6 +212,21 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 					<p className="text-xs text-slate-400">Nota: O documento abre em nova aba.</p>
 				</div>
 			)}
+
+			{/* Success Modal */}
+			<SuccessModal
+				isOpen={showSuccessModal}
+				onClose={() => setShowSuccessModal(false)}
+				title={isRegeneration ? "Preview Atualizado!" : "Documento Pronto!"}
+				description={isRegeneration 
+					? "Seu documento foi atualizado com sucesso e está pronto para visualização."
+					: "Seu documento foi gerado com sucesso e está pronto para ser visualizado."}
+				onOpenPreview={() => {
+					if (preview?.edit_url) {
+						window.open(preview.edit_url, '_blank');
+					}
+				}}
+			/>
 		</div>
 	);
 };

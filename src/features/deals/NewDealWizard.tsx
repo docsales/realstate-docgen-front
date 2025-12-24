@@ -599,6 +599,7 @@ export const NewDealWizard: React.FC = () => {
               {step === 3 && (
                 <MappingStep
                   mappings={mappings}
+                  dealId={dealId!}
                   onMap={(fieldId, value, source) => {
                     if (value === '') {
                       setMappings(prev => {

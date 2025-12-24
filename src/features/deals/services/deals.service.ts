@@ -113,6 +113,18 @@ export class DealsService {
   }
 
   /**
+   * Obtém variáveis do template do Google Docs para mapear
+   */
+  async getDocVariables(dealId: string): Promise<any> {
+    const { data }: { data: any } = await server.api.get<any>(
+      `/deal/${dealId}/doc-variables`,
+      { withCredentials: true }
+    );
+
+    return data;
+  }
+
+  /**
    * Gera preview do contrato
    */
   async generatePreview(dealId: string): Promise<GeneratePreviewResponse> {
