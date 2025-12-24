@@ -188,6 +188,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Erro ao fazer logout:', error);
     }
 
+    // Limpa cache de token do servidor
+    server.clearTokenCache();
+    
     setSession(null);
     sessionRef.current = null;
     setUser(null);
