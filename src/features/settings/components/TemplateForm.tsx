@@ -17,28 +17,64 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
   const [order, setOrder] = useState(template?.order ?? 0);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleExtractTemplateId = (templateUrl: string) => {
     if (!templateUrl.includes('/document/d/')) {
       if (templateUrl.includes('drive.google.com') || templateUrl.includes('http')) {
-        setError('URL do template inválida. Por favor, insira a URL completa do documento no Google Docs.');
+        setValidationError('URL do template inválida. Por favor, insira a URL completa do documento no Google Docs.');
         setTemplateId('');
         return;
       }
 
-      setError(null);
+      setValidationError(null);
       return;
     }
 
     const extractedTemplateId = templateUrl.split('/document/d/')[1].split('/edit')[0];
 
     setTemplateId(extractedTemplateId);
-    setError(null);
+    setValidationError(null);
   }
+
+  const extractErrorMessage = (error: any): string => {
+    if (error?.response?.data) {
+      const data = error.response.data;
+
+      if (data.erro) {
+        return data.erro;
+      }
+      if (data.mensagem) {
+        return data.mensagem;
+      }
+      if (data.message) {
+        return data.message;
+      }
+      if (data.error) {
+        return typeof data.error === 'string' ? data.error : data.error.message || 'Erro desconhecido';
+      }
+      if (data.detalhes && Array.isArray(data.detalhes) && data.detalhes.length > 0) {
+        return data.detalhes.join(', ');
+      }
+
+      const status = error.response.status;
+      return `Erro ao salvar template (${status}): ${JSON.stringify(data)}`;
+    }
+
+    if (error?.message) {
+      if (error.message.includes('timeout') || error.message.includes('Network Error')) {
+        return 'Erro de conexão. Verifique sua internet e tente novamente.';
+      }
+      return error.message;
+    }
+
+    return 'Erro ao salvar template. Por favor, tente novamente.';
+  };
 
   const handleSubmit = async () => {
     setIsSaving(true);
+    setSaveError(null);
     try {
       const data = {
         label,
@@ -52,6 +88,8 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
       onClose();
     } catch (error) {
       console.error('Erro ao salvar template:', error);
+      const errorMessage = extractErrorMessage(error);
+      setSaveError(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -101,8 +139,8 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
               required
               className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]"
             />
-            {error && (
-              <p className="text-xs text-red-500 mt-1">{error}</p>
+            {validationError && (
+              <p className="text-xs text-red-500 mt-1">{validationError}</p>
             )}
             <p className="text-xs text-slate-500 mt-1">
               Encontre o ID na URL do documento no Google Docs
@@ -144,6 +182,13 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
               />
             </div>
           </div>
+
+          {saveError && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <p className="text-sm font-medium text-red-800 mb-1">Erro ao salvar template</p>
+              <p className="text-sm text-red-600">{saveError}</p>
+            </div>
+          )}
 
           <div className="divider"></div>
 

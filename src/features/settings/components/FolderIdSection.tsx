@@ -30,15 +30,52 @@ export function FolderIdSection({ initialValue, onSave }: FolderIdSectionProps) 
     setError(null);
   }
 
+  const extractErrorMessage = (error: any): string => {
+    if (error?.response?.data) {
+      const data = error.response.data;
+
+      if (data.erro) {
+        return data.erro;
+      }
+      if (data.mensagem) {
+        return data.mensagem;
+      }
+      if (data.message) {
+        return data.message;
+      }
+      if (data.error) {
+        return typeof data.error === 'string' ? data.error : data.error.message || 'Erro desconhecido';
+      }
+      if (data.detalhes && Array.isArray(data.detalhes) && data.detalhes.length > 0) {
+        return data.detalhes.join(', ');
+      }
+
+      const status = error.response.status;
+      return `Erro ao salvar Folder ID (${status}): ${JSON.stringify(data)}`;
+    }
+
+    if (error?.message) {
+      if (error.message.includes('timeout') || error.message.includes('Network Error')) {
+        return 'Erro de conexão. Verifique sua internet e tente novamente.';
+      }
+      return error.message;
+    }
+
+    return 'Erro ao salvar Folder ID. Por favor, tente novamente.';
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     setSuccessMessage('');
+    setError(null);
     try {
       await onSave(value);
       setSuccessMessage('Folder ID salvo com sucesso!');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Erro ao salvar Folder ID:', error);
+      const errorMessage = extractErrorMessage(error);
+      setError(errorMessage);
     } finally {
       setIsSaving(false);
     }
