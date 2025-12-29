@@ -40,6 +40,7 @@ export class SettingsService {
   async getDocumentTemplateById(id: string): Promise<DocumentTemplate> {
     const response = await server.api.get<DocumentTemplate>(
       `/document-templates/${id}`,
+      { withCredentials: true },
     );
     return response.data;
   }
@@ -50,6 +51,7 @@ export class SettingsService {
     const response = await server.api.post<DocumentTemplate>(
       '/document-templates',
       data,
+      { withCredentials: true },
     );
     return response.data;
   }
@@ -61,12 +63,13 @@ export class SettingsService {
     const response = await server.api.put<DocumentTemplate>(
       `/document-templates/${id}`,
       data,
+      { withCredentials: true },
     );
     return response.data;
   }
 
   async deleteDocumentTemplate(id: string): Promise<void> {
-    await server.api.delete(`/document-templates/${id}`);
+    await server.api.delete(`/document-templates/${id}`, { withCredentials: true });
   }
 }
 

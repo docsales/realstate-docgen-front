@@ -53,16 +53,25 @@ export function SettingsView() {
     }
   };
 
+  const loadTemplates = async () => {
+    try {
+      const templatesData = await settingsService.getDocumentTemplates();
+      setTemplates(templatesData);
+    } catch (error) {
+      console.error('Erro ao carregar templates:', error);
+    }
+  };
+
   const handleSaveApiKey = async (value: string) => {
     await settingsService.updateUser({ docsalesApiKey: value });
     setApiKey(value);
-    recheck(); // Revalidar configurações
+    recheck();
   };
 
   const handleSaveFolderId = async (value: string) => {
     await settingsService.updateUser({ folderId: value });
     setFolderId(value);
-    recheck(); // Revalidar configurações
+    recheck();
   };
 
   const handleSaveDocsalesEmail = async (value: string) => {
@@ -70,7 +79,7 @@ export function SettingsView() {
       docsalesUserEmail: value,
     });
     setUserSettings(updated);
-    recheck(); // Revalidar configurações
+    recheck();
   };
 
   const handleAddTemplate = () => {
@@ -91,22 +100,24 @@ export function SettingsView() {
     } else {
       await settingsService.createDocumentTemplate(data as CreateDocumentTemplateDto);
     }
-    await loadData();
+
+    await loadTemplates();
     setShowTemplateForm(false);
-    recheck(); // Revalidar configurações
+    recheck();
   };
 
   const handleDeleteTemplate = async (id: string) => {
     await settingsService.deleteDocumentTemplate(id);
-    await loadData();
-    recheck(); // Revalidar configurações
+
+    await loadTemplates();
+    recheck();
   };
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ef0474] mx-auto mb-4"></div>
+          <span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
           <p className="text-slate-600">Carregando configurações...</p>
         </div>
       </div>

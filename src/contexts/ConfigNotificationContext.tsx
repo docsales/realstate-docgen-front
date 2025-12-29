@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, type ReactNode } from 'react';
+import React, { createContext, useState, useEffect, type ReactNode, useContext } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -142,10 +142,9 @@ export const ConfigNotificationProvider: React.FC<{ children: ReactNode }> = ({ 
 };
 
 export const useConfigNotification = () => {
-  const context = React.useContext(ConfigNotificationContext);
+  const context = useContext(ConfigNotificationContext);
   if (context === undefined) {
     throw new Error('useConfigNotification must be used within a ConfigNotificationProvider');
   }
   return context;
 };
-

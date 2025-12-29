@@ -236,7 +236,7 @@ export function WebhooksSection() {
                     <div ref={loadMoreRef} className="py-4">
                       {isFetchingNextPage && (
                         <div className="flex items-center justify-center">
-                          <Loader2 className="w-5 h-5 animate-spin text-[#ef0474]" />
+                          <span className="loading loading-spinner loading-lg w-5 h-5 text-[#ef0474] mx-auto mb-4"></span>
                           <span className="ml-2 text-sm text-slate-600">Carregando mais eventos...</span>
                         </div>
                       )}

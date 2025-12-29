@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type React from 'react';
 import { X, Save, FileText } from 'lucide-react';
 import type { DocumentTemplate, CreateDocumentTemplateDto, UpdateDocumentTemplateDto } from '../../../types/settings.types';
 import { Button } from '@/components/Button';
@@ -19,6 +20,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const handleExtractTemplateId = (templateUrl: string) => {
     const input = templateUrl.trim();
@@ -117,9 +119,14 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
     return 'Erro ao salvar template. Por favor, tente novamente.';
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     setIsSaving(true);
     setSaveError(null);
+    setSaveSuccess(false);
+
     try {
       const data = {
         label,
@@ -130,7 +137,12 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
       };
 
       await onSave(data);
-      onClose();
+      setSaveSuccess(true);
+
+      // Aguarda um momento para mostrar a mensagem de sucesso antes de fechar
+      setTimeout(() => {
+        onClose();
+      }, 1000);
     } catch (error) {
       console.error('Erro ao salvar template:', error);
       const errorMessage = extractErrorMessage(error);
@@ -141,7 +153,14 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div 
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <h2 className="text-2xl font-semibold text-slate-800 flex items-center gap-2">
@@ -149,6 +168,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
             {template ? 'Editar Template' : 'Novo Template'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="cursor-pointer text-slate-400 hover:text-slate-600 transition-colors"
           >
@@ -228,6 +248,13 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
             </div>
           </div>
 
+          {saveSuccess && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-4">
+              <p className="text-sm font-medium text-green-800 mb-1">Template salvo com sucesso!</p>
+              <p className="text-sm text-green-600">Fechando o modal...</p>
+            </div>
+          )}
+
           {saveError && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <p className="text-sm font-medium text-red-800 mb-1">Erro ao salvar template</p>
@@ -249,13 +276,13 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
             </Button>
             <Button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || saveSuccess}
               variant="primary"
               isLoading={isSaving}
               className="bg-[#ef0474] text-white border-none rounded-sm hover:bg-[#d00366] transition-colors"
             >
-              <Save className="w-4 h-4" />
-              {isSaving ? 'Salvando...' : 'Salvar Template'}
+              {!isSaving && <Save className="w-4 h-4" />}
+              {isSaving ? 'Salvando...' : saveSuccess ? 'Salvo!' : 'Salvar Template'}
             </Button>
           </div>
         </form>

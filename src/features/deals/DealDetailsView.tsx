@@ -70,7 +70,7 @@ export const DealDetailsView: React.FC = () => {
 	if (isLoading) {
 		return (
 			<div className="flex flex-col items-center justify-center min-h-[60vh]">
-				<Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+				<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
 				<p className="text-slate-600">Carregando dados do contrato...</p>
 			</div>
 		);

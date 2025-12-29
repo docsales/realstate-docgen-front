@@ -104,7 +104,10 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 									/>
 								))
 							) : (
-								<p className="text-slate-500 text-sm">Carregando documentos necessários...</p>
+								<div className="text-center py-12 text-slate-500">
+									<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
+									<p className="text-sm text-slate-500">Carregando documentos necessários...</p>
+								</div>
 							)}
 						</div>
 					</div>

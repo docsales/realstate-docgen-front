@@ -225,7 +225,7 @@ export const DashboardView: React.FC = () => {
       {/* Loading State */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <Loader2 className="w-12 h-12 animate-spin text-primary" />
+          <span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
           <p className="text-slate-500">Carregando contratos...</p>
         </div>
       )}
@@ -368,7 +368,7 @@ export const DashboardView: React.FC = () => {
           <div ref={loadMoreRef} className="py-4">
             {isFetchingNextPage && (
               <div className="flex justify-center items-center gap-2">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                <span className="loading loading-spinner loading-lg w-6 h-6 text-[#ef0474] mx-auto mb-4"></span>
                 <span className="text-slate-500">Carregando mais...</span>
               </div>
             )}
