@@ -21,21 +21,66 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleExtractTemplateId = (templateUrl: string) => {
-    if (!templateUrl.includes('/document/d/')) {
-      if (templateUrl.includes('drive.google.com') || templateUrl.includes('http')) {
-        setValidationError('URL do template inválida. Por favor, insira a URL completa do documento no Google Docs.');
+    const input = templateUrl.trim();
+
+    const TEMPLATE_ID_PATTERN = /^[a-zA-Z0-9_-]{25,50}$/;
+
+    const DOC_PATTERN = '/document/d/';
+    const PRESENTATION_PATTERN = '/presentation/d/';
+
+    const isDocUrl = input.includes(DOC_PATTERN);
+    const isPresentationUrl = input.includes(PRESENTATION_PATTERN);
+
+    if (!isDocUrl && !isPresentationUrl) {
+      if (input.includes('docs.google.com') || input.includes('drive.google.com') || input.includes('http')) {
+        setValidationError('URL do template inválida. Por favor, insira a URL completa do Google Docs ou Google Slides.');
         setTemplateId('');
         return;
       }
 
-      setValidationError(null);
+      if (input.length > 0) {
+        if (TEMPLATE_ID_PATTERN.test(input)) {
+          setTemplateId(input);
+          setValidationError(null);
+        } else {
+          setValidationError('ID de template inválido. Deve conter apenas letras, números, hífens e underscores (25-50 caracteres).');
+          setTemplateId('');
+        }
+      } else {
+        setValidationError(null);
+        setTemplateId('');
+      }
       return;
     }
 
-    const extractedTemplateId = templateUrl.split('/document/d/')[1].split('/edit')[0];
+    try {
+      let extractedId = '';
 
-    setTemplateId(extractedTemplateId);
-    setValidationError(null);
+      if (isDocUrl) {
+        extractedId = input.split(DOC_PATTERN)[1];
+      } else if (isPresentationUrl) {
+        extractedId = input.split(PRESENTATION_PATTERN)[1];
+      }
+
+      extractedId = extractedId
+        .split('/edit')[0]
+        .split('/copy')[0]
+        .split('/preview')[0]
+        .split('?')[0]
+        .split('#')[0]
+        .split('/')[0];
+
+      if (TEMPLATE_ID_PATTERN.test(extractedId)) {
+        setTemplateId(extractedId);
+        setValidationError(null);
+      } else {
+        setValidationError('ID extraído da URL é inválido.');
+        setTemplateId('');
+      }
+    } catch (error) {
+      setValidationError('Erro ao processar a URL. Verifique o formato.');
+      setTemplateId('');
+    }
   }
 
   const extractErrorMessage = (error: any): string => {

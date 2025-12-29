@@ -14,20 +14,47 @@ export function FolderIdSection({ initialValue, onSave }: FolderIdSectionProps) 
   const [error, setError] = useState<string | null>(null);
 
   const handleExtractFolderId = (folderUrl: string) => {
-    if (!folderUrl.includes('/folders/')) {
-      if (folderUrl.includes('drive.google.com') || folderUrl.includes('http')) {
+    const input = folderUrl.trim();
+
+    const FOLDER_ID_PATTERN = /^[a-zA-Z0-9_-]{25,50}$/;
+
+    if (!input.includes('/folders/')) {
+      if (input.includes('drive.google.com') || input.includes('http')) {
         setError('URL da pasta inválida. Por favor, insira a URL completa da pasta no Google Drive.');
         setValue('');
         return;
       }
 
-      setError(null);
+      if (input.length > 0) {
+        if (FOLDER_ID_PATTERN.test(input)) {
+          setValue(input);
+          setError(null);
+        } else {
+          setError('ID de pasta inválido. Deve conter apenas letras, números, hífens e underscores (25-50 caracteres).');
+          setValue('');
+        }
+      } else {
+        setError(null);
+        setValue('');
+      }
       return;
     }
 
-    const folderId = folderUrl.split('/folders/')[1];
-    setValue(folderId);
-    setError(null);
+    try {
+      const urlParts = input.split('/folders/')[1];
+      const folderId = urlParts.split('?')[0].split('#')[0].split('/')[0];
+
+      if (FOLDER_ID_PATTERN.test(folderId)) {
+        setValue(folderId);
+        setError(null);
+      } else {
+        setError('ID extraído da URL é inválido.');
+        setValue('');
+      }
+    } catch (error) {
+      setError('Erro ao processar a URL. Verifique o formato.');
+      setValue('');
+    }
   }
 
   const extractErrorMessage = (error: any): string => {
