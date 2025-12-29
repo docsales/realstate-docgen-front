@@ -17,15 +17,32 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
   const [order, setOrder] = useState(template?.order ?? 0);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const handleExtractTemplateId = (templateUrl: string) => {
+    if (!templateUrl.includes('/document/d/')) {
+      if (templateUrl.includes('drive.google.com') || templateUrl.includes('http')) {
+        setError('URL do template inválida. Por favor, insira a URL completa do documento no Google Docs.');
+        setTemplateId('');
+        return;
+      }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+      setError(null);
+      return;
+    }
+
+    const extractedTemplateId = templateUrl.split('/document/d/')[1].split('/edit')[0];
+
+    setTemplateId(extractedTemplateId);
+    setError(null);
+  }
+
+  const handleSubmit = async () => {
     setIsSaving(true);
-
     try {
       const data = {
         label,
-        templateId,
+        templateId: templateId,
         description: description || undefined,
         isActive,
         order,
@@ -79,10 +96,14 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
               type="text"
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
+              onBlur={() => handleExtractTemplateId(templateId)}
               placeholder="Ex.: 1a2B3c4D5e6F7g8H9i0J"
               required
               className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]"
             />
+            {error && (
+              <p className="text-xs text-red-500 mt-1">{error}</p>
+            )}
             <p className="text-xs text-slate-500 mt-1">
               Encontre o ID na URL do documento no Google Docs
             </p>

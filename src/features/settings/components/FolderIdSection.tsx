@@ -11,6 +11,24 @@ export function FolderIdSection({ initialValue, onSave }: FolderIdSectionProps) 
   const [value, setValue] = useState(initialValue || '');
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleExtractFolderId = (folderUrl: string) => {
+    if (!folderUrl.includes('/folders/')) {
+      if (folderUrl.includes('drive.google.com') || folderUrl.includes('http')) {
+        setError('URL da pasta inválida. Por favor, insira a URL completa da pasta no Google Drive.');
+        setValue('');
+        return;
+      }
+
+      setError(null);
+      return;
+    }
+
+    const folderId = folderUrl.split('/folders/')[1];
+    setValue(folderId);
+    setError(null);
+  }
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -35,18 +53,22 @@ export function FolderIdSection({ initialValue, onSave }: FolderIdSectionProps) 
         </h2>
       </div>
       <p className="text-sm text-slate-600 mb-4">
-        ID da pasta no Google Drive onde os documentos serão armazenados. 
+        ID da pasta no Google Drive onde os documentos serão armazenados.
         Você pode encontrar este ID na URL da pasta do Google Drive.
       </p>
-      
+
       <div className="space-y-4">
         <input
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onBlur={() => handleExtractFolderId(value)}
           placeholder="Ex.: 1a2B3c4D5e6F7g8H9i0J"
           className="w-full px-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#085995]"
         />
+        {error && (
+          <p className="text-xs text-red-500 mt-1">{error}</p>
+        )}
 
         <div className="flex items-center gap-3">
           <Button
