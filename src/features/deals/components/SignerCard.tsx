@@ -1,9 +1,10 @@
 import { UtilsService } from "@/services/utils.service";
-import type { Signatory, SignerStatus } from "@/types/types";
+import type { DealStatus, Signatory, SignerStatus } from "@/types/types";
 import { CheckCircle2, Eye, Hourglass, X } from "lucide-react";
 
 interface SignerCardProps {
   signer: Signatory;
+  dealStatus: DealStatus;
   onRemove?: (signerId: string) => Promise<void>;
   onClick?: (signerId: string) => void;
   canRemove?: boolean;
@@ -11,7 +12,15 @@ interface SignerCardProps {
   isSelected?: boolean;
 }
 
-export const SignerCard: React.FC<SignerCardProps> = ({ signer, onRemove, onClick, canRemove = true, isLoading = false, isSelected = false }) => {
+export const SignerCard: React.FC<SignerCardProps> = ({
+  signer,
+  dealStatus,
+  onRemove,
+  onClick,
+  canRemove = true,
+  isLoading = false,
+  isSelected = false,
+}) => {
   const getSignerStatus = (status: SignerStatus) => {
     switch (status) {
       case 'waiting':
@@ -76,7 +85,7 @@ export const SignerCard: React.FC<SignerCardProps> = ({ signer, onRemove, onClic
           </div>
         </div>
 
-        {signer.status && (
+        {signer.status && dealStatus !== 'DRAFT' && (
           <div>
             {getSignerStatus(signer.status)}
           </div>

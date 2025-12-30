@@ -148,6 +148,7 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
               <SignerCard
                 key={signer.id}
                 signer={signer}
+                dealStatus={dealData?.status || 'DRAFT'}
                 canRemove={canRemoveSigner()}
                 onRemove={removeSignatory}
                 onClick={() => handleEdit(signer)}

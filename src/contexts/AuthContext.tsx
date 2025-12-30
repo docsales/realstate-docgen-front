@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import type { UserSettings } from '@/types/settings.types';
 import { server } from '@/services/api.service';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface User {
   id: string;
@@ -47,6 +48,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const sessionRef = React.useRef<Session | null>(null);
+  const queryClient = useQueryClient();
+
+  // Registra provider de sessão para o api.service usar (evita chamadas ao Supabase)
+  React.useEffect(() => {
+    server.setSessionProvider(() => {
+      const currentSession = sessionRef.current;
+      if (!currentSession?.access_token) return null;
+      
+      return {
+        token: currentSession.access_token,
+        expiresAt: currentSession.expires_at ? currentSession.expires_at * 1000 : Date.now() + 60 * 60 * 1000,
+      };
+    });
+  }, []);
 
   const fetchUser = React.useCallback(async (currentSession: Session | null) => {
     if (!currentSession) return;
@@ -65,73 +80,53 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     let isMounted = true;
-    const initializedRef = { current: false };
 
-    const initializeAuth = async () => {
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+    // Função para inicializar o estado
+    const initialize = async () => {
+      const { data: { session: initialSession } } = await supabase.auth.getSession();
+      
+      if (!isMounted) return;
 
-        if (isMounted) {
-          if (currentSession?.user) {
-            setSession(currentSession);
-            sessionRef.current = currentSession;
-            await fetchUser(currentSession);
-          } else {
-            setSession(null);
-            sessionRef.current = null;
-          }
-          initializedRef.current = true;
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error('Erro ao inicializar autenticação:', error);
-        if (isMounted) {
-          initializedRef.current = true;
-          setIsLoading(false);
-        }
+      if (initialSession) {
+        setSession(initialSession);
+        sessionRef.current = initialSession;
+        await fetchUser(initialSession);
       }
+      
+      setIsLoading(false);
     };
 
-    initializeAuth();
+    initialize();
 
-    // Escutar mudanças de estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
-        // Ignora eventos durante a inicialização
-        if (!initializedRef.current) return;
+        if (!isMounted) return;
 
-        // Ignora eventos que não são mudanças significativas
-        if (event === 'INITIAL_SESSION') return;
-
-        // Evita processar se a sessão não mudou realmente
         const currentSession = sessionRef.current;
-        const sessionChanged = 
-          (currentSession?.access_token !== newSession?.access_token) ||
-          (currentSession === null && newSession !== null) ||
-          (currentSession !== null && newSession === null);
+        
+        const userChanged = currentSession?.user?.id !== newSession?.user?.id;
+        const sessionStatusChanged = (!!currentSession !== !!newSession);
 
-        // Só processa se realmente mudou ou é um evento importante
-        if (!sessionChanged && 
-            event !== 'SIGNED_OUT' && 
-            event !== 'SIGNED_IN' && 
-            event !== 'TOKEN_REFRESHED') {
+        if (!userChanged && !sessionStatusChanged && event !== 'SIGNED_IN') {
+          if (newSession) {
+            sessionRef.current = newSession;
+            setSession(newSession);
+          }
           return;
         }
 
-        if (isMounted) {
-          try {
-            if (newSession?.user) {
-              setSession(newSession);
-              sessionRef.current = newSession;
-              await fetchUser(newSession);
-            } else {
-              setSession(null);
-              sessionRef.current = null;
-              setUser(null);
-            }
-          } catch (error) {
-            console.error('Erro ao atualizar autenticação:', error);
-          }
+
+        if (newSession) {
+          setSession(newSession);
+          sessionRef.current = newSession;
+          // Só buscamos o user se for uma mudança real de usuário ou entrada
+          await fetchUser(newSession);
+        } else {
+          setSession(null);
+          sessionRef.current = null;
+          setUser(null);
+          server.clearTokenCache();
+          queryClient.clear();
         }
       }
     );
@@ -140,10 +135,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchUser]);
+  }, [fetchUser, queryClient]);
 
   const login = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -151,16 +146,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (error) {
       throw new Error(error.message);
     }
-
-    if (data.user && data.session) {
-      setSession(data.session);
-      sessionRef.current = data.session;
-      await fetchUser(data.session);
-    }
+    // O resto é tratado pelo onAuthStateChange
   };
 
   const register = async (name: string, email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -173,12 +163,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (error) {
       throw new Error(error.message);
     }
-
-    if (data.user && data.session) {
-      setSession(data.session);
-      sessionRef.current = data.session;
-      await fetchUser(data.session);
-    }
+    // O resto é tratado pelo onAuthStateChange
   };
 
   const logout = async () => {
@@ -187,18 +172,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (error) {
       console.error('Erro ao fazer logout:', error);
     }
-
-    // Limpa cache de token do servidor
-    server.clearTokenCache();
-    
-    setSession(null);
-    sessionRef.current = null;
-    setUser(null);
+    // O resto é tratado pelo onAuthStateChange (limpeza de cache e estado)
   };
 
-  // isAuthenticated deve considerar a sessão como suficiente
-  // O user pode ainda estar carregando, mas se tem sessão válida, está autenticado
-  // Isso evita redirecionamentos desnecessários durante o carregamento do user
   const isAuthenticated = !!session;
 
   return (

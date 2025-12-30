@@ -47,17 +47,22 @@ export const DashboardView: React.FC = () => {
 
   // Se não encontrou nada localmente E tem termo de busca, buscar no servidor
   useEffect(() => {
-    if (searchTerm && localFilteredDeals.length === 0 && allDeals.length > 0) {
+    // Só dispara busca no servidor se:
+    // 1. Existe um termo de busca
+    // 2. Não há resultados locais
+    // 3. Já carregamos alguma página (allDeals.length > 0)
+    // 4. O termo de busca é diferente do que já estamos buscando no servidor
+    if (searchTerm && localFilteredDeals.length === 0 && allDeals.length > 0 && searchTerm !== serverSearchTerm) {
       // Debounce de 500ms antes de buscar no servidor
       const timer = setTimeout(() => {
         setServerSearchTerm(searchTerm);
       }, 500);
       return () => clearTimeout(timer);
-    } else if (!searchTerm) {
+    } else if (!searchTerm && serverSearchTerm !== undefined) {
       // Limpar busca do servidor quando apagar termo
       setServerSearchTerm(undefined);
     }
-  }, [searchTerm, localFilteredDeals.length, allDeals.length]);
+  }, [searchTerm, localFilteredDeals.length, allDeals.length, serverSearchTerm]);
 
   // Intersection Observer para infinite scroll
   useEffect(() => {

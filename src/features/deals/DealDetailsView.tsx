@@ -428,6 +428,7 @@ export const DealDetailsView: React.FC = () => {
 						{dealData.signers?.map((signer: Signatory) => (
 							<SignerCard
 								key={signer.id} signer={signer}
+								dealStatus={dealData.status}
 								canRemove={dealData.status === 'DRAFT'}
 								onRemove={removeSigner}
 								onClick={() => {
