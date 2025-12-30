@@ -37,12 +37,14 @@ const AuthenticatedLayout = () => {
                 <span className="text-sm font-semibold text-slate-700">{user?.name}</span>
                 <span className="text-xs text-slate-500">{user?.email}</span>
               </div>
-              
+
               {/* User Menu Dropdown com daisyUI */}
               <div className="cursor-pointer dropdown dropdown-end">
                 <div tabIndex={0} role="button" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white border-2 border-white bg-gradient-to-br from-[#ef0474] to-[#085995] shadow-md">
-                    {user?.name?.charAt(0) || 'U'}
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white border-2 border-white bg-gradient-to-br from-[#085995] to-[#ef0474] shadow-md">
+                    <span className="text-white">
+                      {user?.name?.charAt(0) || 'U'}
+                    </span>
                   </div>
                   <ChevronDown className="w-4 h-4 text-slate-400" />
                 </div>

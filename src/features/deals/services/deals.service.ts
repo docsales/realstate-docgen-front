@@ -114,14 +114,25 @@ export class DealsService {
 
   /**
    * Obtém variáveis do template do Google Docs para mapear
+   * Timeout aumentado para 120s devido ao processamento LLM de pré-mapeamento
    */
   async getDocVariables(dealId: string): Promise<any> {
     const { data }: { data: any } = await server.api.get<any>(
       `/deal/${dealId}/doc-variables`,
-      { withCredentials: true }
+      { 
+        withCredentials: true,
+        timeout: 120000, // 120 segundos (2 minutos) para permitir processamento LLM
+      }
     );
 
     return data;
+  }
+
+  /**
+   * Limpa cache de pré-mapeamentos (força re-processamento com LLM)
+   */
+  async clearPreMappingsCache(dealId: string): Promise<void> {
+    await server.api.delete(`/deal/${dealId}/pre-mappings`);
   }
 
   /**
