@@ -102,6 +102,22 @@ export class UtilsService {
         return 'SENTENÇA DE DIVÓRCIO';
       case 'CONTRATO_DE_COMPRA_E_VENDA':
         return 'CONTRATO DE COMPRA E VENDA';
+      case 'PROCURACAO':
+        return 'PROCURAÇÃO';
+      case 'PROCURACAO_CONJUGE':
+        return 'PROCURAÇÃO DO CÔNJUGE';
+      case 'COMPROVANTE_RESIDENCIA':
+        return 'COMPROVANTE DE RESIDÊNCIA';
+      case 'COMPROVANTE_RENDA':
+        return 'COMPROVANTE DE RENDA';
+      case 'ALVARA':
+        return 'ALVARÁ';
+      case 'PLANTA':
+        return 'PLANTA DO IMÓVEL';
+      case 'MEMORIAL_DESCRITIVO':
+        return 'MEMORIAL DESCRITIVO';
+      case 'HABITE_SE':
+        return 'HABITE-SE';
       default:
         return type;
     }

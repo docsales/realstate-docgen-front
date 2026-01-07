@@ -9,18 +9,25 @@ import {
   Trash,
   Sparkles,
   RotateCcw,
-  Eraser,
   FileText,
   Copy,
   X,
+  User,
+  Users,
+  Home,
+  DollarSign,
+  CheckCircle2,
+  ChevronDown,
 } from 'lucide-react';
 import type {
   DealConfig,
   MappingValue,
   OcrDataByPerson,
+  UploadedFile,
 } from '../../../types/types';
 import { dealsService } from '../services/deals.service';
 import { IAMappingLoader } from '../components/IAMappingLoader';
+import { UtilsService } from '@/services/utils.service';
 
 interface MappingStepProps {
   mappings: Record<string, MappingValue>;
@@ -28,6 +35,7 @@ interface MappingStepProps {
   dealConfig: DealConfig;
   dealId: string;
   ocrData?: OcrDataByPerson[];
+  files?: UploadedFile[]; // Arquivos com document_type preservado
 }
 
 interface GroupedVariable {
@@ -36,9 +44,36 @@ interface GroupedVariable {
   label: string;
 }
 
-interface VariableGroup {
-  prefix: string;
+// Interfaces para agrupamento por pessoa/documento
+interface PersonDocumentGroup {
+  personId: string;
+  personName: string;
+  role: 'buyer' | 'seller' | 'property';
+  index?: number;
+  documents: DocumentGroup[];
+}
+
+interface DocumentGroup {
+  documentType: string; // código (ex: MATRÍCULA, RG, CPF)
+  title: string; // título único exibido no UI (ex: Matrícula #2 — arquivo.pdf)
+  docIcon: string;
+  data: Record<string, any>;
+}
+
+// Novas interfaces para categorização de variáveis
+interface PersonGroup {
+  index: number;
+  personName: string;
   variables: GroupedVariable[];
+}
+
+interface CategoryGroup {
+  categoryName: string;
+  categoryKey: string;
+  icon: any;
+  color: string;
+  subGroups?: PersonGroup[];
+  variables?: GroupedVariable[];
 }
 
 // Função para formatar nome de campo para label legível
@@ -49,16 +84,523 @@ const formatFieldLabel = (fieldName: string): string => {
     .join(' ');
 };
 
-// Função para formatar nome do prefixo
-const formatPrefixLabel = (prefix: string): string => {
-  const prefixLabels: Record<string, string> = {
-    customer: 'Cliente',
-    deal: 'Negócio',
-    property: 'Imóvel',
-    seller: 'Vendedor',
-    buyer: 'Comprador',
-  };
-  return prefixLabels[prefix] || prefix.charAt(0).toUpperCase() + prefix.slice(1);
+// Mapeamento de códigos de document_type para nomes legíveis
+const getDocumentTypeLabel = (documentType: string): string => {
+  const convertedType = UtilsService.getDocumentType(documentType);
+  return convertedType || documentType.replace(/_/g, ' ');
+};
+
+// Função para obter ícone baseado no tipo de documento
+const getDocumentIcon = (documentType: string): string => {
+  if (documentType.includes('RG') || documentType.includes('CPF') || documentType.includes('CNH')) {
+    return '🪪';
+  }
+  if (documentType.includes('CERTIDAO')) {
+    return '📜';
+  }
+  if (documentType.includes('COMPROVANTE') || documentType.includes('CONTRACHEQUE') || documentType.includes('IRPF')) {
+    return '📄';
+  }
+  if (documentType.includes('MATRICULA') || documentType.includes('IPTU') || documentType.includes('ESCRITURA')) {
+    return '🏠';
+  }
+  if (documentType.includes('CONTRATO') || documentType.includes('PROCURACAO')) {
+    return '📝';
+  }
+  return '📄';
+};
+
+// Função para extrair nome da pessoa dos dados OCR
+const extractPersonName = (data: Record<string, any>): string => {
+  // Tenta diferentes campos comuns para nome
+  const nameFields = [
+    'nome', 
+    'nome_completo', 
+    'name', 
+    'full_name',
+    'nome_do_requerente',
+    'requerente',
+  ];
+  
+  for (const field of nameFields) {
+    if (data[field] && typeof data[field] === 'string') {
+      return data[field];
+    }
+  }
+  
+  // Busca recursivamente em objetos aninhados
+  for (const value of Object.values(data)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const nestedName = extractPersonName(value as Record<string, any>);
+      if (nestedName !== 'Sem Nome') {
+        return nestedName;
+      }
+    }
+  }
+  
+  return 'Sem Nome';
+};
+
+// Função para agrupar arquivos por pessoa e documento (usando UploadedFile[])
+const groupFilesByPerson = (
+  files: UploadedFile[],
+  dealConfig: DealConfig
+): PersonDocumentGroup[] => {
+  const groups: PersonDocumentGroup[] = [];
+  
+  // Filtrar apenas arquivos com OCR completo
+  const completedFiles = files.filter(
+    f => f.ocrStatus === 'completed' && f.ocrExtractedData
+  );
+  
+  // Processar vendedores
+  dealConfig.sellers.forEach((seller, index) => {
+    const personFiles = completedFiles.filter(f => f.personId === seller.id);
+    
+    // Extrair nome da primeira ocorrência de nome em qualquer documento
+    let personName = 'Sem Nome';
+    for (const file of personFiles) {
+      if (file.ocrExtractedData) {
+        const extracted = extractPersonName(file.ocrExtractedData);
+        if (extracted !== 'Sem Nome') {
+          personName = extracted;
+          break;
+        }
+      }
+    }
+    
+    const typeCounts = personFiles.reduce<Record<string, number>>((acc, f) => {
+      acc[f.type] = (acc[f.type] || 0) + 1;
+      return acc;
+    }, {});
+    const typeSeen: Record<string, number> = {};
+
+    const documents: DocumentGroup[] = personFiles.map((file) => {
+      typeSeen[file.type] = (typeSeen[file.type] || 0) + 1;
+      const baseLabel = getDocumentTypeLabel(file.type);
+      const suffix = typeCounts[file.type] > 1 ? ` #${typeSeen[file.type]}` : '';
+      const fileName = file.file?.name ? ` — ${file.file.name}` : '';
+
+      return {
+        documentType: file.type,
+        title: `${baseLabel}${suffix}${fileName}`,
+        docIcon: getDocumentIcon(file.type),
+        data: file.ocrExtractedData || {},
+      };
+    });
+    
+    groups.push({
+      personId: seller.id,
+      personName,
+      role: 'seller',
+      index,
+      documents
+    });
+  });
+  
+  // Processar compradores
+  dealConfig.buyers.forEach((buyer, index) => {
+    const personFiles = completedFiles.filter(f => f.personId === buyer.id);
+    
+    let personName = 'Sem Nome';
+    for (const file of personFiles) {
+      if (file.ocrExtractedData) {
+        const extracted = extractPersonName(file.ocrExtractedData);
+        if (extracted !== 'Sem Nome') {
+          personName = extracted;
+          break;
+        }
+      }
+    }
+    
+    const typeCounts = personFiles.reduce<Record<string, number>>((acc, f) => {
+      acc[f.type] = (acc[f.type] || 0) + 1;
+      return acc;
+    }, {});
+    const typeSeen: Record<string, number> = {};
+
+    const documents: DocumentGroup[] = personFiles.map((file) => {
+      typeSeen[file.type] = (typeSeen[file.type] || 0) + 1;
+      const baseLabel = getDocumentTypeLabel(file.type);
+      const suffix = typeCounts[file.type] > 1 ? ` #${typeSeen[file.type]}` : '';
+      const fileName = file.file?.name ? ` — ${file.file.name}` : '';
+
+      return {
+        documentType: file.type,
+        title: `${baseLabel}${suffix}${fileName}`,
+        docIcon: getDocumentIcon(file.type),
+        data: file.ocrExtractedData || {},
+      };
+    });
+    
+    groups.push({
+      personId: buyer.id,
+      personName,
+      role: 'buyer',
+      index,
+      documents
+    });
+  });
+  
+  // Processar imóvel
+  const propertyFiles = completedFiles.filter(f => f.personId === 'property' || f.category === 'property');
+  if (propertyFiles.length > 0) {
+    const typeCounts = propertyFiles.reduce<Record<string, number>>((acc, f) => {
+      acc[f.type] = (acc[f.type] || 0) + 1;
+      return acc;
+    }, {});
+    const typeSeen: Record<string, number> = {};
+
+    const documents: DocumentGroup[] = propertyFiles.map((file) => {
+      typeSeen[file.type] = (typeSeen[file.type] || 0) + 1;
+      const baseLabel = getDocumentTypeLabel(file.type);
+      const suffix = typeCounts[file.type] > 1 ? ` #${typeSeen[file.type]}` : '';
+      const fileName = file.file?.name ? ` — ${file.file.name}` : '';
+
+      return {
+        documentType: file.type,
+        title: `${baseLabel}${suffix}${fileName}`,
+        docIcon: getDocumentIcon(file.type),
+        data: file.ocrExtractedData || {},
+      };
+    });
+    
+    groups.push({
+      personId: 'property',
+      personName: 'Imóvel',
+      role: 'property',
+      documents
+    });
+  }
+  
+  return groups;
+};
+
+// Fallback: agrupar dados OCR legados (mantém compatibilidade)
+const groupOcrDataByPerson = (
+  ocrData: OcrDataByPerson[],
+  dealConfig: DealConfig
+): PersonDocumentGroup[] => {
+  const groups: PersonDocumentGroup[] = [];
+  
+  // Processar vendedores
+  dealConfig.sellers.forEach((seller, index) => {
+    const ocrForPerson = ocrData.find(ocr => ocr.personId === seller.id);
+    const personName = ocrForPerson ? extractPersonName(ocrForPerson.data) : 'Sem Nome';
+    
+    const documents: DocumentGroup[] = [];
+    if (ocrForPerson && ocrForPerson.data) {
+      documents.push({
+        documentType: 'LEGACY',
+        title: 'Dados Extraídos',
+        docIcon: '📄',
+        data: ocrForPerson.data
+      });
+    }
+    
+    groups.push({
+      personId: seller.id,
+      personName,
+      role: 'seller',
+      index,
+      documents
+    });
+  });
+  
+  // Processar compradores
+  dealConfig.buyers.forEach((buyer, index) => {
+    const ocrForPerson = ocrData.find(ocr => ocr.personId === buyer.id);
+    const personName = ocrForPerson ? extractPersonName(ocrForPerson.data) : 'Sem Nome';
+    
+    const documents: DocumentGroup[] = [];
+    if (ocrForPerson && ocrForPerson.data) {
+      documents.push({
+        documentType: 'LEGACY',
+        title: 'Dados Extraídos',
+        docIcon: '📄',
+        data: ocrForPerson.data
+      });
+    }
+    
+    groups.push({
+      personId: buyer.id,
+      personName,
+      role: 'buyer',
+      index,
+      documents
+    });
+  });
+  
+  // Processar imóvel
+  const propertyOcr = ocrData.find(ocr => ocr.personId === 'property');
+  if (propertyOcr) {
+    const documents: DocumentGroup[] = [{
+      documentType: 'LEGACY_PROPERTY',
+      title: 'Dados do Imóvel',
+      docIcon: '🏠',
+      data: propertyOcr.data
+    }];
+    
+    groups.push({
+      personId: 'property',
+      personName: 'Imóvel',
+      role: 'property',
+      documents
+    });
+  }
+  
+  return groups;
+};
+
+// Função para obter nome da pessoa do OCR por role e índice
+const getPersonNameFromOcr = (
+  role: 'buyer' | 'seller',
+  index: number,
+  ocrGroups: PersonDocumentGroup[]
+): string => {
+  const person = ocrGroups.find(g => g.role === role && g.index === index);
+  return person?.personName || `${role === 'buyer' ? 'Comprador' : 'Vendedor'} ${index + 1}`;
+};
+
+// Função para categorizar variáveis nas 4 categorias hardcoded
+const categorizeVariables = (
+  variables: string[],
+  ocrGroups: PersonDocumentGroup[]
+): CategoryGroup[] => {
+  const buyerVars: Record<number, GroupedVariable[]> = {};
+  const sellerVars: Record<number, GroupedVariable[]> = {};
+  const propertyVars: GroupedVariable[] = [];
+  const dealVars: GroupedVariable[] = [];
+  const otherVars: GroupedVariable[] = [];
+  
+  variables.forEach(variable => {
+    // Extrair prefixo e resto (suporta formatos antigos e novos)
+    // Novo (schema atual): buyers.1.nome / sellers.1.nome (índice começa em 1)
+    const buyersDotMatch = variable.match(/^buyers\.(\d+)\.(.+)$/);
+    const sellersDotMatch = variable.match(/^sellers\.(\d+)\.(.+)$/);
+    // Variações com colchetes
+    const buyersBracketMatch = variable.match(/^buyers\[(\d+)\]\.(.+)$/);
+    const sellersBracketMatch = variable.match(/^sellers\[(\d+)\]\.(.+)$/);
+    // Antigo (singular)
+    const buyerBracketMatch = variable.match(/^buyer\[(\d+)\]\.(.+)$/);
+    const sellerBracketMatch = variable.match(/^seller\[(\d+)\]\.(.+)$/);
+    const buyerDotMatch = variable.match(/^buyer\.(\d+)\.(.+)$/);
+    const sellerDotMatch = variable.match(/^seller\.(\d+)\.(.+)$/);
+    
+    const buyerMatch = buyersDotMatch || buyersBracketMatch || buyerBracketMatch || buyerDotMatch;
+    const sellerMatch = sellersDotMatch || sellersBracketMatch || sellerBracketMatch || sellerDotMatch;
+
+    // Legado (snake_case / upper): NOME_VENDEDOR_1, CPF_COMPRADOR_2, etc.
+    const legacyBuyerSuffix = variable.match(/^(.+?)_(COMPRADOR|BUYER)_(\d+)$/i);
+    const legacySellerSuffix = variable.match(/^(.+?)_(VENDEDOR|SELLER)_(\d+)$/i);
+    const legacyBuyerPrefix = variable.match(/^(COMPRADOR|BUYER)_(\d+)_(.+)$/i);
+    const legacySellerPrefix = variable.match(/^(VENDEDOR|SELLER)_(\d+)_(.+)$/i);
+
+    if (buyerMatch) {
+      const index1 = parseInt(buyerMatch[1], 10);
+      const index = Number.isFinite(index1) ? Math.max(index1 - 1, 0) : 0; // template é 1-based
+      const fieldName = buyerMatch[2];
+      if (!buyerVars[index]) buyerVars[index] = [];
+      buyerVars[index].push({
+        fullKey: variable,
+        fieldName,
+        label: formatFieldLabel(fieldName)
+      });
+    } else if (sellerMatch) {
+      const index1 = parseInt(sellerMatch[1], 10);
+      const index = Number.isFinite(index1) ? Math.max(index1 - 1, 0) : 0; // template é 1-based
+      const fieldName = sellerMatch[2];
+      if (!sellerVars[index]) sellerVars[index] = [];
+      sellerVars[index].push({
+        fullKey: variable,
+        fieldName,
+        label: formatFieldLabel(fieldName)
+      });
+    } else if (legacyBuyerSuffix) {
+      const index1 = parseInt(legacyBuyerSuffix[3], 10);
+      const index = Number.isFinite(index1) ? Math.max(index1 - 1, 0) : 0;
+      const fieldName = legacyBuyerSuffix[1];
+      if (!buyerVars[index]) buyerVars[index] = [];
+      buyerVars[index].push({
+        fullKey: variable,
+        fieldName,
+        label: formatFieldLabel(fieldName)
+      });
+    } else if (legacySellerSuffix) {
+      const index1 = parseInt(legacySellerSuffix[3], 10);
+      const index = Number.isFinite(index1) ? Math.max(index1 - 1, 0) : 0;
+      const fieldName = legacySellerSuffix[1];
+      if (!sellerVars[index]) sellerVars[index] = [];
+      sellerVars[index].push({
+        fullKey: variable,
+        fieldName,
+        label: formatFieldLabel(fieldName)
+      });
+    } else if (legacyBuyerPrefix) {
+      const index1 = parseInt(legacyBuyerPrefix[2], 10);
+      const index = Number.isFinite(index1) ? Math.max(index1 - 1, 0) : 0;
+      const fieldName = legacyBuyerPrefix[3];
+      if (!buyerVars[index]) buyerVars[index] = [];
+      buyerVars[index].push({
+        fullKey: variable,
+        fieldName,
+        label: formatFieldLabel(fieldName)
+      });
+    } else if (legacySellerPrefix) {
+      const index1 = parseInt(legacySellerPrefix[2], 10);
+      const index = Number.isFinite(index1) ? Math.max(index1 - 1, 0) : 0;
+      const fieldName = legacySellerPrefix[3];
+      if (!sellerVars[index]) sellerVars[index] = [];
+      sellerVars[index].push({
+        fullKey: variable,
+        fieldName,
+        label: formatFieldLabel(fieldName)
+      });
+    } else if (variable.startsWith('buyers.') || variable.startsWith('sellers.')) {
+      // Caso raro: buyers.<algo> sem índice válido, cai em outros para não perder visibilidade
+      otherVars.push({
+        fullKey: variable,
+        fieldName: variable,
+        label: formatFieldLabel(variable)
+      });
+    } else if (variable.startsWith('property.')) {
+      const fieldName = variable.substring('property.'.length);
+      propertyVars.push({
+        fullKey: variable,
+        fieldName,
+        label: formatFieldLabel(fieldName)
+      });
+    } else if (variable.startsWith('deal.')) {
+      const fieldName = variable.substring('deal.'.length);
+      dealVars.push({
+        fullKey: variable,
+        fieldName,
+        label: formatFieldLabel(fieldName)
+      });
+    } else {
+      // Fallback para outros formatos antigos
+      const parts = variable.split('.');
+      if (parts.length > 1) {
+        const [prefix, ...rest] = parts;
+        const fieldName = rest.join('.');
+        
+        if (prefix === 'buyer' || prefix === 'buyers') {
+          if (!buyerVars[0]) buyerVars[0] = [];
+          buyerVars[0].push({
+            fullKey: variable,
+            fieldName,
+            label: formatFieldLabel(fieldName)
+          });
+        } else if (prefix === 'seller' || prefix === 'sellers') {
+          if (!sellerVars[0]) sellerVars[0] = [];
+          sellerVars[0].push({
+            fullKey: variable,
+            fieldName,
+            label: formatFieldLabel(fieldName)
+          });
+        } else {
+          otherVars.push({
+            fullKey: variable,
+            fieldName,
+            label: formatFieldLabel(fieldName)
+          });
+        }
+      }
+    }
+  });
+
+  // Se houver OCR de compradores/vendedores, manter os blocos visíveis mesmo sem variáveis do template
+  // (ajuda o usuário a entender que não há campos mapeáveis daquela pessoa neste template)
+  const buyerOcrGroups = ocrGroups.filter(g => g.role === 'buyer' && typeof g.index === 'number');
+  const sellerOcrGroups = ocrGroups.filter(g => g.role === 'seller' && typeof g.index === 'number');
+
+  if (Object.keys(buyerVars).length === 0 && buyerOcrGroups.length > 0) {
+    buyerOcrGroups.forEach(g => { buyerVars[g.index!] = []; });
+  }
+  if (Object.keys(sellerVars).length === 0 && sellerOcrGroups.length > 0) {
+    sellerOcrGroups.forEach(g => { sellerVars[g.index!] = []; });
+  }
+  
+  const categories: CategoryGroup[] = [];
+  
+  // Compradores
+  if (Object.keys(buyerVars).length > 0) {
+    const subGroups: PersonGroup[] = Object.entries(buyerVars)
+      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+      .map(([indexStr, vars]) => {
+        const index = parseInt(indexStr, 10);
+        return {
+          index,
+          personName: getPersonNameFromOcr('buyer', index, ocrGroups),
+          variables: vars
+        };
+      });
+    
+    categories.push({
+      categoryName: 'Compradores',
+      categoryKey: 'buyers',
+      icon: Users,
+      color: 'green',
+      subGroups
+    });
+  }
+  
+  // Vendedores
+  if (Object.keys(sellerVars).length > 0) {
+    const subGroups: PersonGroup[] = Object.entries(sellerVars)
+      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+      .map(([indexStr, vars]) => {
+        const index = parseInt(indexStr, 10);
+        return {
+          index,
+          personName: getPersonNameFromOcr('seller', index, ocrGroups),
+          variables: vars
+        };
+      });
+    
+    categories.push({
+      categoryName: 'Vendedores',
+      categoryKey: 'sellers',
+      icon: Users,
+      color: 'blue',
+      subGroups
+    });
+  }
+  
+  // Condições Comerciais
+  if (dealVars.length > 0) {
+    categories.push({
+      categoryName: 'Condições Comerciais',
+      categoryKey: 'deal',
+      icon: DollarSign,
+      color: 'amber',
+      variables: dealVars
+    });
+  }
+  
+  // Imóvel
+  if (propertyVars.length > 0) {
+    categories.push({
+      categoryName: 'Imóvel',
+      categoryKey: 'property',
+      icon: Home,
+      color: 'purple',
+      variables: propertyVars
+    });
+  }
+  
+  // Outros (se houver)
+  if (otherVars.length > 0) {
+    categories.push({
+      categoryName: 'Outros',
+      categoryKey: 'other',
+      icon: FileText,
+      color: 'slate',
+      variables: otherVars
+    });
+  }
+  
+  return categories;
 };
 
 export const MappingStep: React.FC<MappingStepProps> = ({
@@ -66,7 +608,8 @@ export const MappingStep: React.FC<MappingStepProps> = ({
   onMap,
   dealConfig,
   dealId,
-  ocrData
+  ocrData,
+  files
 }) => {
   const [isLoadingVariables, setIsLoadingVariables] = useState(false);
   const [isRefreshingVariables, setIsRefreshingVariables] = useState(false);
@@ -83,34 +626,22 @@ export const MappingStep: React.FC<MappingStepProps> = ({
     value: unknown;
   } | null>(null);
   const [hasCopiedExpanded, setHasCopiedExpanded] = useState(false);
+  const [isAiBannerExpanded, setIsAiBannerExpanded] = useState(false);
 
-  const displayOcrData = ocrData || [];
+  // Agrupar dados por pessoa - usa files se disponível, senão ocrData
+  const ocrPersonGroups = React.useMemo(() => {
+    if (files && files.length > 0) {
+      return groupFilesByPerson(files, dealConfig);
+    } else {
+      const displayOcrData = ocrData || [];
+      return groupOcrDataByPerson(displayOcrData, dealConfig);
+    }
+  }, [files, ocrData, dealConfig]);
 
-  // Agrupar variáveis por prefixo
-  const groupedVariables: VariableGroup[] = React.useMemo(() => {
-    const groups: Record<string, GroupedVariable[]> = {};
-
-    templateVariables.forEach((variable) => {
-      const parts = variable.split('.');
-      if (parts.length > 1) {
-        const [prefix, ...rest] = parts;
-        if (!groups[prefix]) {
-          groups[prefix] = [];
-        }
-        const fieldName = rest.join('.');
-        groups[prefix].push({
-          fullKey: variable,
-          fieldName,
-          label: formatFieldLabel(fieldName),
-        });
-      }
-    });
-
-    return Object.entries(groups).map(([prefix, variables]) => ({
-      prefix,
-      variables,
-    }));
-  }, [templateVariables]);
+  // Categorizar variáveis usando a nova estrutura de 4 categorias
+  const categorizedVariables: CategoryGroup[] = React.useMemo(() => {
+    return categorizeVariables(templateVariables, ocrPersonGroups);
+  }, [templateVariables, ocrPersonGroups]);
 
   const renderJsonTree = (data: any, prefix = '') => {
     return Object.entries(data).map(([key, value]) => {
@@ -161,24 +692,64 @@ export const MappingStep: React.FC<MappingStepProps> = ({
   }
 
   const renderOcrSections = () => {
-    const sections: React.ReactElement[] = [];
-
-    dealConfig.sellers.forEach((seller, index) => {
-      const ocrForPerson = displayOcrData.find(ocr => ocr.personId === seller.id);
-
-      sections.push(
-        <div key={`seller-${seller.id}`} className="mb-4">
+    return ocrPersonGroups.map((personGroup) => {
+      const { personId, personName, role, index, documents } = personGroup;
+      
+      // Definir cores baseado no papel
+      const colorConfig = {
+        buyer: {
+          bg: 'from-green-50 to-green-100',
+          text: 'text-green-900',
+          border: 'border-green-200/50',
+          icon: 'text-green-400'
+        },
+        seller: {
+          bg: 'from-blue-50 to-blue-100',
+          text: 'text-blue-900',
+          border: 'border-blue-200/50',
+          icon: 'text-blue-400'
+        },
+        property: {
+          bg: 'from-purple-50 to-purple-100',
+          text: 'text-purple-900',
+          border: 'border-purple-200/50',
+          icon: 'text-purple-400'
+        }
+      };
+      
+      const colors = colorConfig[role];
+      const roleLabel = role === 'buyer' ? 'Comprador' : role === 'seller' ? 'Vendedor' : 'Imóvel';
+      const displayName = role === 'property' 
+        ? 'Imóvel' 
+        : `${roleLabel} ${(index ?? 0) + 1} - ${personName}`;
+      
+      return (
+        <div key={personId} className="mb-4">
           <details open className="group overflow-visible">
-            <summary className="bg-gradient-to-r from-blue-50 to-blue-100 list-none cursor-pointer sticky -top-1 z-30 shadow-sm rounded-md group-open:rounded-b-none transition-all duration-200 -mx-1 p-1 group-open:border-b border-blue-200/50">
-              <div className="px-4 py-3 font-bold text-blue-900 text-sm flex items-center justify-between">
-                <span>Vendedor {index + 1}</span>
-                <ChevronRight className="w-4 h-4 group-open:rotate-90 transition-transform text-blue-400" />
+            <summary className={`bg-gradient-to-r ${colors.bg} list-none cursor-pointer sticky -top-1 z-30 shadow-sm rounded-md group-open:rounded-b-none transition-all duration-200 group-open:border-b ${colors.border} -mx-1 p-1`}>
+              <div className={`px-4 py-3 font-bold ${colors.text} text-sm flex items-center justify-between gap-2`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <User className={`w-4 h-4 flex-shrink-0 ${colors.icon}`} />
+                  <span className="truncate">{displayName}</span>
+                </div>
+                <ChevronRight className={`w-4 h-4 group-open:rotate-90 transition-transform ${colors.icon} flex-shrink-0`} />
               </div>
             </summary>
             <div className="p-4 bg-white border-x border-b border-slate-100 rounded-b-xl animate-in fade-in slide-in-from-top-1 duration-200">
-              {ocrForPerson ? (
-                <div className="pl-2">
-                  {renderJsonTree(ocrForPerson.data)}
+              {documents.length > 0 ? (
+                <div className="space-y-3">
+                  {documents.map((doc, docIndex) => (
+                    <details key={docIndex} open className="group/doc">
+                      <summary className="cursor-pointer text-xs font-semibold text-slate-600 hover:text-slate-800 list-none flex items-center gap-2 p-2 bg-slate-50 rounded-md hover:bg-slate-100 transition-colors">
+                        <ChevronRight className="w-3 h-3 group-open/doc:rotate-90 transition-transform" />
+                        <span>{doc.docIcon}</span>
+                        <span className="truncate" title={doc.title}>{doc.title}</span>
+                      </summary>
+                      <div className="mt-2 pl-2">
+                        {renderJsonTree(doc.data)}
+                      </div>
+                    </details>
+                  ))}
                 </div>
               ) : (
                 <p className="text-xs text-slate-400 italic pl-2">Nenhum dado extraído</p>
@@ -188,63 +759,13 @@ export const MappingStep: React.FC<MappingStepProps> = ({
         </div>
       );
     });
-
-    dealConfig.buyers.forEach((buyer, index) => {
-      const ocrForPerson = displayOcrData.find(ocr => ocr.personId === buyer.id);
-
-      sections.push(
-        <div key={`buyer-${buyer.id}`} className="mb-4">
-          <details open className="group overflow-visible">
-            <summary className="bg-gradient-to-r from-green-50 to-green-100 list-none cursor-pointer sticky -top-1 z-30 shadow-sm rounded-md group-open:rounded-b-none transition-all duration-200 group-open:border-b border-green-200/50 -mx-1 p-1">
-              <div className="px-4 py-3 font-bold text-green-900 text-sm flex items-center justify-between">
-                <span>Comprador {index + 1}</span>
-                <ChevronRight className="w-4 h-4 group-open:rotate-90 transition-transform text-green-400" />
-              </div>
-            </summary>
-            <div className="p-4 bg-white border-x border-b border-slate-100 rounded-b-xl animate-in fade-in slide-in-from-top-1 duration-200">
-              {ocrForPerson ? (
-                <div className="pl-2">
-                  {renderJsonTree(ocrForPerson.data)}
-                </div>
-              ) : (
-                <p className="text-xs text-slate-400 italic pl-2">Nenhum dado extraído</p>
-              )}
-            </div>
-          </details>
-        </div>
-      );
-    });
-
-    const propertyOcr = displayOcrData.find(ocr => ocr.personId === 'property');
-    sections.push(
-      <div key="property" className="mb-4">
-        <details open className="group overflow-visible">
-          <summary className="bg-gradient-to-r from-purple-50 to-purple-100 list-none cursor-pointer sticky -top-1 z-30 shadow-sm rounded-md group-open:rounded-b-none transition-all duration-200 group-open:border-b border-purple-200/50 -mx-1 p-1">
-            <div className="px-4 py-3 font-bold text-purple-900 text-sm flex items-center justify-between">
-              <span>Imóvel</span>
-              <ChevronRight className="w-4 h-4 group-open:rotate-90 transition-transform text-purple-400" />
-            </div>
-          </summary>
-          <div className="p-4 bg-white border-x border-b border-slate-100 rounded-b-xl animate-in fade-in slide-in-from-top-1 duration-200">
-            {propertyOcr ? (
-              <div className="pl-2">
-                {renderJsonTree(propertyOcr.data)}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 italic pl-2">Nenhum dado extraído</p>
-            )}
-          </div>
-        </details>
-      </div>
-    );
-
-    return sections;
   };
 
   const renderContractField = (fieldId: string, label: string) => {
     const mapping = mappings[fieldId];
     const isActive = activeDropZone === fieldId;
     const isPreMapped = preMappedFields.has(fieldId);
+    const isMapped = !!mapping;
 
     return (
       <div
@@ -284,11 +805,11 @@ export const MappingStep: React.FC<MappingStepProps> = ({
           }
         }}
         className={`
-          cursor-pointer p-3 rounded-lg border-2 transition-all duration-200 relative
+          cursor-pointer p-3 rounded-lg border-2 transition-all duration-300 relative group/field
           hover:shadow-sm hover:scale-[1.02]
           ${mapping
             ? isPreMapped
-              ? 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-400 border-solid shadow-sm'
+              ? 'bg-purple-50/70 border-purple-300 border-solid shadow-sm'
               : mapping.source === 'drag'
                 ? 'bg-blue-50/50 border-blue-500 border-solid'
                 : 'bg-amber-50/50 border-amber-500 border-solid'
@@ -302,12 +823,24 @@ export const MappingStep: React.FC<MappingStepProps> = ({
           <span className="text-xs font-bold text-slate-500 uppercase pointer-events-none">
             {label}
           </span>
-          {isPreMapped && (
-            <div className="flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-[10px] font-bold uppercase">
-              <Sparkles className="w-3 h-3" />
-              IA
-            </div>
-          )}
+          <div className="flex items-center gap-1">
+            {isMapped && (
+              <div className="animate-in fade-in zoom-in duration-300">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+              </div>
+            )}
+            {isPreMapped && (
+              <div className="relative group/ai">
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-white text-purple-700 border border-purple-200 rounded-full text-[10px] font-bold uppercase shadow-sm">
+                  <Sparkles className="w-3 h-3" />
+                  IA
+                </div>
+                <div className="pointer-events-none hidden group-hover/ai:block absolute right-0 top-full mt-1 z-50 w-56 rounded-md bg-slate-900 text-white text-[11px] leading-snug px-2 py-1 shadow-lg">
+                  Pré-preenchido pela IA. Revise o valor antes de continuar.
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {mapping ? (
@@ -330,6 +863,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
               className={`
                 flex-1 px-2 py-1 rounded border text-sm font-medium
                 focus:outline-none focus:ring-2 focus:ring-offset-1
+                transition-all duration-200
                 ${isPreMapped
                   ? 'border-purple-300 bg-white text-purple-900 focus:ring-purple-400'
                   : mapping.source === 'drag'
@@ -351,7 +885,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                   });
                 }
               }}
-              className="cursor-pointer text-red-400 hover:text-red-600 p-1 z-10 relative flex-shrink-0"
+              className="cursor-pointer text-red-400 hover:text-red-600 p-1 z-10 relative flex-shrink-0 transition-colors"
               title="Remover mapeamento"
             >
               <Trash className="w-4 h-4" />
@@ -363,7 +897,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
           </div>
         )}
 
-        {isActive && <div className="absolute inset-0 bg-blue-400/5 pointer-events-none rounded-lg" />}
+        {isActive && <div className="absolute inset-0 bg-blue-400/5 pointer-events-none rounded-lg animate-pulse" />}
       </div>
     );
   };
@@ -568,27 +1102,77 @@ export const MappingStep: React.FC<MappingStepProps> = ({
         </div>
       )}
 
-      {/* Banner informativo de pré-mapeamento */}
+      {/* Banner informativo de pré-mapeamento - Versão melhorada */}
       {preMappedFields.size > 0 && (
-        <div className="bg-gradient-to-r from-purple-50 via-pink-50 to-purple-50 border-2 border-purple-200 rounded-xl p-4 shadow-sm">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-bold text-purple-800 mb-1 flex items-center gap-2">
-                Pré-mapeamento Inteligente Ativado
-              </h4>
-              <p className="text-sm text-purple-700 mb-2">
-                Nossa IA analisou os documentos e sugeriu mapeamentos para{' '}
-                <span className="font-bold">{preMappedFields.size} variável(is)</span>.
-                Os campos com o badge <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-[10px] font-bold"><Sparkles className="w-3 h-3" />IA</span> foram preenchidos automaticamente.
-              </p>
-              <p className="text-xs text-purple-600">
-                💡 Você pode editar ou remover qualquer sugestão. Revise os valores antes de continuar.
-              </p>
+        <div className="bg-gradient-to-r from-purple-50 via-pink-50 to-purple-50 border-2 border-purple-200 rounded-xl shadow-lg overflow-hidden">
+          <div className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-md">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-bold text-purple-800 mb-1 flex items-center gap-2">
+                  Pré-mapeamento Inteligente Ativado
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white text-purple-700 border border-purple-200 rounded-full text-[10px] font-bold shadow-sm">
+                    <Sparkles className="w-3 h-3" />
+                    IA
+                  </span>
+                </h4>
+                <p className="text-sm text-purple-700 mb-2">
+                  Nossa IA analisou os documentos e sugeriu mapeamentos para{' '}
+                  <span className="font-bold">{preMappedFields.size} variável(is)</span>.
+                  Os campos foram preenchidos automaticamente com base nos dados extraídos.
+                </p>
+                <p className="text-xs text-purple-600 mb-3">
+                  💡 Você pode editar ou remover qualquer sugestão. Revise os valores antes de continuar.
+                </p>
+                
+                {/* Botão para expandir/recolher lista */}
+                <button
+                  onClick={() => setIsAiBannerExpanded(!isAiBannerExpanded)}
+                  className="cursor-pointer text-xs font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-1 transition-colors"
+                >
+                  <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${isAiBannerExpanded ? 'rotate-90' : ''}`} />
+                  {isAiBannerExpanded ? 'Ocultar detalhes' : 'Ver todos os mapeamentos'}
+                </button>
+              </div>
             </div>
           </div>
+          
+          {/* Lista expansível de campos mapeados */}
+          {isAiBannerExpanded && (
+            <div className="border-t border-purple-200 bg-white/50 p-4 animate-in slide-in-from-top-2 fade-in duration-300">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                {Array.from(preMappedFields).map((fieldId) => {
+                  const mapping = mappings[fieldId];
+                  if (!mapping) return null;
+                  
+                  // Extrair label legível
+                  const parts = fieldId.split('.');
+                  const fieldLabel = parts.length > 1 
+                    ? formatFieldLabel(parts[parts.length - 1])
+                    : formatFieldLabel(fieldId);
+                  
+                  return (
+                    <div 
+                      key={fieldId} 
+                      className="flex items-start gap-2 p-2 bg-white border border-purple-100 rounded-lg text-xs hover:shadow-sm transition-shadow"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-purple-900 truncate" title={fieldId}>
+                          {fieldLabel}
+                        </div>
+                        <div className="text-slate-600 truncate" title={mapping.value}>
+                          {mapping.value}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -611,14 +1195,16 @@ export const MappingStep: React.FC<MappingStepProps> = ({
         {/* Right: Contract Target */}
         <div className="flex-1 flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-            <h3 className="font-bold text-slate-700 flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-secondary" />
-              Variáveis do Template
-            </h3>
+            <div className="flex items-center gap-3">
+              <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-secondary" />
+                Variáveis do Template
+              </h3>
+            </div>
 
             {/* Botões de ação */}
             {hasLoadedOnce && !isLoadingVariables && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 {/* Botão de re-processar pré-mapeamentos */}
                 {preMappedFields.size > 0 && (
                   <button
@@ -664,36 +1250,103 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {groupedVariables.map((group) => (
-                    <details key={group.prefix} open className="group overflow-visible mb-4">
-                      <summary className="bg-slate-100 list-none cursor-pointer sticky -top-1 z-30 shadow-sm rounded-md group-open:rounded-b-none transition-all duration-200 -mx-1 p-1 group-open:border-b border-slate-200">
-                        <div className="px-4 py-3 font-bold text-slate-800 text-sm flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span>{formatPrefixLabel(group.prefix)}</span>
+                  {categorizedVariables.map((category) => {
+                    const Icon = category.icon;
+                    const colorClasses = {
+                      green: {
+                        bg: 'bg-gradient-to-r from-green-50 to-green-100',
+                        text: 'text-green-900',
+                        border: 'border-green-200',
+                        icon: 'text-green-600'
+                      },
+                      blue: {
+                        bg: 'bg-gradient-to-r from-blue-50 to-blue-100',
+                        text: 'text-blue-900',
+                        border: 'border-blue-200',
+                        icon: 'text-blue-600'
+                      },
+                      amber: {
+                        bg: 'bg-gradient-to-r from-amber-50 to-amber-100',
+                        text: 'text-amber-900',
+                        border: 'border-amber-200',
+                        icon: 'text-amber-600'
+                      },
+                      purple: {
+                        bg: 'bg-gradient-to-r from-purple-50 to-purple-100',
+                        text: 'text-purple-900',
+                        border: 'border-purple-200',
+                        icon: 'text-purple-600'
+                      },
+                      slate: {
+                        bg: 'bg-slate-100',
+                        text: 'text-slate-900',
+                        border: 'border-slate-200',
+                        icon: 'text-slate-600'
+                      }
+                    };
+                    
+                    const colors = colorClasses[category.color as keyof typeof colorClasses];
+                    const totalVariables = category.subGroups 
+                      ? category.subGroups.reduce((sum, sg) => sum + sg.variables.length, 0)
+                      : category.variables?.length || 0;
+                    
+                    const mappedCount = category.subGroups
+                      ? category.subGroups.reduce((sum, sg) => 
+                          sum + sg.variables.filter(v => mappings[v.fullKey]).length, 0)
+                      : category.variables?.filter(v => mappings[v.fullKey]).length || 0;
+                    
+                    return (
+                      <details key={category.categoryKey} open className="group overflow-visible mb-4">
+                        <summary className={`${colors.bg} list-none cursor-pointer sticky -top-1 z-30 shadow-sm rounded-md group-open:rounded-b-none transition-all duration-200 -mx-1 p-1 group-open:border-b ${colors.border}`}>
+                          <div className={`px-4 py-3 font-bold ${colors.text} text-sm flex items-center justify-between`}>
+                            <div className="flex items-center gap-2">
+                              <Icon className={`w-5 h-5 ${colors.icon}`} />
+                              <span>{category.categoryName}</span>
+                              <span className="text-xs font-normal opacity-70">
+                                ({mappedCount}/{totalVariables})
+                              </span>
+                            </div>
+                            <ChevronRight className={`w-4 h-4 group-open:rotate-90 transition-transform ${colors.icon}`} />
                           </div>
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                group.variables.forEach(v => onMap(v.fullKey, null, 'manual'));
-                              }}
-                              className="cursor-pointer p-1 hover:bg-red-50 rounded text-red-400 hover:text-red-600 transition-colors"
-                              title={`Limpar todos os campos de ${formatPrefixLabel(group.prefix)}`}
-                            >
-                              <Eraser className="w-4 h-4" />
-                            </button>
-                            <ChevronRight className="w-4 h-4 group-open:rotate-90 transition-transform text-slate-400" />
-                          </div>
+                        </summary>
+                        <div className="p-4 bg-white border-x border-b border-slate-100 rounded-b-xl animate-in fade-in slide-in-from-top-1 duration-200">
+                          {category.subGroups ? (
+                            <div className="space-y-3">
+                              {category.subGroups.map((subGroup) => (
+                                <details key={`${category.categoryKey}-${subGroup.index}`} open className="group/sub">
+                                  <summary className="cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-900 list-none flex items-center gap-2 p-2 bg-slate-50 rounded-md hover:bg-slate-100 transition-colors">
+                                    <ChevronDown className="w-4 h-4 group-open/sub:rotate-180 transition-transform" />
+                                    <User className="w-4 h-4" />
+                                    <span>{subGroup.personName}</span>
+                                    <span className="text-xs font-normal text-slate-500">
+                                      ({subGroup.variables.filter(v => mappings[v.fullKey]).length}/{subGroup.variables.length})
+                                    </span>
+                                  </summary>
+                                  <div className="mt-2 ml-6 space-y-3">
+                                    {subGroup.variables.length === 0 ? (
+                                      <p className="text-sm text-slate-500">
+                                        Nenhuma variável de {category.categoryKey === 'buyers' ? 'comprador' : 'vendedor'} encontrada neste template.
+                                      </p>
+                                    ) : (
+                                      subGroup.variables.map((variable) =>
+                                        renderContractField(variable.fullKey, variable.label)
+                                      )
+                                    )}
+                                  </div>
+                                </details>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {category.variables?.map((variable) =>
+                                renderContractField(variable.fullKey, variable.label)
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </summary>
-                      <div className="p-4 bg-white border-x border-b border-slate-100 rounded-b-xl space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                        {group.variables.map((variable) =>
-                          renderContractField(variable.fullKey, variable.label)
-                        )}
-                      </div>
-                    </details>
-                  ))}
+                      </details>
+                    );
+                  })}
                 </div>
               )}
             </div>

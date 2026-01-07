@@ -398,6 +398,10 @@ export const NewDealWizard: React.FC = () => {
 
   const titles = ["Configurações", "Documentos", "Mapear Dados", "Preview", "Signatários"];
 
+  const getEffectiveDealId = (overrideDealId?: string | null): string | null => {
+    return overrideDealId ?? dealId ?? editDealId ?? null;
+  };
+
   const nextStep = async () => {
     if (!isStepValid(step)) return;
 
@@ -422,8 +426,20 @@ export const NewDealWizard: React.FC = () => {
           },
         });
 
-        setDealId(newDeal.id);
-        navigate(`/deals/${newDeal.id}/edit?step=2`, { replace: true });
+        const createdId =
+          typeof (newDeal as any)?.id === 'string' && (newDeal as any).id.trim().length > 0
+            ? ((newDeal as any).id as string)
+            : null;
+
+        if (!createdId) {
+          throw new Error('Deal criado sem id');
+        }
+
+        // Importante: navegar usando o ID recém-criado (não depende de state async)
+        setDealId(createdId);
+        setDirection(1);
+        setStepAndNavigate(2, createdId);
+        return;
       } catch (error) {
         console.error('❌ Erro ao criar deal:', error);
         setSaveError('Erro ao criar proposta. Tente novamente.');
@@ -641,9 +657,21 @@ export const NewDealWizard: React.FC = () => {
     }
   }
 
-  const setStepAndNavigate = (step: number) => {
+  const setStepAndNavigate = (step: number, overrideDealId?: string | null) => {
     setStep(step);
-    navigate(`/deals/${dealId}/edit?step=${step}`, { replace: true });
+    const effectiveId = getEffectiveDealId(overrideDealId);
+    if (!effectiveId) {
+      console.error('❌ Tentativa de navegar sem dealId (effectiveId=null)', {
+        dealId,
+        editDealId,
+        overrideDealId,
+        step,
+      });
+      setSaveError('Não foi possível avançar: ID da proposta não encontrado. Tente novamente.');
+      setTimeout(() => setSaveError(null), 5000);
+      return;
+    }
+    navigate(`/deals/${effectiveId}/edit?step=${step}`, { replace: true });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -812,6 +840,7 @@ export const NewDealWizard: React.FC = () => {
                   }}
                   dealConfig={configData}
                   ocrData={ocrData}
+                  files={documents}
                 />
               )}
               {step === 4 && (

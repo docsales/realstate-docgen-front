@@ -31,7 +31,7 @@ export const Input: React.FC<InputProps> = ({ label, error, className = '', mask
     <div className="flex flex-col gap-1 w-full">
       {label && <label className="text-sm font-medium text-slate-700">{label}</label>}
       <input
-        className={`border border-slate-600 rounded-lg px-3 py-2 bg-white text-slate-600 placeholder-slate-400 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all ${error ? 'border-red-500' : ''} ${className}`}
+        className={`border border-slate-600 rounded-md px-3 py-2 bg-white text-slate-600 placeholder-slate-400 focus:ring-2 focus:ring-[#8592A6] focus:border-transparent outline-none transition-all ${error ? 'border-red-500' : ''} ${className}`}
         onChange={handleChange}
         {...props}
       />
