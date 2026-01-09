@@ -12,6 +12,7 @@ import { DashboardView } from '../features/dashboard/DashboardView';
 import { NewDealWizard } from '../features/deals/NewDealWizard';
 import { DealDetailsView } from '../features/deals/DealDetailsView';
 import { SettingsView } from '../features/settings/SettingsView';
+import { DealEditGuard } from './DealEditGuard';
 
 const logoSrc = "/images/docsales-logo.png";
 
@@ -128,7 +129,14 @@ export const AppRouter = () => {
         <Route path="/dashboard" element={<DashboardView />} />
         <Route path="/deals/new" element={<NewDealWizard />} />
         <Route path="/deals/:id" element={<DealDetailsView />} />
-        <Route path="/deals/:id/edit" element={<NewDealWizard />} />
+        <Route
+          path="/deals/:id/edit"
+          element={
+            <DealEditGuard>
+              <NewDealWizard />
+            </DealEditGuard>
+          }
+        />
         <Route path="/settings" element={<SettingsView />} />
       </Route>
 
