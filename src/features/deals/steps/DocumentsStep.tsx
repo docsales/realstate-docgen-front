@@ -5,6 +5,7 @@ import type { UploadedFile, DealConfig } from '@/types/types';
 import { BuyerDocumentsTab } from '../components/documents/BuyerDocumentsTab';
 import { SellerDocumentsTab } from '../components/documents/SellerDocumentsTab';
 import { PropertyDocumentsTab } from '../components/documents/PropertyDocumentsTab';
+import { ProposalDocumentsTab } from '../components/documents/ProposalDocumentsTab';
 import { documentChecklistService } from '../services/document-checklist.service';
 import type { ConsolidatedChecklist, ChecklistRequestDTO } from '@/types/checklist.types';
 import { ChecklistSummary } from '../components/documents/ChecklistSummary';
@@ -20,6 +21,8 @@ interface DocumentsStepProps {
 	onValidationGateChange?: (gate: { canContinue: boolean; message: string }) => void;
 }
 
+type DocumentTab = 'buyers' | 'sellers' | 'property' | 'proposal';
+
 export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	files,
 	onFilesChange,
@@ -29,12 +32,14 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 }) => {
 	const removeDocumentFromDealMutation = useRemoveDocumentFromDeal();
 
-	const [activeTab, setActiveTab] = useState<'buyers' | 'sellers' | 'property'>('sellers');
+	const [activeTab, setActiveTab] = useState<DocumentTab>('sellers');
 	const [checklist, setChecklist] = useState<ConsolidatedChecklist | null>(null);
 	const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
 	const [checklistError, setChecklistError] = useState<string | null>(null);
 	const hasCheckedOnMountRef = useRef(false);
 	const mountTimestampRef = useRef<number>(Date.now());
+
+	const documentsTabRef = useRef<HTMLDivElement>(null);
 
 	// Armazenar o config anterior para comparação
 	const previousConfigRef = useRef<string | null>(null);
@@ -50,15 +55,15 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		autoProcess: true,
 		dealId: dealId || undefined,
 		onComplete: (_documentId, extractedData, localFileId) => {
-			onFilesChange(prevFiles => prevFiles.map(f => {
-				if (f.id === localFileId) {
+			onFilesChange(prevFiles => prevFiles.map(prevFile => {
+				if (prevFile.id === localFileId) {
 					return {
-						...f,
+						...prevFile,
 						validated: true,
-						ocrExtractedData: extractedData, // Garantir que extractedData está salvo no arquivo
+						ocrExtractedData: extractedData,
 					};
 				}
-				return f;
+				return prevFile;
 			}));
 		},
 		onError: (fileId, error) => {
@@ -99,7 +104,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 			}
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [files.length, isCheckingStatus]); // Usar files.length ao invés de files para evitar loops
+	}, [files.length, isCheckingStatus]);
 
 	// Função para carregar o checklist
 	const loadChecklist = useCallback(async () => {
@@ -151,18 +156,17 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		}
 	}, [config]);
 
-	// Carregar checklist apenas quando o config mudar de verdade
 	useEffect(() => {
 		const configKey = JSON.stringify({
-			buyers: config.buyers.map(b => ({
-				personType: b.personType,
-				maritalState: b.maritalState,
-				propertyRegime: b.propertyRegime
+			buyers: config.buyers.map(buyer => ({
+				personType: buyer.personType,
+				maritalState: buyer.maritalState,
+				propertyRegime: buyer.propertyRegime
 			})),
-			sellers: config.sellers.map(s => ({
-				personType: s.personType,
-				maritalState: s.maritalState,
-				propertyRegime: s.propertyRegime
+			sellers: config.sellers.map(seller => ({
+				personType: seller.personType,
+				maritalState: seller.maritalState,
+				propertyRegime: seller.propertyRegime
 			})),
 			bankFinancing: config.bankFinancing,
 			propertyState: config.propertyState,
@@ -180,8 +184,11 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	const handleRemoveFile = (fileId: string) => {
 		if (!dealId) return;
 
+		const toRemove = files.find(f => f.id === fileId);
+		const backendDocumentId = toRemove?.documentId || fileId;
+
 		onFilesChange(files.filter(f => f.id !== fileId));
-		removeDocumentFromDealMutation.mutate({ dealId, documentId: fileId }, {
+		removeDocumentFromDealMutation.mutate({ dealId, documentId: backendDocumentId }, {
 			onSuccess: () => {
 				console.log('✅ Documento removido do deal');
 			},
@@ -199,23 +206,26 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 
 	const deedCountClamped = Math.min(Math.max(config.deedCount || 1, 1), 5);
 
-	// Gate: só permite avançar quando TODOS os docs obrigatórios foram anexados e todos os anexos foram validados com sucesso
 	const validationGate = useCallback(() => {
 		if (!checklist) {
 			return { canContinue: false, message: 'Carregando checklist de documentos...' };
 		}
 
-		const errorCount = files.filter(f => f.validated === false).length;
+		// Proposta comercial é opcional: não deve bloquear avanço do Step 2
+		// (mas, se o usuário enviou, ela ainda será processada e ficará disponível no Step 3).
+		const blockingFiles = files.filter(f => f.category !== 'proposal');
+
+		const errorCount = blockingFiles.filter(f => f.validated === false).length;
 		if (errorCount > 0) {
 			return { canContinue: false, message: `Há ${errorCount} documento(s) com erro. Remova e reenvie para continuar.` };
 		}
 
-		const pendingCount = files.filter(f => f.validated === undefined || f.ocrStatus === 'processing' || f.ocrStatus === 'uploading').length;
+		const pendingCount = blockingFiles.filter(f => f.validated === undefined || f.ocrStatus === 'processing' || f.ocrStatus === 'uploading').length;
 		if (pendingCount > 0) {
 			return { canContinue: false, message: `Aguardando validação de ${pendingCount} documento(s)...` };
 		}
 
-		const allUploadedValidated = files.every(f => f.validated === true);
+		const allUploadedValidated = blockingFiles.every(f => f.validated === true);
 		if (!allUploadedValidated) {
 			return { canContinue: false, message: 'Aguardando validação dos documentos...' };
 		}
@@ -228,7 +238,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 			const isSpouse = seller.isSpouse || false;
 			const expectedDe = isSpouse ? 'conjuge' : 'titular';
 			const docsForThisSeller = sellerRequiredDocs.filter(doc => !doc.de || doc.de === expectedDe);
-			const sellerFiles = files.filter(f => f.category === 'sellers' && f.personId === seller.id);
+			const sellerFiles = blockingFiles.filter(f => f.category === 'sellers' && f.personId === seller.id);
 
 			docsForThisSeller.forEach(doc => {
 				const hasValidated = sellerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
@@ -242,7 +252,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 			const isSpouse = buyer.isSpouse || false;
 			const expectedDe = isSpouse ? 'conjuge' : 'titular';
 			const docsForThisBuyer = buyerRequiredDocs.filter(doc => !doc.de || doc.de === expectedDe);
-			const buyerFiles = files.filter(f => f.category === 'buyers' && f.personId === buyer.id);
+			const buyerFiles = blockingFiles.filter(f => f.category === 'buyers' && f.personId === buyer.id);
 
 			docsForThisBuyer.forEach(doc => {
 				const hasValidated = buyerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
@@ -252,7 +262,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 
 		// Imóvel
 		const propertyRequiredDocs = checklist.imovel.documentos.filter(d => d.obrigatorio);
-		const propertyFiles = files.filter(f => f.category === 'property');
+		const propertyFiles = blockingFiles.filter(f => f.category === 'property');
 
 		propertyRequiredDocs.forEach(doc => {
 			if (doc.id === 'MATRICULA') {
@@ -275,6 +285,124 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	}, [checklist, config.buyers, config.sellers, deedCountClamped, files]);
 
 	const { canContinue, message: continueMessage } = validationGate();
+
+	const setupDocumentsTabsButtons = (tab: DocumentTab) => {
+		console.log('setupDocumentsTabsButtons', tab);
+		const map = {
+			'sellers': { previous: null, next: 'buyers' },
+			'buyers': { previous: 'sellers', next: 'property' },
+			'property': { previous: 'buyers', next: 'proposal' },
+			'proposal': { previous: 'property', next: null },
+		};
+
+		return map[tab];
+	}
+
+	const navigateDocumentsTab = (nextTab: DocumentTab) => {
+		setActiveTab(nextTab);
+		documentsTabRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
+	const translateTab = (tab: DocumentTab) => {
+		switch (tab) {
+			case 'buyers':
+				return 'Compradores';
+			case 'sellers':
+				return 'Vendedores';
+			case 'property':
+				return 'Imóvel';
+			case 'proposal':
+				return 'Proposta';
+			default:
+				return tab;
+		}
+	}
+
+	const renderHeaderDocumentTabsButtons = (tab: DocumentTab) => {
+		return (
+			<button
+				type="button"
+				onClick={() => navigateDocumentsTab(tab)}
+				className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === tab
+					? 'text-primary border-b-2 border-primary bg-white'
+					: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+					}`}
+			>
+				<span className="capitalize">
+					{translateTab(tab)}
+				</span>
+			</button>
+		);
+	}
+
+	const renderDocumentsTabContent = (tab: DocumentTab) => {
+		switch (tab) {
+			case 'buyers':
+				return <BuyerDocumentsTab
+					buyers={config.buyers || []}
+					uploadedFiles={files}
+					onFilesChange={onFilesChange}
+					onRemoveFile={handleRemoveFile}
+					checklist={checklist}
+				/>
+			case 'sellers':
+				return <SellerDocumentsTab
+					sellers={config.sellers || []}
+					uploadedFiles={files}
+					onFilesChange={onFilesChange}
+					onRemoveFile={handleRemoveFile}
+					checklist={checklist}
+				/>
+			case 'property':
+				return <PropertyDocumentsTab
+					propertyState={config.propertyState}
+					propertyType={config.propertyType}
+					deedCount={config.deedCount}
+					uploadedFiles={files}
+					onFilesChange={onFilesChange}
+					onRemoveFile={handleRemoveFile}
+					checklist={checklist}
+				/>
+			case 'proposal':
+				return <ProposalDocumentsTab
+					uploadedFiles={files}
+					onFilesChange={onFilesChange}
+					onRemoveFile={handleRemoveFile}
+					checklist={checklist}
+				/>
+			default:
+				return null;
+		}
+	};
+
+	const renderDocumentsTabsButtons = () => {
+		const { previous, next } = setupDocumentsTabsButtons(activeTab);
+		return (
+			<div className="flex justify-between items-center mt-6">
+				{previous ?
+					<Button variant="secondary" onClick={() => navigateDocumentsTab(previous as DocumentTab)}>
+						<div className="flex items-center gap-2">
+							<ArrowLeft className="w-4 h-4" />
+							<span className="capitalize">
+								{translateTab(previous as DocumentTab)}
+							</span>
+						</div>
+					</Button> : <div className="w-full" />}
+				{next && <Button variant="secondary" onClick={() => navigateDocumentsTab(next as DocumentTab)}>
+					<div className="flex items-center gap-2">
+						<span className="capitalize">
+							{translateTab(next as DocumentTab)}
+						</span>
+						<ArrowRight className="w-4 h-4" />
+					</div>
+				</Button>}
+			</div>
+		);
+	}
+
+	useEffect(() => {
+		setupDocumentsTabsButtons(activeTab);
+	}, [activeTab]);
 
 	// Informar ao wizard o estado de "pode continuar" do Step 2 (para renderizar no rodapé fixo)
 	useEffect(() => {
@@ -401,94 +529,21 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 
 			{/* Tabs Navigation */}
 			<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-				<div className="border-b border-slate-200 bg-slate-50/30">
+				<div ref={documentsTabRef} className="border-b border-slate-200 bg-slate-50/30">
 					<div className="flex">
-						<button
-							type="button"
-							onClick={() => setActiveTab('sellers')}
-							className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === 'sellers'
-								? 'text-primary border-b-2 border-primary bg-white'
-								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-								}`}
-						>
-							Vendedores
-						</button>
-						<button
-							type="button"
-							onClick={() => setActiveTab('buyers')}
-							className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === 'buyers'
-								? 'text-primary border-b-2 border-primary bg-white'
-								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-								}`}
-						>
-							Compradores
-						</button>
-						<button
-							type="button"
-							onClick={() => setActiveTab('property')}
-							className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === 'property'
-								? 'text-primary border-b-2 border-primary bg-white'
-								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-								}`}
-						>
-							Imóvel
-						</button>
+						{renderHeaderDocumentTabsButtons('sellers')}
+						{renderHeaderDocumentTabsButtons('buyers')}
+						{renderHeaderDocumentTabsButtons('property')}
+						{renderHeaderDocumentTabsButtons('proposal')}
 					</div>
 				</div>
 
 				{/* Tab Content */}
 				<div className="p-6">
-					{activeTab === 'buyers' && (
-						<BuyerDocumentsTab
-							buyers={config.buyers || []}
-							uploadedFiles={files}
-							onFilesChange={onFilesChange}
-							onRemoveFile={handleRemoveFile}
-							checklist={checklist}
-						/>
-					)}
-
-					{activeTab === 'sellers' && (
-						<SellerDocumentsTab
-							sellers={config.sellers || []}
-							uploadedFiles={files}
-							onFilesChange={onFilesChange}
-							onRemoveFile={handleRemoveFile}
-							checklist={checklist}
-						/>
-					)}
-
-					{activeTab === 'property' && (
-						<PropertyDocumentsTab
-							propertyState={config.propertyState}
-							propertyType={config.propertyType}
-							deedCount={config.deedCount}
-							uploadedFiles={files}
-							onFilesChange={onFilesChange}
-							onRemoveFile={handleRemoveFile}
-							checklist={checklist}
-						/>
-					)}
+					{renderDocumentsTabContent(activeTab)}
 
 					{/* Buttons Navigation */}
-					<div className="flex justify-between items-center mt-6">
-						{activeTab !== 'sellers' ? (
-							<Button variant="secondary" onClick={() => setActiveTab(activeTab === 'buyers' ? 'sellers' : 'buyers')}>
-								<div className="flex items-center gap-2">
-									<ArrowLeft className="w-4 h-4" />
-									{activeTab === 'buyers' ? 'Vendedores' : 'Compradores'}
-								</div>
-							</Button>
-						) : <div className="w-full" />}
-						{activeTab !== 'property' && (
-							<Button variant="secondary" onClick={() => setActiveTab(activeTab === 'buyers' ? 'property' : 'buyers')}>
-								<div className="flex items-center gap-2">
-									{activeTab === 'buyers' ? 'Imóvel' : 'Compradores'}
-									<ArrowRight className="w-4 h-4" />
-								</div>
-							</Button>
-						)}
-					</div>
+					{renderDocumentsTabsButtons()}
 				</div>
 			</div>
 		</div>

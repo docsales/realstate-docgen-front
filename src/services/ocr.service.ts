@@ -165,7 +165,7 @@ export const ocrService = {
    */
   createMetadata(
     documentType: string,
-    category: 'buyers' | 'sellers' | 'property',
+    category: 'buyers' | 'sellers' | 'property' | 'proposal',
     personId?: string,
     customId?: string,
     dealId?: string

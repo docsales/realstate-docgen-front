@@ -48,7 +48,7 @@ interface GroupedVariable {
 interface PersonDocumentGroup {
   personId: string;
   personName: string;
-  role: 'buyer' | 'seller' | 'property';
+  role: 'buyer' | 'seller' | 'property' | 'proposal';
   index?: number;
   documents: DocumentGroup[];
 }
@@ -270,6 +270,37 @@ const groupFilesByPerson = (
       personName: 'Imóvel',
       role: 'property',
       documents
+    });
+  }
+
+  // Processar proposta comercial (condições comerciais do deal)
+  const proposalFiles = completedFiles.filter(f => f.category === 'proposal');
+  if (proposalFiles.length > 0) {
+    const typeCounts = proposalFiles.reduce<Record<string, number>>((acc, f) => {
+      acc[f.type] = (acc[f.type] || 0) + 1;
+      return acc;
+    }, {});
+    const typeSeen: Record<string, number> = {};
+
+    const documents: DocumentGroup[] = proposalFiles.map((file) => {
+      typeSeen[file.type] = (typeSeen[file.type] || 0) + 1;
+      const baseLabel = getDocumentTypeLabel(file.type);
+      const suffix = typeCounts[file.type] > 1 ? ` #${typeSeen[file.type]}` : '';
+      const fileName = file.file?.name ? ` — ${file.file.name}` : '';
+
+      return {
+        documentType: file.type,
+        title: `${baseLabel}${suffix}${fileName}`,
+        docIcon: '💰',
+        data: file.ocrExtractedData || {},
+      };
+    });
+
+    groups.push({
+      personId: 'deal',
+      personName: 'Condições Comerciais',
+      role: 'proposal',
+      documents,
     });
   }
   
@@ -714,14 +745,31 @@ export const MappingStep: React.FC<MappingStepProps> = ({
           text: 'text-purple-900',
           border: 'border-purple-200/50',
           icon: 'text-purple-400'
+        },
+        proposal: {
+          bg: 'from-amber-50 to-amber-100',
+          text: 'text-amber-900',
+          border: 'border-amber-200/50',
+          icon: 'text-amber-500'
         }
       };
       
       const colors = colorConfig[role];
-      const roleLabel = role === 'buyer' ? 'Comprador' : role === 'seller' ? 'Vendedor' : 'Imóvel';
-      const displayName = role === 'property' 
-        ? 'Imóvel' 
-        : `${roleLabel} ${(index ?? 0) + 1} - ${personName}`;
+      const roleLabel =
+        role === 'buyer'
+          ? 'Comprador'
+          : role === 'seller'
+            ? 'Vendedor'
+            : role === 'property'
+              ? 'Imóvel'
+              : 'Condições Comerciais';
+
+      const displayName =
+        role === 'property'
+          ? 'Imóvel'
+          : role === 'proposal'
+            ? personName
+            : `${roleLabel} ${(index ?? 0) + 1} - ${personName}`;
       
       return (
         <div key={personId} className="mb-4">
@@ -729,7 +777,11 @@ export const MappingStep: React.FC<MappingStepProps> = ({
             <summary className={`bg-gradient-to-r ${colors.bg} list-none cursor-pointer sticky -top-1 z-30 shadow-sm rounded-md group-open:rounded-b-none transition-all duration-200 group-open:border-b ${colors.border} -mx-1 p-1`}>
               <div className={`px-4 py-3 font-bold ${colors.text} text-sm flex items-center justify-between gap-2`}>
                 <div className="flex items-center gap-2 min-w-0">
-                  <User className={`w-4 h-4 flex-shrink-0 ${colors.icon}`} />
+                  {role === 'proposal' ? (
+                    <DollarSign className={`w-4 h-4 flex-shrink-0 ${colors.icon}`} />
+                  ) : (
+                    <User className={`w-4 h-4 flex-shrink-0 ${colors.icon}`} />
+                  )}
                   <span className="truncate">{displayName}</span>
                 </div>
                 <ChevronRight className={`w-4 h-4 group-open:rotate-90 transition-transform ${colors.icon} flex-shrink-0`} />
