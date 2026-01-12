@@ -2,21 +2,21 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   ChevronRight,
-  FileCheck,
   GripVertical,
-  AlertCircle,
-  RefreshCw,
   Trash,
   Sparkles,
-  RotateCcw,
   FileText,
-  Copy,
-  X,
   User,
   Users,
   Home,
   DollarSign,
   CheckCircle2,
+  AlertCircle,
+  FileCheck,
+  X,
+  Copy,
+  RotateCcw,
+  RefreshCw,
   ChevronDown,
 } from 'lucide-react';
 import type {
@@ -26,8 +26,8 @@ import type {
   UploadedFile,
 } from '../../../types/types';
 import { dealsService } from '../services/deals.service';
-import { IAMappingLoader } from '../components/IAMappingLoader';
 import { UtilsService } from '@/services/utils.service';
+import { IAMappingLoader } from '../components/IAMappingLoader';
 
 interface MappingStepProps {
   mappings: Record<string, MappingValue>;
@@ -114,20 +114,20 @@ const getDocumentIcon = (documentType: string): string => {
 const extractPersonName = (data: Record<string, any>): string => {
   // Tenta diferentes campos comuns para nome
   const nameFields = [
-    'nome', 
-    'nome_completo', 
-    'name', 
+    'nome',
+    'nome_completo',
+    'name',
     'full_name',
     'nome_do_requerente',
     'requerente',
   ];
-  
+
   for (const field of nameFields) {
     if (data[field] && typeof data[field] === 'string') {
       return data[field];
     }
   }
-  
+
   // Busca recursivamente em objetos aninhados
   for (const value of Object.values(data)) {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -137,7 +137,7 @@ const extractPersonName = (data: Record<string, any>): string => {
       }
     }
   }
-  
+
   return 'Sem Nome';
 };
 
@@ -147,16 +147,60 @@ const groupFilesByPerson = (
   dealConfig: DealConfig
 ): PersonDocumentGroup[] => {
   const groups: PersonDocumentGroup[] = [];
-  
+
   // Filtrar apenas arquivos com OCR completo
   const completedFiles = files.filter(
     f => f.ocrStatus === 'completed' && f.ocrExtractedData
   );
-  
+
+  // Processar compradores
+  dealConfig.buyers.forEach((buyer, index) => {
+    const personFiles = completedFiles.filter(f => f.personId === buyer.id);
+
+    let personName = 'Sem Nome';
+    for (const file of personFiles) {
+      if (file.ocrExtractedData) {
+        const extracted = extractPersonName(file.ocrExtractedData);
+        if (extracted !== 'Sem Nome') {
+          personName = extracted;
+          break;
+        }
+      }
+    }
+
+    const typeCounts = personFiles.reduce<Record<string, number>>((acc, f) => {
+      acc[f.type] = (acc[f.type] || 0) + 1;
+      return acc;
+    }, {});
+    const typeSeen: Record<string, number> = {};
+
+    const documents: DocumentGroup[] = personFiles.map((file) => {
+      typeSeen[file.type] = (typeSeen[file.type] || 0) + 1;
+      const baseLabel = getDocumentTypeLabel(file.type);
+      const suffix = typeCounts[file.type] > 1 ? ` #${typeSeen[file.type]}` : '';
+      const fileName = file.file?.name ? ` — ${file.file.name}` : '';
+
+      return {
+        documentType: file.type,
+        title: `${baseLabel}${suffix}${fileName}`,
+        docIcon: getDocumentIcon(file.type),
+        data: file.ocrExtractedData || {},
+      };
+    });
+
+    groups.push({
+      personId: buyer.id,
+      personName,
+      role: 'buyer',
+      index,
+      documents
+    });
+  });
+
   // Processar vendedores
   dealConfig.sellers.forEach((seller, index) => {
     const personFiles = completedFiles.filter(f => f.personId === seller.id);
-    
+
     // Extrair nome da primeira ocorrência de nome em qualquer documento
     let personName = 'Sem Nome';
     for (const file of personFiles) {
@@ -168,7 +212,7 @@ const groupFilesByPerson = (
         }
       }
     }
-    
+
     const typeCounts = personFiles.reduce<Record<string, number>>((acc, f) => {
       acc[f.type] = (acc[f.type] || 0) + 1;
       return acc;
@@ -188,7 +232,7 @@ const groupFilesByPerson = (
         data: file.ocrExtractedData || {},
       };
     });
-    
+
     groups.push({
       personId: seller.id,
       personName,
@@ -197,81 +241,6 @@ const groupFilesByPerson = (
       documents
     });
   });
-  
-  // Processar compradores
-  dealConfig.buyers.forEach((buyer, index) => {
-    const personFiles = completedFiles.filter(f => f.personId === buyer.id);
-    
-    let personName = 'Sem Nome';
-    for (const file of personFiles) {
-      if (file.ocrExtractedData) {
-        const extracted = extractPersonName(file.ocrExtractedData);
-        if (extracted !== 'Sem Nome') {
-          personName = extracted;
-          break;
-        }
-      }
-    }
-    
-    const typeCounts = personFiles.reduce<Record<string, number>>((acc, f) => {
-      acc[f.type] = (acc[f.type] || 0) + 1;
-      return acc;
-    }, {});
-    const typeSeen: Record<string, number> = {};
-
-    const documents: DocumentGroup[] = personFiles.map((file) => {
-      typeSeen[file.type] = (typeSeen[file.type] || 0) + 1;
-      const baseLabel = getDocumentTypeLabel(file.type);
-      const suffix = typeCounts[file.type] > 1 ? ` #${typeSeen[file.type]}` : '';
-      const fileName = file.file?.name ? ` — ${file.file.name}` : '';
-
-      return {
-        documentType: file.type,
-        title: `${baseLabel}${suffix}${fileName}`,
-        docIcon: getDocumentIcon(file.type),
-        data: file.ocrExtractedData || {},
-      };
-    });
-    
-    groups.push({
-      personId: buyer.id,
-      personName,
-      role: 'buyer',
-      index,
-      documents
-    });
-  });
-  
-  // Processar imóvel
-  const propertyFiles = completedFiles.filter(f => f.personId === 'property' || f.category === 'property');
-  if (propertyFiles.length > 0) {
-    const typeCounts = propertyFiles.reduce<Record<string, number>>((acc, f) => {
-      acc[f.type] = (acc[f.type] || 0) + 1;
-      return acc;
-    }, {});
-    const typeSeen: Record<string, number> = {};
-
-    const documents: DocumentGroup[] = propertyFiles.map((file) => {
-      typeSeen[file.type] = (typeSeen[file.type] || 0) + 1;
-      const baseLabel = getDocumentTypeLabel(file.type);
-      const suffix = typeCounts[file.type] > 1 ? ` #${typeSeen[file.type]}` : '';
-      const fileName = file.file?.name ? ` — ${file.file.name}` : '';
-
-      return {
-        documentType: file.type,
-        title: `${baseLabel}${suffix}${fileName}`,
-        docIcon: getDocumentIcon(file.type),
-        data: file.ocrExtractedData || {},
-      };
-    });
-    
-    groups.push({
-      personId: 'property',
-      personName: 'Imóvel',
-      role: 'property',
-      documents
-    });
-  }
 
   // Processar proposta comercial (condições comerciais do deal)
   const proposalFiles = completedFiles.filter(f => f.category === 'proposal');
@@ -303,7 +272,38 @@ const groupFilesByPerson = (
       documents,
     });
   }
-  
+
+  // Processar imóvel
+  const propertyFiles = completedFiles.filter(f => f.personId === 'property' || f.category === 'property');
+  if (propertyFiles.length > 0) {
+    const typeCounts = propertyFiles.reduce<Record<string, number>>((acc, f) => {
+      acc[f.type] = (acc[f.type] || 0) + 1;
+      return acc;
+    }, {});
+    const typeSeen: Record<string, number> = {};
+
+    const documents: DocumentGroup[] = propertyFiles.map((file) => {
+      typeSeen[file.type] = (typeSeen[file.type] || 0) + 1;
+      const baseLabel = getDocumentTypeLabel(file.type);
+      const suffix = typeCounts[file.type] > 1 ? ` #${typeSeen[file.type]}` : '';
+      const fileName = file.file?.name ? ` — ${file.file.name}` : '';
+
+      return {
+        documentType: file.type,
+        title: `${baseLabel}${suffix}${fileName}`,
+        docIcon: getDocumentIcon(file.type),
+        data: file.ocrExtractedData || {},
+      };
+    });
+
+    groups.push({
+      personId: 'property',
+      personName: 'Imóvel',
+      role: 'property',
+      documents
+    });
+  }
+
   return groups;
 };
 
@@ -313,12 +313,12 @@ const groupOcrDataByPerson = (
   dealConfig: DealConfig
 ): PersonDocumentGroup[] => {
   const groups: PersonDocumentGroup[] = [];
-  
+
   // Processar vendedores
   dealConfig.sellers.forEach((seller, index) => {
     const ocrForPerson = ocrData.find(ocr => ocr.personId === seller.id);
     const personName = ocrForPerson ? extractPersonName(ocrForPerson.data) : 'Sem Nome';
-    
+
     const documents: DocumentGroup[] = [];
     if (ocrForPerson && ocrForPerson.data) {
       documents.push({
@@ -328,7 +328,7 @@ const groupOcrDataByPerson = (
         data: ocrForPerson.data
       });
     }
-    
+
     groups.push({
       personId: seller.id,
       personName,
@@ -337,12 +337,12 @@ const groupOcrDataByPerson = (
       documents
     });
   });
-  
+
   // Processar compradores
   dealConfig.buyers.forEach((buyer, index) => {
     const ocrForPerson = ocrData.find(ocr => ocr.personId === buyer.id);
     const personName = ocrForPerson ? extractPersonName(ocrForPerson.data) : 'Sem Nome';
-    
+
     const documents: DocumentGroup[] = [];
     if (ocrForPerson && ocrForPerson.data) {
       documents.push({
@@ -352,7 +352,7 @@ const groupOcrDataByPerson = (
         data: ocrForPerson.data
       });
     }
-    
+
     groups.push({
       personId: buyer.id,
       personName,
@@ -361,7 +361,7 @@ const groupOcrDataByPerson = (
       documents
     });
   });
-  
+
   // Processar imóvel
   const propertyOcr = ocrData.find(ocr => ocr.personId === 'property');
   if (propertyOcr) {
@@ -371,7 +371,7 @@ const groupOcrDataByPerson = (
       docIcon: '🏠',
       data: propertyOcr.data
     }];
-    
+
     groups.push({
       personId: 'property',
       personName: 'Imóvel',
@@ -379,7 +379,7 @@ const groupOcrDataByPerson = (
       documents
     });
   }
-  
+
   return groups;
 };
 
@@ -403,7 +403,7 @@ const categorizeVariables = (
   const propertyVars: GroupedVariable[] = [];
   const dealVars: GroupedVariable[] = [];
   const otherVars: GroupedVariable[] = [];
-  
+
   variables.forEach(variable => {
     // Extrair prefixo e resto (suporta formatos antigos e novos)
     // Novo (schema atual): buyers.1.nome / sellers.1.nome (índice começa em 1)
@@ -417,7 +417,7 @@ const categorizeVariables = (
     const sellerBracketMatch = variable.match(/^seller\[(\d+)\]\.(.+)$/);
     const buyerDotMatch = variable.match(/^buyer\.(\d+)\.(.+)$/);
     const sellerDotMatch = variable.match(/^seller\.(\d+)\.(.+)$/);
-    
+
     const buyerMatch = buyersDotMatch || buyersBracketMatch || buyerBracketMatch || buyerDotMatch;
     const sellerMatch = sellersDotMatch || sellersBracketMatch || sellerBracketMatch || sellerDotMatch;
 
@@ -514,7 +514,7 @@ const categorizeVariables = (
       if (parts.length > 1) {
         const [prefix, ...rest] = parts;
         const fieldName = rest.join('.');
-        
+
         if (prefix === 'buyer' || prefix === 'buyers') {
           if (!buyerVars[0]) buyerVars[0] = [];
           buyerVars[0].push({
@@ -551,9 +551,9 @@ const categorizeVariables = (
   if (Object.keys(sellerVars).length === 0 && sellerOcrGroups.length > 0) {
     sellerOcrGroups.forEach(g => { sellerVars[g.index!] = []; });
   }
-  
+
   const categories: CategoryGroup[] = [];
-  
+
   // Compradores
   if (Object.keys(buyerVars).length > 0) {
     const subGroups: PersonGroup[] = Object.entries(buyerVars)
@@ -566,7 +566,7 @@ const categorizeVariables = (
           variables: vars
         };
       });
-    
+
     categories.push({
       categoryName: 'Compradores',
       categoryKey: 'buyers',
@@ -575,7 +575,7 @@ const categorizeVariables = (
       subGroups
     });
   }
-  
+
   // Vendedores
   if (Object.keys(sellerVars).length > 0) {
     const subGroups: PersonGroup[] = Object.entries(sellerVars)
@@ -588,7 +588,7 @@ const categorizeVariables = (
           variables: vars
         };
       });
-    
+
     categories.push({
       categoryName: 'Vendedores',
       categoryKey: 'sellers',
@@ -597,7 +597,7 @@ const categorizeVariables = (
       subGroups
     });
   }
-  
+
   // Condições Comerciais
   if (dealVars.length > 0) {
     categories.push({
@@ -608,7 +608,7 @@ const categorizeVariables = (
       variables: dealVars
     });
   }
-  
+
   // Imóvel
   if (propertyVars.length > 0) {
     categories.push({
@@ -619,7 +619,7 @@ const categorizeVariables = (
       variables: propertyVars
     });
   }
-  
+
   // Outros (se houver)
   if (otherVars.length > 0) {
     categories.push({
@@ -630,7 +630,7 @@ const categorizeVariables = (
       variables: otherVars
     });
   }
-  
+
   return categories;
 };
 
@@ -725,35 +725,35 @@ export const MappingStep: React.FC<MappingStepProps> = ({
   const renderOcrSections = () => {
     return ocrPersonGroups.map((personGroup) => {
       const { personId, personName, role, index, documents } = personGroup;
-      
+
       // Definir cores baseado no papel
       const colorConfig = {
         buyer: {
           bg: 'from-green-50 to-green-100',
           text: 'text-green-900',
           border: 'border-green-200/50',
-          icon: 'text-green-400'
+          icon: <User className="w-4 h-4 flex-shrink-0 text-green-400" />
         },
         seller: {
           bg: 'from-blue-50 to-blue-100',
           text: 'text-blue-900',
           border: 'border-blue-200/50',
-          icon: 'text-blue-400'
+          icon: <User className="w-4 h-4 flex-shrink-0 text-blue-400" />
         },
         property: {
           bg: 'from-purple-50 to-purple-100',
           text: 'text-purple-900',
           border: 'border-purple-200/50',
-          icon: 'text-purple-400'
+          icon: <Home className="w-4 h-4 flex-shrink-0 text-purple-400" />
         },
         proposal: {
           bg: 'from-amber-50 to-amber-100',
           text: 'text-amber-900',
           border: 'border-amber-200/50',
-          icon: 'text-amber-500'
+          icon: <DollarSign className="w-4 h-4 flex-shrink-0 text-amber-500" />
         }
       };
-      
+
       const colors = colorConfig[role];
       const roleLabel =
         role === 'buyer'
@@ -770,18 +770,13 @@ export const MappingStep: React.FC<MappingStepProps> = ({
           : role === 'proposal'
             ? personName
             : `${roleLabel} ${(index ?? 0) + 1} - ${personName}`;
-      
       return (
         <div key={personId} className="mb-4">
           <details open className="group overflow-visible">
             <summary className={`bg-gradient-to-r ${colors.bg} list-none cursor-pointer sticky -top-1 z-30 shadow-sm rounded-md group-open:rounded-b-none transition-all duration-200 group-open:border-b ${colors.border} -mx-1 p-1`}>
               <div className={`px-4 py-3 font-bold ${colors.text} text-sm flex items-center justify-between gap-2`}>
                 <div className="flex items-center gap-2 min-w-0">
-                  {role === 'proposal' ? (
-                    <DollarSign className={`w-4 h-4 flex-shrink-0 ${colors.icon}`} />
-                  ) : (
-                    <User className={`w-4 h-4 flex-shrink-0 ${colors.icon}`} />
-                  )}
+                  {colors.icon}
                   <span className="truncate">{displayName}</span>
                 </div>
                 <ChevronRight className={`w-4 h-4 group-open:rotate-90 transition-transform ${colors.icon} flex-shrink-0`} />
@@ -1178,7 +1173,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                 <p className="text-xs text-purple-600 mb-3">
                   💡 Você pode editar ou remover qualquer sugestão. Revise os valores antes de continuar.
                 </p>
-                
+
                 {/* Botão para expandir/recolher lista */}
                 <button
                   onClick={() => setIsAiBannerExpanded(!isAiBannerExpanded)}
@@ -1190,7 +1185,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
               </div>
             </div>
           </div>
-          
+
           {/* Lista expansível de campos mapeados */}
           {isAiBannerExpanded && (
             <div className="border-t border-purple-200 bg-white/50 p-4 animate-in slide-in-from-top-2 fade-in duration-300">
@@ -1198,16 +1193,16 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                 {Array.from(preMappedFields).map((fieldId) => {
                   const mapping = mappings[fieldId];
                   if (!mapping) return null;
-                  
+
                   // Extrair label legível
                   const parts = fieldId.split('.');
-                  const fieldLabel = parts.length > 1 
+                  const fieldLabel = parts.length > 1
                     ? formatFieldLabel(parts[parts.length - 1])
                     : formatFieldLabel(fieldId);
-                  
+
                   return (
-                    <div 
-                      key={fieldId} 
+                    <div
+                      key={fieldId}
                       className="flex items-start gap-2 p-2 bg-white border border-purple-100 rounded-lg text-xs hover:shadow-sm transition-shadow"
                     >
                       <CheckCircle2 className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" />
@@ -1336,17 +1331,17 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                         icon: 'text-slate-600'
                       }
                     };
-                    
+
                     const colors = colorClasses[category.color as keyof typeof colorClasses];
-                    const totalVariables = category.subGroups 
+                    const totalVariables = category.subGroups
                       ? category.subGroups.reduce((sum, sg) => sum + sg.variables.length, 0)
                       : category.variables?.length || 0;
-                    
+
                     const mappedCount = category.subGroups
-                      ? category.subGroups.reduce((sum, sg) => 
-                          sum + sg.variables.filter(v => mappings[v.fullKey]).length, 0)
+                      ? category.subGroups.reduce((sum, sg) =>
+                        sum + sg.variables.filter(v => mappings[v.fullKey]).length, 0)
                       : category.variables?.filter(v => mappings[v.fullKey]).length || 0;
-                    
+
                     return (
                       <details key={category.categoryKey} open className="group overflow-visible mb-4">
                         <summary className={`${colors.bg} list-none cursor-pointer sticky -top-1 z-30 shadow-sm rounded-md group-open:rounded-b-none transition-all duration-200 -mx-1 p-1 group-open:border-b ${colors.border}`}>
