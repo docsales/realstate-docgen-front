@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings as SettingsIcon } from 'lucide-react';
 import { settingsService } from '../../services/settings.service';
-import { useAuth } from '../../hooks/useAuth';
 import { useConfigNotification } from '../../hooks/useConfigNotification';
 import type {
-  UserSettings,
+  AccountSettings,
   DocumentTemplate,
   CreateDocumentTemplateDto,
   UpdateDocumentTemplateDto,
@@ -20,10 +19,9 @@ import { WebhooksSection } from './components/WebhooksSection';
 
 export function SettingsView() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { recheck } = useConfigNotification();
   const [isLoading, setIsLoading] = useState(true);
-  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+  const [accountSettings, setAccountSettings] = useState<AccountSettings | null>(null);
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | undefined>(undefined);
@@ -38,14 +36,14 @@ export function SettingsView() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const settings = await settingsService.getUserSettings()
-      setUserSettings(settings);
+      const account = await settingsService.getAccount();
+      setAccountSettings(account);
 
       const templatesData = await settingsService.getDocumentTemplates()
       setTemplates(templatesData);
 
-      setApiKey(user?.docsalesApiKey || '');
-      setFolderId(user?.folderId || '');
+      setApiKey(account?.docsalesApiKey || '');
+      setFolderId(account?.folderId || '');
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
     } finally {
@@ -63,22 +61,24 @@ export function SettingsView() {
   };
 
   const handleSaveApiKey = async (value: string) => {
-    await settingsService.updateUser({ docsalesApiKey: value });
+    const updated = await settingsService.updateAccount({ docsalesApiKey: value });
+    setAccountSettings(updated);
     setApiKey(value);
     recheck();
   };
 
   const handleSaveFolderId = async (value: string) => {
-    await settingsService.updateUser({ folderId: value });
+    const updated = await settingsService.updateAccount({ folderId: value });
+    setAccountSettings(updated);
     setFolderId(value);
     recheck();
   };
 
   const handleSaveDocsalesEmail = async (value: string) => {
-    const updated = await settingsService.updateUserSettings({
-      docsalesUserEmail: value,
+    const updated = await settingsService.updateAccount({
+      defaultDocsalesUserEmail: value,
     });
-    setUserSettings(updated);
+    setAccountSettings(updated);
     recheck();
   };
 
@@ -152,7 +152,7 @@ export function SettingsView() {
           <FolderIdSection initialValue={folderId} onSave={handleSaveFolderId} />
 
           <DocsalesEmailSection
-            initialValue={userSettings?.docsalesUserEmail || null}
+            initialValue={accountSettings?.defaultDocsalesUserEmail || null}
             onSave={handleSaveDocsalesEmail}
           />
 

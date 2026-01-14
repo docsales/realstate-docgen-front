@@ -1,7 +1,7 @@
 import { server } from './api.service';
 import type {
-  UserSettings,
-  UpdateUserSettingsDto,
+  AccountSettings,
+  UpdateAccountSettingsDto,
   DocumentTemplate,
   CreateDocumentTemplateDto,
   UpdateDocumentTemplateDto,
@@ -9,21 +9,21 @@ import type {
 } from '../types/settings.types';
 
 export class SettingsService {
-  async getUserSettings(): Promise<UserSettings> {
-    const response = await server.api.get<UserSettings>(`/user-settings`, { withCredentials: true });
+  async getAccount(): Promise<AccountSettings> {
+    const response = await server.api.get<AccountSettings>(`/account`, { withCredentials: true });
     return response.data;
   }
 
-  async updateUserSettings(
-    data: UpdateUserSettingsDto,
-  ): Promise<UserSettings> {
-    const response = await server.api.put<UserSettings>(
-      `/user-settings`, data, { withCredentials: true },
+  async updateAccount(
+    data: UpdateAccountSettingsDto,
+  ): Promise<AccountSettings> {
+    const response = await server.api.put<AccountSettings>(
+      `/account`, data, { withCredentials: true },
     );
     return response.data;
   }
 
-  // User endpoints (for docsalesApiKey and folderId)
+  // User endpoints (apenas nome/email agora; mantemos para perfil básico)
   async updateUser(data: UpdateUserDto): Promise<any> {
     const response = await server.api.put(`/users/me`, data, { withCredentials: true });
     return response.data;

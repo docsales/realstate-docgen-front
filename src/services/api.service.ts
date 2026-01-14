@@ -23,6 +23,12 @@ export class Server {
   // Callback para obter sessão do AuthContext (evita chamar Supabase desnecessariamente)
   private getSessionFromContext: (() => { token: string; expiresAt: number } | null) | null = null;
 
+  // Callback para obter accountId (necessário para backend account-centric)
+  private getAccountIdFromContext: (() => string | null) | null = null;
+
+  // Callback para aguardar bootstrap completar (evita rejeitar requests prematuramente)
+  private waitForBootstrap: (() => Promise<void>) | null = null;
+
   api = axios.create({
     baseURL: this.apiUrl,
     timeout: 30000, // 30 segundos
@@ -34,7 +40,6 @@ export class Server {
 
   constructor() {
     this.setupInterceptors();
-    // Log periódico a cada 30 segundos
     setInterval(() => {
       const elapsed = (Date.now() - this.lastLogTime) / 1000;
       if (this.getSessionCallCount > 0) {
@@ -55,16 +60,33 @@ export class Server {
   }
 
   /**
+   * Registra callback para obter accountId (ex.: AuthContext).
+   */
+  public setAccountIdProvider(provider: () => string | null) {
+    this.getAccountIdFromContext = provider;
+  }
+
+  /**
+   * Registra callback para aguardar bootstrap do accountId completar.
+   */
+  public setBootstrapWaiter(waiter: () => Promise<void>) {
+    this.waitForBootstrap = waiter;
+  }
+
+  private isAccountHeaderOptional(config: any): boolean {
+    const url = (config?.url || '').toString();
+    return url.startsWith('/auth/bootstrap');
+  }
+
+  /**
    * Obtém um token válido, usando cache quando possível
    */
   private async getValidToken(): Promise<string | null> {
     const now = Date.now();
 
-    // 1. Tenta obter do AuthContext primeiro (evita chamada ao Supabase)
     if (this.getSessionFromContext) {
       const contextSession = this.getSessionFromContext();
       if (contextSession && contextSession.expiresAt > now + 5 * 60 * 1000) {
-        // Atualiza cache local
         this.tokenCache = {
           token: contextSession.token,
           expiresAt: contextSession.expiresAt,
@@ -73,17 +95,14 @@ export class Server {
       }
     }
 
-    // 2. Se token está em cache e ainda válido (com margem de 5 min)
     if (this.tokenCache.token && this.tokenCache.expiresAt > now + 5 * 60 * 1000) {
       return this.tokenCache.token;
     }
 
-    // 3. Se já está refreshing, aguarda
     if (this.refreshingToken) {
       return this.refreshingToken;
     }
 
-    // 4. Última opção: busca do Supabase
     this.refreshingToken = this.refreshToken();
     const token = await this.refreshingToken;
     this.refreshingToken = null;
@@ -123,7 +142,6 @@ export class Server {
   }
 
   private setupInterceptors() {
-    // Request interceptor - adiciona token de autenticação
     this.api.interceptors.request.use(
       async (config) => {
         try {
@@ -135,13 +153,29 @@ export class Server {
             console.warn('Token não disponível para requisição');
           }
 
-          // Se for FormData, remove Content-Type para o browser definir automaticamente com boundary
+          if (!this.isAccountHeaderOptional(config)) {
+            let accountId = this.getAccountIdFromContext?.() ?? null;
+
+            if (!accountId && this.waitForBootstrap) {
+              try {
+                await this.waitForBootstrap();
+                accountId = this.getAccountIdFromContext?.() ?? null;
+              } catch (error) {
+                console.error('[API] ✗ Falha ao aguardar bootstrap:', error);
+              }
+            }
+
+            if (!accountId) {
+              return Promise.reject(new Error('Conta não selecionada/provisionada (X-Account-Id ausente)'));
+            }
+            config.headers['X-Account-Id'] = accountId;
+          }
+
           if (config.data instanceof FormData) {
             delete config.headers['Content-Type'];
           }
         } catch (error) {
           console.error('Erro crítico ao obter token:', error);
-          // Rejeita a requisição se não conseguir token
           return Promise.reject(new Error('Falha na autenticação'));
         }
 
@@ -168,18 +202,15 @@ export class Server {
               throw new Error('Não foi possível renovar a sessão');
             }
 
-            // Atualiza cache
             this.tokenCache = {
               token: session.access_token,
               expiresAt: session.expires_at ? session.expires_at * 1000 : Date.now() + 60 * 60 * 1000,
             };
 
-            // Refaz requisição com novo token
             originalRequest.headers.Authorization = `${this.tokenPrefix} ${session.access_token}`;
             return this.api(originalRequest);
 
           } catch (refreshError) {
-            // Se refresh falhar, faz logout
             console.error('Falha ao renovar sessão, fazendo logout:', refreshError);
             await supabase.auth.signOut();
             this.clearTokenCache();
@@ -187,10 +218,7 @@ export class Server {
           }
         }
 
-        // Log de erros de rede
-        if (!error.response) {
-          console.error('Erro de rede ou timeout:', error.message);
-        }
+        if (!error.response) console.error('Erro de rede ou timeout:', error.message);
 
         return Promise.reject(error);
       }

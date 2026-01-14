@@ -1,14 +1,19 @@
-export interface UserSettings {
+export interface AccountSettings {
   id: string;
-  userId: string;
-  docsalesUserEmail: string | null;
+  name: string | null;
+  email: string;
+  defaultDocsalesUserEmail: string | null;
+  docsalesAccountId: string | null;
+  docsalesApiKey: string | null;
+  folderId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface DocumentTemplate {
   id: string;
-  userId: string;
+  accountId?: string;
+  userId?: string;
   label: string;
   templateId: string;
   description?: string | null;
@@ -34,21 +39,23 @@ export interface UpdateDocumentTemplateDto {
   order?: number;
 }
 
-export interface UpdateUserSettingsDto {
-  docsalesUserEmail?: string;
+export interface UpdateAccountSettingsDto {
+  name?: string | null;
+  docsalesAccountId?: string | null;
+  docsalesApiKey?: string | null;
+  folderId?: string | null;
+  defaultDocsalesUserEmail?: string | null;
 }
 
 export interface UpdateUserDto {
   name?: string;
   email?: string;
-  docsalesAccountId?: string;
-  docsalesApiKey?: string;
-  folderId?: string;
 }
 
 export interface WebhookToken {
   id: string;
-  userId: string;
+  accountId?: string;
+  userId?: string;
   token: string;
   lastUsedAt: string | null;
   isActive: boolean;
@@ -59,7 +66,8 @@ export interface WebhookToken {
 
 export interface WebhookEvent {
   id: string;
-  userId: string;
+  accountId?: string;
+  userId?: string;
   payload: any;
   headers: any;
   processedAt: string | null;

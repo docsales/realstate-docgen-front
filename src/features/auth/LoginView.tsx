@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 
 const logoSrc = "/images/docsales-logo.png";
 
-export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNavigateToRegister }) => {
+export const LoginView: React.FC = () => {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -60,16 +60,13 @@ export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNa
           <Button type="submit" className="btn-md w-full text-lg" isLoading={loading}>Entrar</Button>
         </form>
 
-        <div className="mt-6 text-center text-sm">
+        {/* TODO: Validar novo sistema de cadastro de conta e usuário */}
+        {/* <div className="mt-6 text-center text-sm">
           <span className="text-slate-500">Não tem uma conta? </span>
           <button onClick={onNavigateToRegister} className="cursor-pointer text-primary font-semibold hover:underline">
             Cadastre-se
           </button>
-        </div>
-
-        <div className="mt-8 text-center text-xs text-slate-400">
-          Versão Prototype 0.1.6
-        </div>
+        </div> */}
       </div>
     </div>
   );

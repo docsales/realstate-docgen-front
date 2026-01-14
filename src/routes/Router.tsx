@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, Outlet, useNavigate, Link } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, Link } from 'react-router-dom';
 import { LogOut, Settings, ChevronDown } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { ProtectedRoute } from './ProtectedRoute';
@@ -7,7 +7,7 @@ import { ConfigNotificationProvider } from '../contexts/ConfigNotificationContex
 
 // Views
 import { LoginView } from '../features/auth/LoginView';
-import { RegisterView } from '../features/auth/RegisterView';
+// import { RegisterView } from '../features/auth/RegisterView';
 import { DashboardView } from '../features/dashboard/DashboardView';
 import { NewDealWizard } from '../features/deals/NewDealWizard';
 import { DealDetailsView } from '../features/deals/DealDetailsView';
@@ -85,15 +85,13 @@ const AuthenticatedLayout = () => {
 };
 
 // Componentes wrapper para usar useNavigate
-const LoginViewWrapper = () => {
-  const navigate = useNavigate();
-  return <LoginView onNavigateToRegister={() => navigate('/register')} />;
-};
+const LoginViewWrapper = () => <LoginView />;
 
-const RegisterViewWrapper = () => {
-  const navigate = useNavigate();
-  return <RegisterView onNavigateToLogin={() => navigate('/login')} />;
-};
+// TODO: Validar novo sistema de cadastro de conta e usuário
+// const RegisterViewWrapper = () => {
+//   const navigate = useNavigate();
+//   return <RegisterView onNavigateToLogin={() => navigate('/login')} />;
+// };
 
 
 export const AppRouter = () => {
@@ -108,14 +106,14 @@ export const AppRouter = () => {
           </PublicRoute>
         }
       />
-      <Route
+      {/* <Route
         path="/register"
         element={
           <PublicRoute>
             <RegisterViewWrapper />
           </PublicRoute>
         }
-      />
+      /> */}
 
       {/* Rotas protegidas com layout compartilhado */}
       <Route

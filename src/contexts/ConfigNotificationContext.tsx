@@ -30,24 +30,16 @@ export const ConfigNotificationProvider: React.FC<{ children: ReactNode }> = ({ 
     const missing: string[] = [];
 
     try {
-      // Check API Key
-      if (!user.docsalesApiKey || user.docsalesApiKey.trim() === '') {
-        missing.push('DocSales API Key');
-      }
-
-      // Check Folder ID
-      if (!user.folderId || user.folderId.trim() === '') {
-        missing.push('Folder ID');
-      }
-
-      // Check User Email
+      // Check Account Settings (API key / folder / email default)
       try {
-        const settings = await settingsService.getUserSettings();
-        if (!settings.docsalesUserEmail || settings.docsalesUserEmail.trim() === '') {
-          missing.push('Email do DocSales');
-        }
+        const account = await settingsService.getAccount();
+        if (!account.docsalesApiKey || account.docsalesApiKey.trim() === '') missing.push('DocSales API Key');
+        if (!account.folderId || account.folderId.trim() === '') missing.push('Folder ID');
+        if (!account.defaultDocsalesUserEmail || account.defaultDocsalesUserEmail.trim() === '') missing.push('Email do DocSales');
       } catch (error) {
         console.error('Erro ao verificar configurações do usuário:', error);
+        missing.push('DocSales API Key');
+        missing.push('Folder ID');
         missing.push('Email do DocSales');
       }
 

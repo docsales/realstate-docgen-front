@@ -71,14 +71,14 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 		try {
 			const [templatesData, settingsData] = await Promise.all([
 				settingsService.getDocumentTemplates(),
-				settingsService.getUserSettings(),
+				settingsService.getAccount(),
 			]);
 
 			setTemplates(templatesData);
 
 			if (templatesData.length === 0) {
 				setError('TEMPLATES_MISSING');
-			} else if (!settingsData.docsalesUserEmail) {
+			} else if (!settingsData.defaultDocsalesUserEmail) {
 				setError('EMAIL_MISSING');
 			} else {
 				setError(null);
