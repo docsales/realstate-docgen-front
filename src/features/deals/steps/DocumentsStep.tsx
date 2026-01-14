@@ -287,7 +287,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	const { canContinue, message: continueMessage } = validationGate();
 
 	const setupDocumentsTabsButtons = (tab: DocumentTab) => {
-		console.log('setupDocumentsTabsButtons', tab);
 		const map = {
 			'sellers': { previous: null, next: 'buyers' },
 			'buyers': { previous: 'sellers', next: 'property' },
