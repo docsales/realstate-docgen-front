@@ -59,11 +59,6 @@ export const useOcr = (
   }, [onFilesChange]);
 
   /**
-   * Mapeamento de IDs locais para IDs do backend (documentId)
-   */
-  const fileIdMapRef = useRef<Map<string, string>>(new Map());
-
-  /**
    * Verifica status de um arquivo específico (para checagem manual)
    */
   const checkFileStatus = useCallback(async (documentId: string): Promise<{ status: string; hasUpdate: boolean }> => {
@@ -75,29 +70,22 @@ export const useOcr = (
     processingRef.current.add(requestKey);
 
     try {
+      // Após o upload, file.id já é o documentId (UUID)
       const result = await ocrService.getStatus(documentId);
 
-      let localFileId = documentId;
-      for (const [localId, mappedDocId] of fileIdMapRef.current.entries()) {
-        if (mappedDocId === documentId) {
-          localFileId = localId;
-          break;
-        }
-      }
-
       if (result.status === 'completed') {
-        updateFileOcrStatus(localFileId, OcrStatus.COMPLETED, undefined, undefined, result.extractedData);
-        onComplete?.(documentId, result.extractedData, localFileId);
+        updateFileOcrStatus(documentId, OcrStatus.COMPLETED, undefined, undefined, result.extractedData);
+        onComplete?.(documentId, result.extractedData, documentId);
         return { status: 'completed', hasUpdate: true };
       } else if (result.status === 'error') {
-        updateFileOcrStatus(localFileId, OcrStatus.ERROR, undefined, result.error);
-        onError?.(localFileId, result.error || 'Erro no processamento');
-        console.log('❌ Erro no arquivo:', localFileId);
+        updateFileOcrStatus(documentId, OcrStatus.ERROR, undefined, result.error);
+        onError?.(documentId, result.error || 'Erro no processamento');
+        console.log('❌ Erro no arquivo:', documentId);
         return { status: 'error', hasUpdate: true };
       } else {
-        const currentFile = files.find(f => f.id === localFileId);
+        const currentFile = files.find(f => f.id === documentId);
         if (result.whisperHash && result.whisperHash !== currentFile?.ocrWhisperHash) {
-          updateFileOcrStatus(localFileId, OcrStatus.PROCESSING, result.whisperHash);
+          updateFileOcrStatus(documentId, OcrStatus.PROCESSING, result.whisperHash);
         }
         return { status: result.status, hasUpdate: false };
       }
@@ -125,30 +113,31 @@ export const useOcr = (
    * Processa um arquivo via OCR
    */
   const processFile = useCallback(async (file: UploadedFile) => {
-    if (processingRef.current.has(file.id)) return;
+    const originalId = file.id; // Guardar o ID original para limpeza
+    if (processingRef.current.has(originalId)) return;
 
-    const fileStatus = files.find(f => f.id === file.id)?.ocrStatus;
-    const shouldBlock = processedFilesRef.current.has(file.id) &&
+    const fileStatus = files.find(f => f.id === originalId)?.ocrStatus;
+    const shouldBlock = processedFilesRef.current.has(originalId) &&
       fileStatus !== OcrStatus.ERROR &&
       fileStatus !== OcrStatus.IDLE &&
       fileStatus !== OcrStatus.UPLOADING;
 
     if (shouldBlock) return;
 
-    processingRef.current.add(file.id);
-    processedFilesRef.current.add(file.id);
+    processingRef.current.add(originalId);
+    processedFilesRef.current.add(originalId);
 
     try {
       // Só atualiza para UPLOADING se ainda não estiver nesse status
       if (fileStatus !== OcrStatus.UPLOADING) {
-        updateFileOcrStatus(file.id, OcrStatus.UPLOADING);
+        updateFileOcrStatus(originalId, OcrStatus.UPLOADING);
       }
 
       const metadata = ocrService.createMetadata(
         file.type,
         file.category,
         file.personId,
-        file.id,
+        originalId,
         dealId
       );
 
@@ -163,29 +152,34 @@ export const useOcr = (
 
       const documentId = result.documentId || result.fileId;
 
-      if (documentId && documentId !== file.id) {
-        fileIdMapRef.current.set(file.id, documentId);
-
-        processedFilesRef.current.add(documentId);
-
+      if (documentId && documentId !== originalId) {
+        // Substituir o id do arquivo pelo documentId (UUID) do backend
         onFilesChange((prevFiles: any[]) => prevFiles.map(f => {
-          if (f.id === file.id) {
-            return { ...f, documentId };
+          if (f.id === originalId) {
+            return { ...f, id: documentId, documentId };
           }
           return f;
         }));
-      }
 
-      updateFileOcrStatus(file.id, OcrStatus.PROCESSING, result.whisperHash);
+        // Atualizar referências internas
+        processedFilesRef.current.delete(originalId);
+        processedFilesRef.current.add(documentId);
+
+        // Atualizar status usando o novo id (UUID)
+        updateFileOcrStatus(documentId, OcrStatus.PROCESSING, result.whisperHash);
+      } else {
+        // Se documentId for igual ao originalId ou não existir, usa o id original
+        updateFileOcrStatus(originalId, OcrStatus.PROCESSING, result.whisperHash);
+      }
 
     } catch (error) {
       console.error('❌ Erro no OCR:', error);
       const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
-      updateFileOcrStatus(file.id, OcrStatus.ERROR, undefined, errorMsg);
-      processedFilesRef.current.delete(file.id);
-      onError?.(file.id, errorMsg);
+      updateFileOcrStatus(originalId, OcrStatus.ERROR, undefined, errorMsg);
+      processedFilesRef.current.delete(originalId);
+      onError?.(originalId, errorMsg);
     } finally {
-      processingRef.current.delete(file.id);
+      processingRef.current.delete(originalId);
     }
   }, [updateFileOcrStatus, onError, files]);
 
@@ -280,12 +274,8 @@ export const useOcr = (
     setIsCheckingStatus(true);
 
     try {
-      const documentIds = processingFiles.map(f => {
-        if (f.documentId) return f.documentId;
-        const mappedId = fileIdMapRef.current.get(f.id);
-        if (mappedId) return mappedId;
-        return f.id;
-      });
+      // Após o upload, file.id já é o documentId (UUID)
+      const documentIds = processingFiles.map(f => f.documentId || f.id);
 
       // Fire-and-forget: não aguarda resposta HTTP (evita timeout); WS atualizará status/resultados.
       void ocrService.processBatchFireAndForget(documentIds);
@@ -335,31 +325,17 @@ export const useOcr = (
       socket.on('ocr_completed', (data: { documentId: string; extractedData: any; status: string }) => {
         if (!isMounted) return;
 
-        let localFileId = data.documentId;
-        for (const [localId, mappedDocId] of fileIdMapRef.current.entries()) {
-          if (mappedDocId === data.documentId) {
-            localFileId = localId;
-            break;
-          }
-        }
-
-        updateFileOcrStatus(localFileId, OcrStatus.COMPLETED, undefined, undefined, data.extractedData);
-        onComplete?.(data.documentId, data.extractedData, localFileId);
+        // Após o upload, file.id já é o documentId (UUID)
+        updateFileOcrStatus(data.documentId, OcrStatus.COMPLETED, undefined, undefined, data.extractedData);
+        onComplete?.(data.documentId, data.extractedData, data.documentId);
       });
 
       socket.on('ocr_error', (data: { documentId: string; error: string }) => {
         if (!isMounted) return;
 
-        let localFileId = data.documentId;
-        for (const [localId, mappedDocId] of fileIdMapRef.current.entries()) {
-          if (mappedDocId === data.documentId) {
-            localFileId = localId;
-            break;
-          }
-        }
-
-        updateFileOcrStatus(localFileId, OcrStatus.ERROR, undefined, data.error);
-        onError?.(localFileId, data.error);
+        // Após o upload, file.id já é o documentId (UUID)
+        updateFileOcrStatus(data.documentId, OcrStatus.ERROR, undefined, data.error);
+        onError?.(data.documentId, data.error);
       });
 
       const processingFiles = files.filter(f =>
@@ -371,8 +347,8 @@ export const useOcr = (
         setTimeout(() => {
           if (isMounted) {
             processingFiles.forEach(file => {
-              const documentId = fileIdMapRef.current.get(file.id) || file.id;
-              checkFileStatus(documentId).catch(err => {
+              // Após o upload, file.id já é o documentId (UUID)
+              checkFileStatus(file.id).catch(err => {
                 console.error('❌ Erro ao verificar status após reconexão:', err);
               });
             });
