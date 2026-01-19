@@ -234,7 +234,6 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
             
             // Salvar automaticamente no banco para obter IDs reais
             try {
-              console.log('💾 Salvando signatários pré-mapeados no banco...');
               await updateDealMutation.mutateAsync({
                 dealId,
                 payload: {
@@ -253,7 +252,6 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
                   }) as any,
                 },
               });
-              console.log(`✅ Auto-preenchidos e salvos ${newSignatories.length} signatário(s) de compradores e vendedores`);
             } catch (saveError) {
               console.error('❌ Erro ao salvar signatários no banco:', saveError);
               // Não bloquear a UI, mas logar o erro
