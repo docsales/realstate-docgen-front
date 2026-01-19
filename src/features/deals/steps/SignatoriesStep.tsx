@@ -148,6 +148,7 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
     updates: Partial<Signatory>;
   }[]>([]);
   const [showSyncBanner, setShowSyncBanner] = useState(false);
+  const [ignoredChanges, setIgnoredChanges] = useState<Set<string>>(new Set());
 
   // ===== AUTO-PREENCHIMENTO DE SIGNATÁRIOS =====
   useEffect(() => {
@@ -291,14 +292,12 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
         const changes: Partial<Signatory> = {};
 
         if (matchingPerson.name && matchingPerson.name !== sig.name) {
-          console.log(`   📝 Nome mudou: "${sig.name}" → "${matchingPerson.name}"`);
           changes.name = matchingPerson.name;
         }
 
         const sigEmail = (sig.email || '').toLowerCase().trim();
         const personEmail = (matchingPerson.email || '').toLowerCase().trim();
         if (personEmail && personEmail !== sigEmail) {
-          console.log(`   📧 Email mudou: "${sigEmail}" → "${personEmail}"`);
           changes.email = matchingPerson.email;
         }
 
@@ -306,7 +305,14 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
         const personPhone = (matchingPerson.phone || '').replace(/\D/g, '');
         if (personPhone && personPhone !== sigPhone) changes.phoneNumber = matchingPerson.phone;
 
-        if (Object.keys(changes).length > 0) updates.push({ signatory: sig, updates: changes });
+        if (Object.keys(changes).length > 0) {
+          // Criar chave única para essa mudança
+          const changeKey = `${sig.id}-${JSON.stringify(changes)}`;
+          // Só adicionar se não foi ignorada pelo usuário
+          if (!ignoredChanges.has(changeKey)) {
+            updates.push({ signatory: sig, updates: changes });
+          }
+        }
       }
     });
 
@@ -314,7 +320,7 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
       setPendingUpdates(updates);
       setShowSyncBanner(true);
     }
-  }, [dealData, signatories, showSyncBanner]);
+  }, [dealData, signatories, showSyncBanner, ignoredChanges]);
 
   const canRemoveSigner = (): boolean => {
     if (!dealId || (dealData && dealData.status === 'DRAFT')) return true;
@@ -449,11 +455,21 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
       console.log('⚠️ Sincronização cancelada: alguns signatários têm dados inválidos');
     }
 
+    // Limpar mudanças ignoradas, pois foram sincronizadas
+    setIgnoredChanges(new Set());
     setPendingUpdates([]);
     setShowSyncBanner(false);
   };
 
   const dismissSyncBanner = () => {
+    // Marcar as mudanças atuais como ignoradas
+    const newIgnoredChanges = new Set(ignoredChanges);
+    pendingUpdates.forEach(update => {
+      const changeKey = `${update.signatory.id}-${JSON.stringify(update.updates)}`;
+      newIgnoredChanges.add(changeKey);
+    });
+    setIgnoredChanges(newIgnoredChanges);
+    
     setShowSyncBanner(false);
     setPendingUpdates([]);
   };
