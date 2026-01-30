@@ -484,106 +484,112 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	}, [dealId]);
 
 	const validationGate = useCallback(() => {
-		if (!checklist) {
-			return { canContinue: false, message: 'Carregando checklist de documentos...' };
-		}
+		return { canContinue: true, message: 'Validação desabilitada temporariamente' };
+	}, [])
 
-		// Proposta comercial é opcional: não deve bloquear avanço do Step 2
-		// (mas, se o usuário enviou, ela ainda será processada e ficará disponível no Step 3).
-		const blockingFiles = files.filter(f => f.category !== 'proposal');
+	// Código original
+	// TODO: reverter para o código original após testes
+	// const validationGate = useCallback(() => {
+	// 	if (!checklist) {
+	// 		return { canContinue: false, message: 'Carregando checklist de documentos...' };
+	// 	}
 
-		const errorCount = blockingFiles.filter(f => f.validated === false).length;
-		if (errorCount > 0) {
-			return { canContinue: false, message: `Há ${errorCount} documento(s) com erro. Remova e reenvie para continuar.` };
-		}
+	// 	// Proposta comercial é opcional: não deve bloquear avanço do Step 2
+	// 	// (mas, se o usuário enviou, ela ainda será processada e ficará disponível no Step 3).
+	// 	const blockingFiles = files.filter(f => f.category !== 'proposal');
 
-		const pendingCount = blockingFiles.filter(f => f.validated === undefined || f.ocrStatus === 'processing' || f.ocrStatus === 'uploading').length;
-		if (pendingCount > 0) {
-			return { canContinue: false, message: `Aguardando validação de ${pendingCount} documento(s)...` };
-		}
+	// 	const errorCount = blockingFiles.filter(f => f.validated === false).length;
+	// 	if (errorCount > 0) {
+	// 		return { canContinue: false, message: `Há ${errorCount} documento(s) com erro. Remova e reenvie para continuar.` };
+	// 	}
 
-		const allUploadedValidated = blockingFiles.every(f => f.validated === true);
-		if (!allUploadedValidated) {
-			return { canContinue: false, message: 'Aguardando validação dos documentos...' };
-		}
+	// 	const pendingCount = blockingFiles.filter(f => f.validated === undefined || f.ocrStatus === 'processing' || f.ocrStatus === 'uploading').length;
+	// 	if (pendingCount > 0) {
+	// 		return { canContinue: false, message: `Aguardando validação de ${pendingCount} documento(s)...` };
+	// 	}
 
-		let missingRequired = 0;
+	// 	const allUploadedValidated = blockingFiles.every(f => f.validated === true);
+	// 	if (!allUploadedValidated) {
+	// 		return { canContinue: false, message: 'Aguardando validação dos documentos...' };
+	// 	}
 
-		// Agrupar vendedores por casal
-		const sellersByCouple = new Map<string, Person[]>();
-		config.sellers.forEach(seller => {
-			const coupleId = seller.coupleId || `single_${seller.id}`;
-			if (!sellersByCouple.has(coupleId)) {
-				sellersByCouple.set(coupleId, []);
-			}
-			sellersByCouple.get(coupleId)!.push(seller);
-		});
+	// 	let missingRequired = 0;
 
-		// Vendedores - validar considerando casais
-		const sellerRequiredDocs = checklist.vendedores.documentos.filter(d => d.obrigatorio);
-		sellersByCouple.forEach((coupleMembers) => {
-			coupleMembers.forEach((seller) => {
-				const isSpouse = seller.isSpouse || false;
-				const expectedDe = isSpouse ? 'conjuge' : 'titular';
-				const docsForThisSeller = sellerRequiredDocs.filter(doc => !doc.de || doc.de === expectedDe);
-				const sellerFiles = blockingFiles.filter(f => f.category === 'sellers' && f.personId === seller.id);
+	// 	// Agrupar vendedores por casal
+	// 	const sellersByCouple = new Map<string, Person[]>();
+	// 	config.sellers.forEach(seller => {
+	// 		const coupleId = seller.coupleId || `single_${seller.id}`;
+	// 		if (!sellersByCouple.has(coupleId)) {
+	// 			sellersByCouple.set(coupleId, []);
+	// 		}
+	// 		sellersByCouple.get(coupleId)!.push(seller);
+	// 	});
 
-				docsForThisSeller.forEach(doc => {
-					const hasValidated = sellerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
-					if (!hasValidated) missingRequired += 1;
-				});
-			});
-		});
+	// 	// Vendedores - validar considerando casais
+	// 	const sellerRequiredDocs = checklist.vendedores.documentos.filter(d => d.obrigatorio);
+	// 	sellersByCouple.forEach((coupleMembers) => {
+	// 		coupleMembers.forEach((seller) => {
+	// 			const isSpouse = seller.isSpouse || false;
+	// 			const expectedDe = isSpouse ? 'conjuge' : 'titular';
+	// 			const docsForThisSeller = sellerRequiredDocs.filter(doc => !doc.de || doc.de === expectedDe);
+	// 			const sellerFiles = blockingFiles.filter(f => f.category === 'sellers' && f.personId === seller.id);
 
-		// Agrupar compradores por casal
-		const buyersByCouple = new Map<string, Person[]>();
-		config.buyers.forEach(buyer => {
-			const coupleId = buyer.coupleId || `single_${buyer.id}`;
-			if (!buyersByCouple.has(coupleId)) {
-				buyersByCouple.set(coupleId, []);
-			}
-			buyersByCouple.get(coupleId)!.push(buyer);
-		});
+	// 			docsForThisSeller.forEach(doc => {
+	// 				const hasValidated = sellerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
+	// 				if (!hasValidated) missingRequired += 1;
+	// 			});
+	// 		});
+	// 	});
 
-		// Compradores - validar considerando casais
-		const buyerRequiredDocs = checklist.compradores.documentos.filter(d => d.obrigatorio);
-		buyersByCouple.forEach((coupleMembers) => {
-			coupleMembers.forEach((buyer) => {
-				const isSpouse = buyer.isSpouse || false;
-				const expectedDe = isSpouse ? 'conjuge' : 'titular';
-				const docsForThisBuyer = buyerRequiredDocs.filter(doc => !doc.de || doc.de === expectedDe);
-				const buyerFiles = blockingFiles.filter(f => f.category === 'buyers' && f.personId === buyer.id);
+	// 	// Agrupar compradores por casal
+	// 	const buyersByCouple = new Map<string, Person[]>();
+	// 	config.buyers.forEach(buyer => {
+	// 		const coupleId = buyer.coupleId || `single_${buyer.id}`;
+	// 		if (!buyersByCouple.has(coupleId)) {
+	// 			buyersByCouple.set(coupleId, []);
+	// 		}
+	// 		buyersByCouple.get(coupleId)!.push(buyer);
+	// 	});
 
-				docsForThisBuyer.forEach(doc => {
-					const hasValidated = buyerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
-					if (!hasValidated) missingRequired += 1;
-				});
-			});
-		});
+	// 	// Compradores - validar considerando casais
+	// 	const buyerRequiredDocs = checklist.compradores.documentos.filter(d => d.obrigatorio);
+	// 	buyersByCouple.forEach((coupleMembers) => {
+	// 		coupleMembers.forEach((buyer) => {
+	// 			const isSpouse = buyer.isSpouse || false;
+	// 			const expectedDe = isSpouse ? 'conjuge' : 'titular';
+	// 			const docsForThisBuyer = buyerRequiredDocs.filter(doc => !doc.de || doc.de === expectedDe);
+	// 			const buyerFiles = blockingFiles.filter(f => f.category === 'buyers' && f.personId === buyer.id);
 
-		// Imóvel
-		const propertyRequiredDocs = checklist.imovel.documentos.filter(d => d.obrigatorio);
-		const propertyFiles = blockingFiles.filter(f => f.category === 'property');
+	// 			docsForThisBuyer.forEach(doc => {
+	// 				const hasValidated = buyerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
+	// 				if (!hasValidated) missingRequired += 1;
+	// 			});
+	// 		});
+	// 	});
 
-		propertyRequiredDocs.forEach(doc => {
-			if (doc.id === 'MATRICULA') {
-				const validatedCount = propertyFiles.filter(f => fileSatisfiesType(f, doc.id) && f.validated === true).length;
-				if (validatedCount < deedCountClamped) {
-					missingRequired += (deedCountClamped - validatedCount);
-				}
-				return;
-			}
+	// 	// Imóvel
+	// 	const propertyRequiredDocs = checklist.imovel.documentos.filter(d => d.obrigatorio);
+	// 	const propertyFiles = blockingFiles.filter(f => f.category === 'property');
 
-			const hasValidated = propertyFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
-			if (!hasValidated) missingRequired += 1;
-		});
+	// 	propertyRequiredDocs.forEach(doc => {
+	// 		if (doc.id === 'MATRICULA') {
+	// 			const validatedCount = propertyFiles.filter(f => fileSatisfiesType(f, doc.id) && f.validated === true).length;
+	// 			if (validatedCount < deedCountClamped) {
+	// 				missingRequired += (deedCountClamped - validatedCount);
+	// 			}
+	// 			return;
+	// 		}
 
-		if (missingRequired > 0) {
-			return { canContinue: false, message: `Faltam anexar ${missingRequired} documento(s) obrigatório(s) para continuar.` };
-		}
+	// 		const hasValidated = propertyFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
+	// 		if (!hasValidated) missingRequired += 1;
+	// 	});
 
-		return { canContinue: true, message: 'Tudo certo! Você já pode continuar.' };
-	}, [checklist, config.buyers, config.sellers, deedCountClamped, files]);
+	// 	if (missingRequired > 0) {
+	// 		return { canContinue: false, message: `Faltam anexar ${missingRequired} documento(s) obrigatório(s) para continuar.` };
+	// 	}
+
+	// 	return { canContinue: true, message: 'Tudo certo! Você já pode continuar.' };
+	// }, [checklist, config.buyers, config.sellers, deedCountClamped, files]);
 
 	const { canContinue, message: continueMessage } = validationGate();
 
