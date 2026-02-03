@@ -213,6 +213,12 @@ export const DealDetailsView: React.FC = () => {
 		}
 	}
 
+	const handleNavigateToSpecificStep = (step: number) => {
+		if (deal.status !== 'DRAFT') return;
+
+		navigate(`/deals/${dealId}/edit?step=${step}`);
+	}
+
 	const getStatusBadge = (status: DealStatus) => {
 		switch (status) {
 			case 'SIGNED': return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Assinado</span>;
@@ -247,6 +253,26 @@ export const DealDetailsView: React.FC = () => {
 					<ArrowLeft className="w-4 h-4 mr-2" /> Voltar
 				</Button>
 			</div>
+		);
+	}
+
+	const renderNavigateToSpecificStepButton = (step: number, description: string) => {
+		if (deal.status !== 'DRAFT') return <></>;
+
+		return (
+			<Button
+				onClick={() => handleNavigateToSpecificStep(step)}
+				variant="secondary"
+				size="sm"
+				className="tooltip tooltip-left flex items-center gap-2"
+				data-tip={`Acesse as configurações ${description} para visualizar os dados`}
+				disabled={deal.status !== 'DRAFT'}
+			>
+				<div className="flex items-center gap-2">
+					<Edit className="w-4 h-4 mr-2" />
+					<span className="text-sm">Visualizar</span>
+				</div>
+			</Button>
 		);
 	}
 
@@ -332,8 +358,14 @@ export const DealDetailsView: React.FC = () => {
 						{/* Imóvel */}
 						<div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
 							<div className="flex items-center gap-2 mb-4 text-primary">
-								<Home className="w-5 h-5" />
-								<h3 className="font-bold text-lg text-slate-800">Imóvel</h3>
+								<div className="flex items-center justify-between w-full">
+									<div className="flex items-center gap-2">
+										<Home className="w-5 h-5" />
+										<h3 className="font-bold text-lg text-slate-800">Imóvel</h3>
+									</div>
+
+									{renderNavigateToSpecificStepButton(1, 'do imóvel')}
+								</div>
 							</div>
 							<div className="space-y-4">
 								<div>
@@ -493,7 +525,11 @@ export const DealDetailsView: React.FC = () => {
 				/>
 				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-0">
 					<div className="p-6 border-b border-slate-100">
-						<h3 className="font-bold text-lg text-slate-800">Documentos do Contrato</h3>
+						<div className="flex items-center justify-between w-full">
+							<h3 className="font-bold text-lg text-slate-800">Documentos do Contrato</h3>
+
+							{renderNavigateToSpecificStepButton(2, 'de documentos')}
+						</div>
 						<p className="text-sm text-slate-500">
 							{deal.docs.length > 0
 								? 'Documentos anexados ao contrato'
@@ -567,7 +603,11 @@ export const DealDetailsView: React.FC = () => {
 					onChange={() => setActiveTab('signers')}
 				/>
 				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-6">
-					<h3 className="font-bold text-lg text-slate-800 mb-1">Signatários</h3>
+					<div className="flex items-center justify-between w-full">
+						<h3 className="font-bold text-lg text-slate-800 mb-1">Signatários</h3>
+
+						{renderNavigateToSpecificStepButton(5, 'de signatários')}
+					</div>
 					<p className="text-sm text-slate-500 mb-4">
 						{dealData.signers?.length || 0} {dealData.signers?.length !== 1 ? 'Signatários' : 'Signatário'} adicionado(s) para o contrato
 					</p>
