@@ -2,10 +2,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Button } from '../../../components/Button';
 import { ArrowRight, CheckCircle2, ExternalLink, FilePenLine, FileText, RefreshCw } from 'lucide-react';
 import type { GeneratePreviewResponse } from '@/types/types';
-import { useDeal, useGeneratePreview } from '../hooks/useDeals';
+import { useDeal, useStartPreviewJob } from '../hooks/useDeals';
 import { DocumentWritingLoader } from '../components/DocumentWritingLoader';
 import { SuccessModal } from '../components/SuccessModal';
 import { fireConfetti, fireQuickConfetti } from '@/utils/confetti';
+import { previewService, type PreviewProgressStep, type PreviewJobState } from '@/services/preview.service';
+import type { Socket } from 'socket.io-client';
 
 interface PreviewStepProps {
 	dealId: string;
@@ -16,13 +18,91 @@ interface PreviewStepProps {
 
 export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mappedCount, onGenerate }) => {
 	const { data: deal, isLoading, refetch: refetchDeal } = useDeal(dealId);
-	const generatePreviewMutation = useGeneratePreview();
+	const startPreviewJobMutation = useStartPreviewJob();
 	const [status, setStatus] = useState<'idle' | 'generating' | 'done'>('idle');
 	const [preview, setPreview] = useState<GeneratePreviewResponse | null>(null);
 	const previousMappedCountRef = useRef<number>(mappedCount);
 	const previousContractFieldsRef = useRef<string | null>(null);
 	const [showSuccessModal, setShowSuccessModal] = useState(false);
 	const [isRegeneration, setIsRegeneration] = useState(false);
+	const [jobId, setJobId] = useState<string | null>(null);
+	const [jobStep, setJobStep] = useState<PreviewProgressStep>('getting_template_variables');
+	const socketRef = useRef<Socket | null>(null);
+	const pollTimerRef = useRef<number | null>(null);
+
+	const stepToUi = (step: PreviewProgressStep) => {
+		switch (step) {
+			case 'getting_template_variables':
+				return { title: 'Preparando o modelo...', description: 'Buscando variáveis do template no Google Docs.' };
+			case 'building_payload':
+				return { title: 'Montando o documento...', description: 'Organizando os dados mapeados para o preview.' };
+			case 'llm_sellers':
+				return { title: 'Analisando vendedores...', description: 'Consolidando dados com IA (pode levar alguns segundos).' };
+			case 'llm_buyers':
+				return { title: 'Analisando compradores...', description: 'Consolidando dados com IA (pode levar alguns segundos).' };
+			case 'apps_script_generate':
+				return { title: isRegeneration ? 'Regerando seu Documento...' : 'Gerando seu Documento...', description: 'Criando/atualizando o rascunho no Google Docs.' };
+			case 'updating_deal':
+				return { title: 'Finalizando...', description: 'Salvando metadados e preparando o link do preview.' };
+			case 'done':
+			default:
+				return { title: 'Finalizando...', description: 'Aguarde um instante...' };
+		}
+	};
+
+	const stopPolling = () => {
+		if (pollTimerRef.current) {
+			window.clearInterval(pollTimerRef.current);
+			pollTimerRef.current = null;
+		}
+	};
+
+	const startPolling = (dealIdToPoll: string, jobIdToPoll: string) => {
+		stopPolling();
+		pollTimerRef.current = window.setInterval(async () => {
+			try {
+				const state = await previewService.getJobStatus(dealIdToPoll, jobIdToPoll);
+				setJobStep(state.step);
+				if (state.status === 'COMPLETED' && state.result?.edit_url) {
+					onCompleted(state);
+				}
+				if (state.status === 'ERROR') {
+					console.error('❌ Preview job error:', state.error);
+					setStatus('done');
+					stopPolling();
+				}
+			} catch (e: any) {
+				// Best-effort: em multi-instância o job pode “sumir”
+				console.warn('⚠️ Não foi possível consultar status do job (provável troca de instância):', e?.message || e);
+				setStatus('done');
+				stopPolling();
+			}
+		}, 5000);
+	};
+
+	const onCompleted = async (stateOrResult: PreviewJobState | { result?: any; edit_url?: string; id?: string; status_code?: number }) => {
+		const editUrl = (stateOrResult as any)?.result?.edit_url ?? (stateOrResult as any)?.edit_url;
+		const id = (stateOrResult as any)?.result?.id ?? (stateOrResult as any)?.id;
+		const status_code = (stateOrResult as any)?.result?.status_code ?? (stateOrResult as any)?.status_code ?? 200;
+
+		await new Promise(resolve => setTimeout(resolve, 300));
+		await refetchDeal();
+
+		setPreview({
+			edit_url: editUrl,
+			id,
+			status_code,
+		});
+		setStatus('done');
+		stopPolling();
+
+		if (isRegeneration) fireQuickConfetti();
+		else fireConfetti();
+
+		setTimeout(() => {
+			setShowSuccessModal(true);
+		}, 500);
+	};
 
 	const handleGenerate = async (isRegen = false) => {
 		if (!dealId) {
@@ -32,36 +112,65 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 
 		setIsRegeneration(isRegen);
 		setStatus('generating');
+		setJobStep('getting_template_variables');
 		try {
-			const generatedPreview = await generatePreviewMutation.mutateAsync({ dealId });
-
-			await new Promise(resolve => setTimeout(resolve, 300));
-
-			await refetchDeal();
-
-			const newPreview = {
-				edit_url: generatedPreview.edit_url,
-				id: generatedPreview.id,
-				status_code: generatedPreview.status_code,
-			};
-
-			setPreview(newPreview);
-			setStatus('done');
-
-			if (isRegen) {
-				fireQuickConfetti();
-			} else {
-				fireConfetti();
-			}
-
-			setTimeout(() => {
-				setShowSuccessModal(true);
-			}, 500);
+			const { jobId } = await startPreviewJobMutation.mutateAsync({ dealId });
+			setJobId(jobId);
+			startPolling(dealId, jobId);
 		} catch (error) {
-			console.error('❌ Erro ao gerar preview:', error);
+			console.error('❌ Erro ao iniciar geração do preview:', error);
 			setStatus('done');
+			stopPolling();
 		}
 	};
+
+	useEffect(() => {
+		// Conecta WS uma vez (best-effort)
+		let mounted = true;
+		(async () => {
+			if (socketRef.current) return;
+			const socket = await previewService.connectWebSocket();
+			if (!mounted) {
+				socket?.disconnect();
+				return;
+			}
+			socketRef.current = socket;
+			if (!socket) return;
+
+			socket.on('preview_progress', (evt: { jobId: string; dealId: string; step: PreviewProgressStep }) => {
+				if (!evt?.jobId || evt.jobId !== jobId) return;
+				if (!evt?.dealId || evt.dealId !== dealId) return;
+				setJobStep(evt.step);
+			});
+
+			socket.on('preview_completed', (evt: { jobId: string; dealId: string; edit_url: string; id: string }) => {
+				if (!evt?.jobId || evt.jobId !== jobId) return;
+				if (!evt?.dealId || evt.dealId !== dealId) return;
+				onCompleted({ edit_url: evt.edit_url, id: evt.id, status_code: 200 });
+			});
+
+			socket.on('preview_error', (evt: { jobId: string; dealId: string; error: string }) => {
+				if (!evt?.jobId || evt.jobId !== jobId) return;
+				if (!evt?.dealId || evt.dealId !== dealId) return;
+				console.error('❌ Erro no preview (WS):', evt.error);
+				setStatus('done');
+				stopPolling();
+			});
+		})();
+
+		return () => {
+			mounted = false;
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [dealId, jobId]);
+
+	useEffect(() => {
+		return () => {
+			stopPolling();
+			socketRef.current?.disconnect();
+			socketRef.current = null;
+		};
+	}, []);
 
 	useEffect(() => {
 		if (status === 'generating') return;
@@ -143,10 +252,8 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 
 			{status === 'generating' && (
 				<DocumentWritingLoader
-					title={isRegeneration ? "Regerando seu Documento..." : "Gerando seu Documento..."}
-					description={isRegeneration
-						? "Atualizando o documento com as novas informações..."
-						: "O sistema está aplicando as variáveis no modelo e criando o link no Drive."}
+					title={stepToUi(jobStep).title}
+					description={stepToUi(jobStep).description}
 				/>
 			)}
 
@@ -169,9 +276,9 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 							variant="secondary"
 							className="w-full flex items-center gap-2 justify-center"
 							onClick={() => handleGenerate(true)}
-							disabled={generatePreviewMutation.isPending}
+							disabled={startPreviewJobMutation.isPending}
 						>
-							<RefreshCw className={`w-4 h-4 ${generatePreviewMutation.isPending ? 'animate-spin' : ''}`} />
+							<RefreshCw className={`w-4 h-4 ${startPreviewJobMutation.isPending ? 'animate-spin' : ''}`} />
 							<span>Regerar Preview</span>
 						</Button>
 						<Button onClick={onGenerate} className="w-full justify-center flex items-center gap-2">

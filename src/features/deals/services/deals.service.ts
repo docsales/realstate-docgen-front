@@ -138,9 +138,16 @@ export class DealsService {
    * Gera preview do contrato
    */
   async generatePreview(dealId: string): Promise<GeneratePreviewResponse> {
-    const { data }: { data: GeneratePreviewResponse } = await server.api.post<GeneratePreviewResponse>(
-      `/deal/${dealId}/preview`
-    );
+    const { data }: { data: GeneratePreviewResponse } =
+      await server.api.post<GeneratePreviewResponse>(
+        `/deal/${dealId}/preview`,
+        undefined,
+        {
+          // Preview pode envolver Apps Script + LLM e levar >30s em produção.
+          timeout: 300000, // 5 min
+          withCredentials: true,
+        },
+      );
     return data;
   }
 

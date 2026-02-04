@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { dealsService, type CreateDealPayload, type UpdateDealStatusPayload } from '../services/deals.service';
 import type { UpdateDealDataDto } from '@/types/types';
+import { previewService } from '@/services/preview.service';
 
 // Query keys para cache management
 export const dealKeys = {
@@ -191,6 +192,15 @@ export function useGeneratePreview() {
     onSuccess: (_, { dealId }) => {
       queryClient.invalidateQueries({ queryKey: dealKeys.detail(dealId) });
     },
+  });
+}
+
+/**
+ * Hook para iniciar job assíncrono de preview (best-effort em memória)
+ */
+export function useStartPreviewJob() {
+  return useMutation({
+    mutationFn: ({ dealId }: { dealId: string }) => previewService.startJob(dealId),
   });
 }
 
