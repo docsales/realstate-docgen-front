@@ -256,6 +256,25 @@ export const DealDetailsView: React.FC = () => {
 		);
 	}
 
+	const getDealValue = () => {
+		if (deal.valor !== 'Não informado' && deal.valor !== '' || !deal.metadata?.contractValue) return deal.valor;
+		return formatCurrency(Number(deal.metadata?.contractValue) / 100);
+	}
+
+	const getUsersIcon = (count: number) => {
+		if (count > 1) return <Users className="w-5 h-5" />;
+		return <User className="w-5 h-5" />;
+	}
+
+	const formatCurrency = (value: number) => {
+		return new Intl.NumberFormat('pt-BR', {
+			style: 'currency',
+			currency: 'BRL',
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2,
+		}).format(value);
+	}
+
 	const renderNavigateToSpecificStepButton = (step: number, description: string) => {
 		if (deal.status !== 'DRAFT') return <></>;
 
@@ -284,7 +303,12 @@ export const DealDetailsView: React.FC = () => {
 			{/* Header */}
 			<div className="mb-6">
 				<button onClick={() => navigate('/dashboard')} className="cursor-pointer flex items-center text-slate-500 hover:text-slate-700 text-sm mb-4 transition-colors">
-					<ArrowLeft className="w-4 h-4 mr-1" /> Voltar para listagem
+					<div className="flex items-center gap-2">
+						<ArrowLeft className="w-4 h-4" />
+						<span className="text-sm font-medium">
+							Voltar para listagem
+						</span>
+					</div>
 				</button>
 
 				<div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -398,7 +422,7 @@ export const DealDetailsView: React.FC = () => {
 							<div className="grid grid-cols-2 gap-6 mb-4">
 								<div>
 									<label className="text-xs text-slate-400 block mb-1">Valor Total</label>
-									<p className="text-primary font-bold text-lg">{deal.valor}</p>
+									<p className="text-primary font-bold text-lg">{getDealValue()}</p>
 								</div>
 								<div>
 									<label className="text-xs text-slate-400 block mb-1">Entrada</label>
@@ -424,9 +448,9 @@ export const DealDetailsView: React.FC = () => {
 						{/* Comprador */}
 						<div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
 							<div className="flex items-center gap-2 mb-2 text-primary">
-								<User className="w-5 h-5" />
+								{getUsersIcon(deal.buyers.length)}
 								<h3 className="font-bold text-lg text-slate-800">
-									Comprador{deal.buyers.length !== 1 && 'es'} ({deal.buyers.length})
+									{`Comprador${deal.buyers.length > 1 ? 'es' : ''} (${deal.buyers.length})`}
 								</h3>
 							</div>
 							<p className="text-xs text-slate-400 mb-4">
@@ -470,10 +494,12 @@ export const DealDetailsView: React.FC = () => {
 						{/* Vendedor */}
 						<div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
 							<div className="flex items-center gap-2 mb-2 text-primary">
-								<Users className="w-5 h-5" />
-								<h3 className="font-bold text-lg text-slate-800">
-									Vendedor{deal.sellers.length !== 1 && 'es'} ({deal.sellers.length})
-								</h3>
+								<div className="flex items-center gap-2">
+									{getUsersIcon(deal.sellers.length)}
+									<h3 className="font-bold text-lg text-slate-800">
+										{`Vendedor${deal.sellers.length > 1 ? 'es' : ''} (${deal.sellers.length})`}
+									</h3>
+								</div>
 							</div>
 							<p className="text-xs text-slate-400 mb-4">
 								{deal.sellers.length || 0} Pessoa(s)

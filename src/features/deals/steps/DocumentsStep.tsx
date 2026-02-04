@@ -249,8 +249,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		return false;
 	};
 
-	const deedCountClamped = Math.min(Math.max(config.deedCount || 1, 1), 5);
-
 	// Função helper para verificar se todos documentos do casal estão completos
 	const checkCoupleDocumentsComplete = useCallback((
 		members: Person[],
@@ -293,16 +291,10 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		if (!dealId) return;
 
 		// Verificar se já está validando
-		if (validatingCouples.has(coupleId)) {
-			console.log(`⏳ Casal ${coupleId} já está sendo validado, pulando...`);
-			return;
-		}
+		if (validatingCouples.has(coupleId)) return;
 
 		// Verificar se já foi validado com sucesso
-		if (coupleValidations.has(coupleId)) {
-			console.log(`✅ Casal ${coupleId} já foi validado, pulando...`);
-			return;
-		}
+		if (coupleValidations.has(coupleId)) return;
 
 		// Verificar número de tentativas
 		const attempts = coupleValidationAttempts.get(coupleId) || 0;
@@ -326,7 +318,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 			return newMap;
 		});
 
-		console.log(`🔍 Tentativa ${attempts + 1}/${MAX_VALIDATION_ATTEMPTS}: Iniciando validação automática do casal ${coupleId}`);
 		setValidatingCouples(prev => new Set(prev).add(coupleId));
 
 		try {
@@ -336,7 +327,6 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 				titularPersonId: titular.id,
 				conjugePersonId: conjuge.id,
 			});
-			console.log(`📤 Validação do casal ${coupleId} disparada (resultado via WebSocket)`);
 		} catch (error) {
 			console.error(`❌ Erro na tentativa ${attempts + 1} de validação do casal ${coupleId}:`, error);
 
@@ -413,10 +403,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 				if (members.length === 2) {
 					const isCoupleComplete = checkCoupleDocumentsComplete(members, 'sellers');
 					if (isCoupleComplete) {
-						console.log(`📋 Casal ${coupleId} (vendedores) tem todos os documentos completos`);
 						validateCoupleIfNeeded(coupleId, members);
-					} else {
-						console.log(`📋 Casal ${coupleId} (vendedores) ainda não tem todos os documentos`);
 					}
 				}
 			});
@@ -426,10 +413,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 				if (members.length === 2) {
 					const isCoupleComplete = checkCoupleDocumentsComplete(members, 'buyers');
 					if (isCoupleComplete) {
-						console.log(`📋 Casal ${coupleId} (compradores) tem todos os documentos completos`);
 						validateCoupleIfNeeded(coupleId, members);
-					} else {
-						console.log(`📋 Casal ${coupleId} (compradores) ainda não tem todos os documentos`);
 					}
 				}
 			});

@@ -81,6 +81,163 @@ function safeString(value: any): string {
   return String(value);
 }
 
+function normalizePersonName(name: unknown): string {
+  const s = typeof name === 'string' ? name : safeString(name);
+  const upper = s
+    .trim()
+    .toUpperCase()
+    // Remove acentos/diacríticos
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  // Trocar pontuação por espaço e colapsar
+  return upper
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isValidCpfDigits(cpfDigits: string): boolean {
+  if (!/^\d{11}$/.test(cpfDigits)) return false;
+  if (/^(\d)\1{10}$/.test(cpfDigits)) return false; // 000.., 111.. etc.
+
+  const nums = cpfDigits.split('').map((c) => Number(c));
+  const calcDigit = (len: number, factorStart: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) {
+      sum += nums[i] * (factorStart - i);
+    }
+    let mod = (sum * 10) % 11;
+    if (mod === 10) mod = 0;
+    return mod;
+  };
+
+  const d1 = calcDigit(9, 10);
+  if (d1 !== nums[9]) return false;
+  const d2 = calcDigit(10, 11);
+  if (d2 !== nums[10]) return false;
+  return true;
+}
+
+function normalizeCpf(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  const raw = typeof value === 'string' ? value : String(value);
+  const digits = raw.replace(/\D/g, '');
+  if (!isValidCpfDigits(digits)) return undefined;
+  return digits;
+}
+
+function setCpfIfBetter(
+  person: ExtractedPerson,
+  candidate: unknown,
+  cpfSourceLabel?: string
+): boolean {
+  const candidateCpf = normalizeCpf(candidate);
+  if (!candidateCpf) return false;
+
+  const currentDigits = (person.cpf || '').replace(/\D/g, '');
+  const hasValidCurrent = isValidCpfDigits(currentDigits);
+  if (hasValidCurrent) return false;
+
+  person.cpf = candidateCpf;
+
+  // Se o nome veio de uma fonte e o CPF de outra, deixar explícito na UI
+  if (cpfSourceLabel) {
+    const ds = typeof person.dataSource === 'string' ? person.dataSource : '';
+    if (ds && ds !== cpfSourceLabel && !ds.includes('CPF:')) {
+      person.dataSource = `${ds} (CPF: ${cpfSourceLabel})`;
+    } else if (!ds) {
+      person.dataSource = cpfSourceLabel;
+    }
+  }
+
+  return true;
+}
+
+function parsePersonsKey(
+  key: string
+): { category: 'buyers' | 'sellers'; index: number; field: string } | null {
+  // Novo (plural): buyers.1.nome / sellers.1.cpf
+  let m = key.match(/^(buyers|sellers)\.(\d+)\.(.+)$/);
+  if (m) {
+    const idxRaw = parseInt(m[2], 10);
+    if (!Number.isFinite(idxRaw)) return null;
+    return { category: m[1] as any, index: idxRaw === 0 ? 1 : idxRaw, field: m[3] };
+  }
+
+  // Variação com colchetes: buyers[1].nome / sellers[1].cpf
+  m = key.match(/^(buyers|sellers)\[(\d+)\]\.(.+)$/);
+  if (m) {
+    const idxRaw = parseInt(m[2], 10);
+    if (!Number.isFinite(idxRaw)) return null;
+    return { category: m[1] as any, index: idxRaw === 0 ? 1 : idxRaw, field: m[3] };
+  }
+
+  // Antigo (singular): buyer.1.nome / seller.1.nome
+  m = key.match(/^(buyer|seller)\.(\d+)\.(.+)$/);
+  if (m) {
+    const idxRaw = parseInt(m[2], 10);
+    if (!Number.isFinite(idxRaw)) return null;
+    const cat = m[1] === 'buyer' ? 'buyers' : 'sellers';
+    return { category: cat, index: idxRaw === 0 ? 1 : idxRaw, field: m[3] };
+  }
+
+  // Singular com colchetes: buyer[1].nome / seller[1].nome
+  m = key.match(/^(buyer|seller)\[(\d+)\]\.(.+)$/);
+  if (m) {
+    const idxRaw = parseInt(m[2], 10);
+    if (!Number.isFinite(idxRaw)) return null;
+    const cat = m[1] === 'buyer' ? 'buyers' : 'sellers';
+    return { category: cat, index: idxRaw === 0 ? 1 : idxRaw, field: m[3] };
+  }
+
+  // Legado (snake_case / upper): NOME_VENDEDOR_1, CPF_COMPRADOR_2, etc.
+  const legacyBuyerSuffix = key.match(/^(.+?)_(COMPRADOR|BUYER)_(\d+)$/i);
+  if (legacyBuyerSuffix) {
+    const idxRaw = parseInt(legacyBuyerSuffix[3], 10);
+    if (!Number.isFinite(idxRaw)) return null;
+    return { category: 'buyers', index: idxRaw === 0 ? 1 : idxRaw, field: legacyBuyerSuffix[1] };
+  }
+
+  const legacySellerSuffix = key.match(/^(.+?)_(VENDEDOR|SELLER)_(\d+)$/i);
+  if (legacySellerSuffix) {
+    const idxRaw = parseInt(legacySellerSuffix[3], 10);
+    if (!Number.isFinite(idxRaw)) return null;
+    return { category: 'sellers', index: idxRaw === 0 ? 1 : idxRaw, field: legacySellerSuffix[1] };
+  }
+
+  const legacyBuyerPrefix = key.match(/^(COMPRADOR|BUYER)_(\d+)_(.+)$/i);
+  if (legacyBuyerPrefix) {
+    const idxRaw = parseInt(legacyBuyerPrefix[2], 10);
+    if (!Number.isFinite(idxRaw)) return null;
+    return { category: 'buyers', index: idxRaw === 0 ? 1 : idxRaw, field: legacyBuyerPrefix[3] };
+  }
+
+  const legacySellerPrefix = key.match(/^(VENDEDOR|SELLER)_(\d+)_(.+)$/i);
+  if (legacySellerPrefix) {
+    const idxRaw = parseInt(legacySellerPrefix[2], 10);
+    if (!Number.isFinite(idxRaw)) return null;
+    return { category: 'sellers', index: idxRaw === 0 ? 1 : idxRaw, field: legacySellerPrefix[3] };
+  }
+
+  return null;
+}
+
+function normalizePersonField(field: string): string {
+  const f = field.trim().toLowerCase();
+  const cleaned = f.replace(/[^a-z0-9_]+/g, '_');
+
+  // Normalizações comuns
+  if (cleaned === 'nome_completo' || cleaned === 'nome' || cleaned === 'name') return 'nome';
+  if (cleaned === 'cpf' || cleaned === 'cpfcnpj' || cleaned === 'cpf_cnpj' || cleaned === 'cpf_cnpj_') return 'cpf';
+  if (cleaned === 'rg') return 'rg';
+  if (cleaned === 'email') return 'email';
+  if (cleaned === 'telefone' || cleaned === 'celular' || cleaned === 'phone' || cleaned === 'fone') return 'telefone';
+  if (cleaned === 'endereco' || cleaned === 'endereco_completo' || cleaned === 'address') return 'endereco_completo';
+
+  return cleaned;
+}
+
 /**
  * Extrai dados de pessoas (compradores ou vendedores) de contractFields
  * Busca padrão: buyers.1.nome, sellers.2.cpf, etc.
@@ -92,20 +249,18 @@ export function extractPersonsFromContractFields(
   if (!contractFields) return [];
 
   const persons = new Map<number, ExtractedPerson>();
-  const prefix = category === 'buyers' ? 'buyers.' : 'sellers.';
 
   // Buscar todos os campos com padrão buyers.1.*, buyers.2.*, etc.
   Object.keys(contractFields).forEach(key => {
     // Ignorar campos customer.*
     if (key.startsWith('customer.')) return;
-    if (!key.startsWith(prefix)) return;
 
-    // Extrair: buyers.1.nome -> index=1, field=nome
-    const match = key.match(/^(buyers|sellers)\.(\d+)\.(.+)$/);
-    if (!match) return;
+    const parsed = parsePersonsKey(key);
+    if (!parsed) return;
+    if (parsed.category !== category) return;
 
-    const index = parseInt(match[2]);
-    const field = match[3];
+    const index = parsed.index;
+    const field = normalizePersonField(parsed.field);
     const value = contractFields[key];
 
     if (!value || (typeof value === 'string' && value.trim() === '')) return;
@@ -122,9 +277,11 @@ export function extractPersonsFromContractFields(
         person.name = safeString(value);
         break;
       case 'cpf':
-      case 'cpf_cnpj':
-        person.cpf = safeString(value).replace(/\D/g, ''); // Normalizar
+      case 'cpf_cnpj': {
+        const cpf = normalizeCpf(value);
+        if (cpf) person.cpf = cpf;
         break;
+      }
       case 'endereco':
       case 'endereco_completo':
         person.address = safeString(value);
@@ -163,18 +320,15 @@ export function extractPersonsFromPreMappings(
   if (!preMappings) return [];
 
   const persons = new Map<number, ExtractedPerson>();
-  const prefix = category === 'buyers' ? 'buyers.' : 'sellers.';
 
   // Buscar todos os campos com padrão buyers.1.*, buyers.2.*, etc.
   Object.keys(preMappings).forEach(key => {
-    if (!key.startsWith(prefix)) return;
+    const parsed = parsePersonsKey(key);
+    if (!parsed) return;
+    if (parsed.category !== category) return;
 
-    // Extrair: buyers.1.nome -> index=1, field=nome
-    const match = key.match(/^(buyers|sellers)\.(\d+)\.(.+)$/);
-    if (!match) return;
-
-    const index = parseInt(match[2]);
-    const field = match[3];
+    const index = parsed.index;
+    const field = normalizePersonField(parsed.field);
     const mapping = preMappings[key];
     const value = mapping?.value;
 
@@ -192,9 +346,11 @@ export function extractPersonsFromPreMappings(
         person.name = safeString(value);
         break;
       case 'cpf':
-      case 'cpf_cnpj':
-        person.cpf = safeString(value).replace(/\D/g, '');
+      case 'cpf_cnpj': {
+        const cpf = normalizeCpf(value);
+        if (cpf) person.cpf = cpf;
         break;
+      }
       case 'endereco':
       case 'endereco_completo':
         person.address = safeString(value);
@@ -327,9 +483,8 @@ export function extractPersonsData(
           person1.name = ensureString(conjuge1.nome_completo) || '';
           person1.dataSource = 'Certidão de Casamento';
         }
-        if (conjuge1.cpf && !person1.cpf) {
-          person1.cpf = ensureString(conjuge1.cpf);
-        }
+
+        setCpfIfBetter(person1, conjuge1?.cpf, 'Certidão de Casamento');
 
         if (person1.name) {
           personMap.set(personId, person1);
@@ -349,9 +504,7 @@ export function extractPersonsData(
           person2.name = ensureString(conjuge2.nome_completo) || '';
           person2.dataSource = 'Certidão de Casamento';
         }
-        if (conjuge2.cpf && !person2.cpf) {
-          person2.cpf = ensureString(conjuge2.cpf);
-        }
+        setCpfIfBetter(person2, conjuge2?.cpf, 'Certidão de Casamento');
 
         if (person2.name) {
           personMap.set(conjuge2Id, person2);
@@ -374,9 +527,7 @@ export function extractPersonsData(
         person.name = ensureString(vars.titular.nome_completo) || '';
         person.dataSource = doc.documentType;
       }
-      if (vars.titular?.cpf && !person.cpf) {
-        person.cpf = ensureString(vars.titular.cpf);
-      }
+      setCpfIfBetter(person, vars.titular?.cpf, doc.documentType);
       if (vars.titular?.rg && !person.rg) {
         person.rg = ensureString(vars.titular.rg);
       }
@@ -386,9 +537,7 @@ export function extractPersonsData(
         person.name = ensureString(vars.nome) || '';
         person.dataSource = 'Comprovante de Residência';
       }
-      if (vars.cpf_cnpj && !person.cpf) {
-        person.cpf = ensureString(vars.cpf_cnpj);
-      }
+      setCpfIfBetter(person, vars.cpf_cnpj, 'Comprovante de Residência');
       if (vars.endereco_completo && !person.address) {
         person.address = ensureString(vars.endereco_completo);
       }
@@ -419,14 +568,62 @@ export function extractAllPersonsData(
 ): ExtractedPerson[] {
   let persons: ExtractedPerson[] = [];
 
-  if (dealData.contractFields) {
-    persons = extractPersonsFromContractFields(dealData.contractFields, category);
-    if (persons.length > 0) return persons;
+  const parseMaybeJsonObject = (value: any): any | undefined => {
+    if (!value) return undefined;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return parsed;
+      } catch {
+        return undefined;
+      }
+    }
+    return value;
+  };
+
+  const contractFields = parseMaybeJsonObject(dealData.contractFields);
+  if (contractFields) {
+    persons = extractPersonsFromContractFields(contractFields, category);
+    if (persons.length > 0) {
+      // Enriquecer com CPF vindo de outros documentos, se necessário
+      if (dealData.documents) {
+        const donors = extractPersonsData(dealData.documents, category);
+        const cpfByName = new Map<string, string>();
+        donors.forEach((p) => {
+          const cpf = normalizeCpf(p.cpf);
+          const key = normalizePersonName(p.name);
+          if (cpf && key) cpfByName.set(key, cpf);
+        });
+        persons.forEach((p) => {
+          const key = normalizePersonName(p.name);
+          const donorCpf = key ? cpfByName.get(key) : undefined;
+          if (donorCpf) setCpfIfBetter(p, donorCpf, 'Documentos');
+        });
+      }
+      return persons;
+    }
   }
 
-  if (dealData.preMappings) {
-    persons = extractPersonsFromPreMappings(dealData.preMappings, category);
-    if (persons.length > 0) return persons;
+  const preMappings = parseMaybeJsonObject(dealData.preMappings);
+  if (preMappings) {
+    persons = extractPersonsFromPreMappings(preMappings, category);
+    if (persons.length > 0) {
+      if (dealData.documents) {
+        const donors = extractPersonsData(dealData.documents, category);
+        const cpfByName = new Map<string, string>();
+        donors.forEach((p) => {
+          const cpf = normalizeCpf(p.cpf);
+          const key = normalizePersonName(p.name);
+          if (cpf && key) cpfByName.set(key, cpf);
+        });
+        persons.forEach((p) => {
+          const key = normalizePersonName(p.name);
+          const donorCpf = key ? cpfByName.get(key) : undefined;
+          if (donorCpf) setCpfIfBetter(p, donorCpf, 'Documentos');
+        });
+      }
+      return persons;
+    }
   }
 
   if (dealData.documents) {

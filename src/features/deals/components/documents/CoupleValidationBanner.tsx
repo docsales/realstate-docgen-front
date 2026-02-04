@@ -66,9 +66,6 @@ export const CoupleValidationBanner: React.FC<CoupleValidationBannerProps> = ({
         titularPersonId,
         conjugePersonId,
       });
-      console.log(
-        `📤 Validação manual do casal ${coupleId} disparada (tentativa ${manualAttempts + 1})`,
-      );
     } catch (error: any) {
       console.error(`❌ Erro na validação manual do casal ${coupleId} (tentativa ${manualAttempts + 1}):`, error);
       const errorMessage =
