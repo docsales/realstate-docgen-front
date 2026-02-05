@@ -1028,8 +1028,14 @@ export const MappingStep: React.FC<MappingStepProps> = ({
 
             Object.entries(preMappings).forEach(([key, suggestion]: [string, any]) => {
               const fieldId = suggestion.variable || key;
+              const existing = mappings[fieldId];
 
-              if (!mappings[fieldId]) {
+              // Só aplicar pré-mapeamento se:
+              // 1. Campo está vazio (!existing)
+              // 2. OU campo tem valor vazio (existing.value é vazio)
+              const isEmpty = !existing || !existing.value || existing.value.trim().length === 0;
+
+              if (isEmpty) {
                 onMap(fieldId, suggestion.value, 'drag');
                 preMappedSet.add(fieldId);
               }
@@ -1074,6 +1080,10 @@ export const MappingStep: React.FC<MappingStepProps> = ({
   const handleReprocessPreMappings = useCallback(async () => {
     if (!dealId || isReprocessing) return;
 
+    // Snapshot dos campos que eram pré-mapeados pela IA ANTES do reprocessamento.
+    // Regra: podemos sobrescrever apenas estes (além de campos vazios).
+    const previouslyAiPreMapped = new Set(preMappedFields);
+
     setIsReprocessing(true);
     setIsLoadingVariables(true);
     setLoaderStage('fetching');
@@ -1082,6 +1092,15 @@ export const MappingStep: React.FC<MappingStepProps> = ({
     const stageTimer = setTimeout(() => setLoaderStage('mapping'), 2500);
 
     try {
+      // Se existir proposta comercial no deal, re-extrair (re-run parser) usando o OCR já salvo
+      // para refletir mudanças recentes no prompt/schema de PROPOSTA_COMERCIAL.
+      // Best-effort: se falhar, seguimos com o reprocessamento normal de pré-mapeamentos.
+      try {
+        await dealsService.reExtractProposals(dealId);
+      } catch (e) {
+        console.warn('⚠️ Falha ao re-extrair propostas (continuando):', e);
+      }
+
       await dealsService.clearPreMappingsCache(dealId);
       setPreMappedFields(new Set());
 
@@ -1098,10 +1117,20 @@ export const MappingStep: React.FC<MappingStepProps> = ({
       if (preMappings && Object.keys(preMappings).length > 0) {
         const preMappedSet = new Set<string>();
 
-        Object.entries(preMappings).forEach(([fieldId, suggestion]: [string, any]) => {
-          onMap(fieldId, suggestion.value, 'drag');
-          preMappedSet.add(fieldId);
-        });
+        Object.entries(preMappings).forEach(
+          ([fieldId, suggestion]: [string, any]) => {
+            const existing = mappings[fieldId];
+            const existingValue = existing?.value;
+            const isEmpty =
+              !existingValue || String(existingValue).trim().length === 0;
+            const canOverwrite = previouslyAiPreMapped.has(fieldId);
+
+            if (isEmpty || canOverwrite) {
+              onMap(fieldId, suggestion.value, 'drag');
+              preMappedSet.add(fieldId);
+            }
+          },
+        );
 
         setPreMappedFields(preMappedSet);
       }
@@ -1113,7 +1142,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
       setIsReprocessing(false);
       setIsLoadingVariables(false);
     }
-  }, [dealId, isReprocessing, onMap]);
+  }, [dealId, isReprocessing, mappings, onMap, preMappedFields]);
 
   return (
     <div className="flex flex-col gap-4 animate-in fade-in duration-500">
@@ -1292,7 +1321,7 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                 onClick={handleReprocessPreMappings}
                 disabled={isLoadingVariables || isReprocessing}
                 className="cursor-pointer flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-700 bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border border-purple-300 rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Re-processar pré-mapeamentos com IA"
+                title="Re-extrai propostas com prompts atualizados e recalcula pré-mapeamentos. Use após alterações em prompts/schemas no backend."
               >
                 <RotateCcw className={`w-4 h-4 ${isReprocessing ? 'animate-spin' : ''}`} />
                 {isReprocessing ? 'Re-processando...' : 'Re-processar IA'}

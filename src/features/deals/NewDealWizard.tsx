@@ -577,7 +577,30 @@ export const NewDealWizard: React.FC = () => {
     setStepAndNavigate(step + 1);
   }
 
-  const prevStep = () => {
+  const prevStep = async () => {
+    // Se estamos saindo do Step 3 (Mapeamento), salvar mappings antes de voltar
+    if (step === 3 && dealId) {
+      setIsSavingMappings(true);
+      try {
+        const contractFieldsJson: Record<string, string> = {};
+        Object.entries(mappings).forEach(([fieldId, mapping]) => {
+          contractFieldsJson[fieldId] = mapping.value;
+        });
+
+        await updateDealMutation.mutateAsync({
+          dealId,
+          payload: {
+            contractFields: contractFieldsJson,
+          },
+        });
+      } catch (error: any) {
+        console.error('❌ Erro ao salvar campos ao voltar:', error);
+        // Não bloqueia navegação, mas mostra erro
+      } finally {
+        setIsSavingMappings(false);
+      }
+    }
+
     // Limpar erros de validação ao mudar de step
     setSignatoriesValidationErrors([]);
     setDirection(-1);
@@ -702,7 +725,30 @@ export const NewDealWizard: React.FC = () => {
     }, 2500);
   }
 
-  const handleStepperClick = (targetStep: number) => {
+  const handleStepperClick = async (targetStep: number) => {
+    // Se estamos saindo do Step 3 (Mapeamento), salvar mappings antes de navegar
+    if (step === 3 && dealId && targetStep !== 3) {
+      setIsSavingMappings(true);
+      try {
+        const contractFieldsJson: Record<string, string> = {};
+        Object.entries(mappings).forEach(([fieldId, mapping]) => {
+          contractFieldsJson[fieldId] = mapping.value;
+        });
+
+        await updateDealMutation.mutateAsync({
+          dealId,
+          payload: {
+            contractFields: contractFieldsJson,
+          },
+        });
+      } catch (error: any) {
+        console.error('❌ Erro ao salvar campos ao navegar:', error);
+        // Não bloqueia navegação, mas mostra erro
+      } finally {
+        setIsSavingMappings(false);
+      }
+    }
+
     if (targetStep < step) {
       setDirection(-1);
       setStepAndNavigate(targetStep);

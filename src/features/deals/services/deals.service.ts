@@ -135,6 +135,17 @@ export class DealsService {
   }
 
   /**
+   * Re-extrai (re-run parser) propostas comerciais do deal usando o OCR já salvo.
+   * Usado para refletir mudanças em prompts/schemas de PROPOSTA_COMERCIAL.
+   */
+  async reExtractProposals(dealId: string): Promise<{ processed: number }> {
+    const { data }: { data: { processed: number } } = await server.api.post(
+      `/deal/${dealId}/proposals/re-extract`,
+    );
+    return data;
+  }
+
+  /**
    * Gera preview do contrato
    */
   async generatePreview(dealId: string): Promise<GeneratePreviewResponse> {
