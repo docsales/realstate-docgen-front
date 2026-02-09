@@ -3,9 +3,10 @@ import { useAuth } from '../hooks/useAuth';
 
 interface PublicRouteProps {
   children: React.ReactNode;
+  allowAuthenticated?: boolean;
 }
 
-export const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
+export const PublicRoute: React.FC<PublicRouteProps> = ({ children, allowAuthenticated = false }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
   // Mostra loading enquanto verifica autenticação
@@ -20,8 +21,8 @@ export const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
     );
   }
 
-  // Se autenticado, redireciona para dashboard
-  if (isAuthenticated) {
+  // Se autenticado, redireciona para dashboard (exceto se allowAuthenticated for true)
+  if (isAuthenticated && !allowAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
 

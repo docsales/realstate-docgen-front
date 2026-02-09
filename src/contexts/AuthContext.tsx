@@ -24,6 +24,68 @@ export interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+type RegisterFieldErrors = Partial<Record<'name' | 'email' | 'password', string>>;
+
+type RegisterApiValidationErrorPayload = {
+  message?: unknown;
+  error?: unknown;
+  errors?: Array<{
+    field?: unknown;
+    constraints?: Record<string, unknown> | null;
+    children?: Array<{
+      field?: unknown;
+      constraints?: Record<string, unknown> | null;
+    }> | null;
+  }> | null;
+};
+
+const normalizeRegisterApiError = (err: any): { message: string; fieldErrors?: RegisterFieldErrors } => {
+  const data = err?.response?.data as RegisterApiValidationErrorPayload | undefined;
+
+  // Payload de validação do Nest ValidationPipe (message + errors[])
+  if (data && Array.isArray(data.errors) && data.errors.length > 0) {
+    const fieldErrors: RegisterFieldErrors = {};
+
+    for (const e of data.errors) {
+      const field = typeof e?.field === 'string' ? e.field : undefined;
+      const constraints = e?.constraints && typeof e.constraints === 'object' ? e.constraints : null;
+
+      const firstConstraintMessage =
+        constraints ? Object.values(constraints).find((v) => typeof v === 'string') as string | undefined : undefined;
+
+      if (field && firstConstraintMessage) {
+        if (field === 'name' || field === 'email' || field === 'password') {
+          fieldErrors[field] = firstConstraintMessage;
+        }
+      }
+    }
+
+    const msg =
+      typeof data.message === 'string'
+        ? data.message
+        : 'Erro de validação';
+
+    return {
+      message: msg,
+      fieldErrors: Object.keys(fieldErrors).length ? fieldErrors : undefined,
+    };
+  }
+
+  const apiMessage =
+    data?.message ??
+    data?.error ??
+    err?.message;
+
+  const normalized =
+    typeof apiMessage === 'string'
+      ? apiMessage
+      : apiMessage
+        ? JSON.stringify(apiMessage)
+        : 'Erro ao criar conta. Tente novamente.';
+
+  return { message: normalized };
+};
+
 const mapSupabaseUserToUser = (
   supabaseUser: SupabaseUser & {
     name?: string,
@@ -261,17 +323,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const register = async (name: string, email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+    try {
+      // Novo fluxo: cria conta/usuário no backend (que cria usuário no Supabase também)
+      await server.api.post(
+        '/auth/register',
+        { name, email, password },
+        { withCredentials: true },
+      );
+    } catch (err: any) {
+      const normalized = normalizeRegisterApiError(err);
+      const error = Object.assign(new Error(normalized.message), {
+        fieldErrors: normalized.fieldErrors,
+      });
+      throw error;
+    }
+
+    // Auto-login: já temos as credenciais do novo usuário
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
-      options: {
-        data: {
-          name,
-        },
-      },
     });
-
     if (error) throw new Error(error.message);
+
+    // Evita race condition de navegação antes do onAuthStateChange atualizar estado
+    if (data.session) {
+      setSession(data.session);
+      sessionRef.current = data.session;
+      await fetchUser(data.session);
+    }
   };
 
   const logout = async () => {

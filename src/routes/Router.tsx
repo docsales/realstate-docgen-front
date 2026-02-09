@@ -7,7 +7,8 @@ import { ConfigNotificationProvider } from '../contexts/ConfigNotificationContex
 
 // Views
 import { LoginView } from '../features/auth/LoginView';
-// import { RegisterView } from '../features/auth/RegisterView';
+import { RegisterView } from '../features/auth/RegisterView';
+import { RegisterSuccessView } from '@/features/auth/RegisterSuccessView';
 import { DashboardView } from '../features/dashboard/DashboardView';
 import { NewDealWizard } from '../features/deals/NewDealWizard';
 import { DealDetailsView } from '../features/deals/DealDetailsView';
@@ -87,11 +88,7 @@ const AuthenticatedLayout = () => {
 // Componentes wrapper para usar useNavigate
 const LoginViewWrapper = () => <LoginView />;
 
-// TODO: Validar novo sistema de cadastro de conta e usuário
-// const RegisterViewWrapper = () => {
-//   const navigate = useNavigate();
-//   return <RegisterView onNavigateToLogin={() => navigate('/login')} />;
-// };
+const RegisterViewWrapper = () => <RegisterView />;
 
 
 export const AppRouter = () => {
@@ -106,14 +103,24 @@ export const AppRouter = () => {
           </PublicRoute>
         }
       />
-      {/* <Route
+      <Route
         path="/register"
         element={
-          <PublicRoute>
+          <PublicRoute allowAuthenticated={true}>
             <RegisterViewWrapper />
           </PublicRoute>
         }
-      /> */}
+      />
+
+      {/* Sucesso do cadastro (protegido, sem navbar/layout autenticado) */}
+      <Route
+        path="/register/success"
+        element={
+          <ProtectedRoute>
+            <RegisterSuccessView />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Rotas protegidas com layout compartilhado */}
       <Route

@@ -75,7 +75,7 @@ export class Server {
 
   private isAccountHeaderOptional(config: any): boolean {
     const url = (config?.url || '').toString();
-    return url.startsWith('/auth/bootstrap');
+    return url.startsWith('/auth/bootstrap') || url.startsWith('/auth/register');
   }
 
   /**

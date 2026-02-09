@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Inputs';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 const logoSrc = "/images/docsales-logo.png";
 
 export const LoginView: React.FC = () => {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -61,12 +63,12 @@ export const LoginView: React.FC = () => {
         </form>
 
         {/* TODO: Validar novo sistema de cadastro de conta e usuário */}
-        {/* <div className="mt-6 text-center text-sm">
+        <div className="mt-6 text-center text-sm">
           <span className="text-slate-500">Não tem uma conta? </span>
-          <button onClick={onNavigateToRegister} className="cursor-pointer text-primary font-semibold hover:underline">
+          <button onClick={() => navigate('/register')} className="cursor-pointer text-primary font-semibold hover:underline">
             Cadastre-se
           </button>
-        </div> */}
+        </div>
       </div>
     </div>
   );
