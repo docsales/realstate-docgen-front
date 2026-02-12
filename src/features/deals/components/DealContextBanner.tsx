@@ -11,7 +11,7 @@ import {
   XCircle,
   Eye,
 } from 'lucide-react';
-import { Button } from '@/components/Button';
+import { Button } from '../../../components/Button';
 import type { Deal, DealDocument, Signatory, DealStatus } from '@/types/types';
 
 interface DealContextBannerProps {
@@ -192,38 +192,24 @@ function DocGeneratedStage({
   const docUrl = deal.consolidated?.draftPreviewUrl;
 
   return (
-    <div className="flex items-center gap-4 p-5 bg-emerald-50 border border-emerald-200 rounded-xl">
-      {/* Open document card-button */}
-      <button
-        type="button"
-        onClick={() => docUrl && window.open(docUrl, '_blank')}
-        className="cursor-pointer flex items-center gap-3 flex-1 min-w-0 p-3 -m-1 rounded-lg hover:bg-emerald-100/50 transition-colors group"
-      >
-        <div className="flex-shrink-0 w-11 h-11 rounded-lg bg-emerald-100 border border-emerald-200 flex items-center justify-center group-hover:bg-emerald-200/70 transition-colors">
-          <FileText className="w-5 h-5 text-emerald-600" />
-        </div>
-        <div className="text-left min-w-0">
-          <p className="text-sm font-semibold text-slate-700 truncate">
-            Minuta gerada
-          </p>
-          <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-1">
-            <ExternalLink className="w-3 h-3" />
-            Abrir documento
-          </p>
-        </div>
-      </button>
-
-      {/* CTA - Navegar para configurar signatários */}
-      <Button
-        size="sm"
-        variant="secondary"
-        onClick={() => navigate(`/deals/${deal.id}/edit?step=5`)}
-        className="flex-shrink-0"
-      >
-        <ArrowRight className="w-4 h-4" />
-        {"Configurar signatários"}
-      </Button>
-    </div>
+    <button
+      type="button"
+      onClick={() => docUrl && window.open(docUrl, '_blank')}
+      className="cursor-pointer flex items-center gap-4 p-5 w-full bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100/60 transition-colors group"
+    >
+      <div className="flex-shrink-0 w-11 h-11 rounded-lg bg-emerald-100 border border-emerald-200 flex items-center justify-center group-hover:bg-emerald-200/70 transition-colors">
+        <FileText className="w-5 h-5 text-emerald-600" />
+      </div>
+      <div className="text-left min-w-0 flex-1">
+        <p className="text-sm font-semibold text-slate-700 truncate">
+          Minuta gerada
+        </p>
+        <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-1">
+          <ExternalLink className="w-3 h-3" />
+          Abrir documento
+        </p>
+      </div>
+    </button>
   );
 }
 

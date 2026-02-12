@@ -193,7 +193,6 @@ export const DealDetailsView: React.FC = () => {
 	};
 
 	// Metadata from step 1
-	const templateName = dealData.docTemplateId || null;
 	const metaConfig = dealData.metadata || {};
 	const useFgts = metaConfig.useFgts ? 'Sim' : 'Não';
 	const bankFinancing = metaConfig.bankFinancing ? 'Sim' : 'Não';
@@ -260,112 +259,85 @@ export const DealDetailsView: React.FC = () => {
 					defaultChecked
 					onChange={() => setActiveTab('data')}
 				/>
-				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-4">
-					{/* Grid layout compacto */}
+				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-5">
 					<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-						{/* Coluna esquerda: Info geral + Imóvel + Condições */}
-						<div className="space-y-4">
-							{/* Info Geral */}
-							<div>
-								<h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-										<FileText className="w-3.5 h-3.5" />
-										{"Informações Gerais"}
-									</h4>
-									<div className="grid grid-cols-2 gap-2">
-										<div className="bg-slate-50 rounded-lg px-3 py-2">
-											<span className="text-xs text-slate-400 block">{"Data de Criação"}</span>
-											<span className="text-sm text-slate-800 font-medium">{deal.date}</span>
-										</div>
-										<div className="bg-slate-50 rounded-lg px-3 py-2">
-											<span className="text-xs text-slate-400 block">{"Tipo"}</span>
-											<span className="text-sm text-slate-800 font-medium">{deal.type}</span>
-										</div>
-										{templateName && (
-											<div className="bg-slate-50 rounded-lg px-3 py-2 col-span-2">
-												<span className="text-xs text-slate-400 block">{"Template"}</span>
-												<span className="text-sm text-slate-800 font-medium truncate block">{templateName}</span>
-											</div>
-										)}
-								</div>
+						{/* --- Card: Informacoes Gerais --- */}
+						<div className="border border-slate-200 rounded-xl overflow-hidden">
+							<div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+								<FileText className="w-4 h-4 text-slate-400" />
+								<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{"Informacoes Gerais"}</span>
 							</div>
-
-							{/* Imóvel */}
-							<div>
-								<h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-										<Home className="w-3.5 h-3.5" />
-										{"Imóvel"}
-									</h4>
-									<div className="grid grid-cols-2 gap-2">
-										<div className="bg-slate-50 rounded-lg px-3 py-2">
-											<span className="text-xs text-slate-400 block">{"Endereço"}</span>
-											<span className="text-sm text-slate-800 font-medium">{deal.address}</span>
-										</div>
-										<div className="bg-slate-50 rounded-lg px-3 py-2">
-											<span className="text-xs text-slate-400 block">{"Matrícula"}</span>
-											<span className="text-sm text-slate-800 font-bold">{deal.matricula}</span>
-										</div>
+							<div className="p-4">
+								<div className="grid grid-cols-2 gap-3">
+									<div>
+										<span className="text-xs text-slate-400 block mb-0.5">{"Data de Criacao"}</span>
+										<span className="text-sm text-slate-800 font-medium">{deal.date}</span>
+									</div>
+									<div>
+										<span className="text-xs text-slate-400 block mb-0.5">{"Tipo"}</span>
+										<span className="text-sm text-slate-800 font-medium">{deal.type}</span>
+									</div>
 								</div>
-									{contractSections?.['Imóvel'] && (
-										<button
-											onClick={() => setContractModalSection('Imóvel')}
-											className="cursor-pointer mt-2 text-xs text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
-										>
-											<Eye className="w-3.5 h-3.5" /> Ver detalhes do contrato
-										</button>
-									)}
-							</div>
-
-							{/* Condições Comerciais */}
-							<div>
-								<h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-										<DollarSign className="w-3.5 h-3.5" />
-										{"Condições Comerciais"}
-									</h4>
-									<div className="grid grid-cols-2 gap-2">
-										<div className="bg-slate-50 rounded-lg px-3 py-2">
-											<span className="text-xs text-slate-400 block">{"Valor"}</span>
-											<span className="text-sm text-slate-800 font-bold">{getDealValue()}</span>
-										</div>
-										<div className="bg-slate-50 rounded-lg px-3 py-2">
-											<span className="text-xs text-slate-400 block">{"FGTS"}</span>
-											<span className="text-sm text-slate-800 font-medium">{useFgts}</span>
-										</div>
-										<div className="bg-slate-50 rounded-lg px-3 py-2">
-											<span className="text-xs text-slate-400 block">{"Financiamento"}</span>
-											<span className="text-sm text-slate-800 font-medium">{bankFinancing}</span>
-										</div>
-										<div className="bg-slate-50 rounded-lg px-3 py-2">
-											<span className="text-xs text-slate-400 block">{"Consórcio"}</span>
-											<span className="text-sm text-slate-800 font-medium">{consortiumLetter}</span>
-										</div>
-								</div>
-									{contractSections?.['Condições Comerciais'] && (
-										<button
-											onClick={() => setContractModalSection('Condições Comerciais')}
-											className="cursor-pointer mt-2 text-xs text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
-										>
-											<Eye className="w-3.5 h-3.5" /> Ver detalhes do contrato
-										</button>
-									)}
 							</div>
 						</div>
 
-						{/* Coluna direita: Compradores + Vendedores */}
-						<div className="space-y-4">
-							{/* Compradores */}
-							<div>
-								<h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+						{/* --- Card: Imovel --- */}
+						<div className="border border-slate-200 rounded-xl overflow-hidden">
+							<div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+								<div className="flex items-center gap-2">
+									<Home className="w-4 h-4 text-slate-400" />
+									<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{"Imovel"}</span>
+								</div>
+								{contractSections?.['Imóvel'] && (
+									<button
+										onClick={() => setContractModalSection('Imóvel')}
+										className="cursor-pointer text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
+									>
+										<Eye className="w-3.5 h-3.5" /> Detalhes
+									</button>
+								)}
+							</div>
+							<div className="p-4">
+								<div className="grid grid-cols-2 gap-3">
+									<div>
+										<span className="text-xs text-slate-400 block mb-0.5">{"Endereco"}</span>
+										<span className="text-sm text-slate-800 font-medium">{deal.address}</span>
+									</div>
+									<div>
+										<span className="text-xs text-slate-400 block mb-0.5">{"Matricula"}</span>
+										<span className="text-sm text-slate-800 font-bold">{deal.matricula}</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* --- Card: Compradores --- */}
+						<div className="border border-slate-200 rounded-xl overflow-hidden">
+							<div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+								<div className="flex items-center gap-2">
 									{getUsersIcon(deal.buyers.length)}
-									{`Comprador${deal.buyers.length > 1 ? 'es' : ''} (${deal.buyers.length})`}
-								</h4>
+									<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+										{`Comprador${deal.buyers.length > 1 ? 'es' : ''} (${deal.buyers.length})`}
+									</span>
+								</div>
+								{contractSections?.['Compradores'] && (
+									<button
+										onClick={() => setContractModalSection('Compradores')}
+										className="cursor-pointer text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
+									>
+										<Eye className="w-3.5 h-3.5" /> Detalhes
+									</button>
+								)}
+							</div>
+							<div className="p-4">
 								{deal.buyers.length > 0 ? (
-									<div className="space-y-1.5">
+									<div className="space-y-2">
 										{deal.buyers.map((buyer: any, idx: number) => {
 											const marital = getMaritalLabel(metaBuyers, idx);
 											return (
-												<div key={idx} className="bg-slate-50 px-3 py-2 rounded-lg flex items-center gap-2.5">
-													<div className="bg-white p-1.5 rounded-full border border-slate-200">
+												<div key={idx} className="flex items-center gap-2.5">
+													<div className="bg-slate-100 p-1.5 rounded-full">
 														<User className="w-3.5 h-3.5 text-slate-400" />
 													</div>
 													<div className="flex-1 min-w-0">
@@ -383,29 +355,35 @@ export const DealDetailsView: React.FC = () => {
 								) : (
 									<p className="text-xs text-slate-400 italic">{"Nenhum comprador cadastrado"}</p>
 								)}
-								{contractSections?.['Compradores'] && (
+							</div>
+						</div>
+
+						{/* --- Card: Vendedores --- */}
+						<div className="border border-slate-200 rounded-xl overflow-hidden">
+							<div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+								<div className="flex items-center gap-2">
+									{getUsersIcon(deal.sellers.length)}
+									<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+										{`Vendedor${deal.sellers.length > 1 ? 'es' : ''} (${deal.sellers.length})`}
+									</span>
+								</div>
+								{contractSections?.['Vendedores'] && (
 									<button
-										onClick={() => setContractModalSection('Compradores')}
-										className="cursor-pointer mt-2 text-xs text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
+										onClick={() => setContractModalSection('Vendedores')}
+										className="cursor-pointer text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
 									>
-										<Eye className="w-3.5 h-3.5" /> Ver detalhes do contrato
+										<Eye className="w-3.5 h-3.5" /> Detalhes
 									</button>
 								)}
 							</div>
-
-							{/* Vendedores */}
-							<div>
-								<h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-									{getUsersIcon(deal.sellers.length)}
-									{`Vendedor${deal.sellers.length > 1 ? 'es' : ''} (${deal.sellers.length})`}
-								</h4>
+							<div className="p-4">
 								{deal.sellers.length > 0 ? (
-									<div className="space-y-1.5">
+									<div className="space-y-2">
 										{deal.sellers.map((seller: any, idx: number) => {
 											const marital = getMaritalLabel(metaSellers, idx);
 											return (
-												<div key={idx} className="bg-slate-50 px-3 py-2 rounded-lg flex items-center gap-2.5">
-													<div className="bg-white p-1.5 rounded-full border border-slate-200">
+												<div key={idx} className="flex items-center gap-2.5">
+													<div className="bg-slate-100 p-1.5 rounded-full">
 														<User className="w-3.5 h-3.5 text-slate-400" />
 													</div>
 													<div className="flex-1 min-w-0">
@@ -423,16 +401,47 @@ export const DealDetailsView: React.FC = () => {
 								) : (
 									<p className="text-xs text-slate-400 italic">{"Nenhum vendedor cadastrado"}</p>
 								)}
-								{contractSections?.['Vendedores'] && (
+							</div>
+						</div>
+
+						{/* --- Card: Condicoes Comerciais (full width) --- */}
+						<div className="border border-slate-200 rounded-xl overflow-hidden lg:col-span-2">
+							<div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+								<div className="flex items-center gap-2">
+									<DollarSign className="w-4 h-4 text-slate-400" />
+									<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{"Condicoes Comerciais"}</span>
+								</div>
+								{contractSections?.['Condições Comerciais'] && (
 									<button
-										onClick={() => setContractModalSection('Vendedores')}
-										className="cursor-pointer mt-2 text-xs text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
+										onClick={() => setContractModalSection('Condições Comerciais')}
+										className="cursor-pointer text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
 									>
-										<Eye className="w-3.5 h-3.5" /> Ver detalhes do contrato
+										<Eye className="w-3.5 h-3.5" /> Detalhes
 									</button>
 								)}
 							</div>
+							<div className="p-4">
+								<div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+									<div>
+										<span className="text-xs text-slate-400 block mb-0.5">{"Valor"}</span>
+										<span className="text-sm text-slate-800 font-bold">{getDealValue()}</span>
+									</div>
+									<div>
+										<span className="text-xs text-slate-400 block mb-0.5">{"FGTS"}</span>
+										<span className="text-sm text-slate-800 font-medium">{useFgts}</span>
+									</div>
+									<div>
+										<span className="text-xs text-slate-400 block mb-0.5">{"Financiamento"}</span>
+										<span className="text-sm text-slate-800 font-medium">{bankFinancing}</span>
+									</div>
+									<div>
+										<span className="text-xs text-slate-400 block mb-0.5">{"Consorcio"}</span>
+										<span className="text-sm text-slate-800 font-medium">{consortiumLetter}</span>
+									</div>
+								</div>
+							</div>
 						</div>
+
 					</div>
 				</div>
 
