@@ -166,10 +166,12 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 							const buyerSpecificFiles = buyerFiles.filter(f => f.personId === member.id);
 							const isSpouse = member.isSpouse || false;
 							const expectedDe = isSpouse ? 'conjuge' : 'titular';
-							const buyerDocuments = requiredDocuments.filter(doc =>
+							const allDocsForMember = requiredDocuments.filter(doc =>
 								!doc.de || doc.de === expectedDe
 							);
-							const validatedCount = buyerDocuments.filter(doc => {
+							const mandatoryDocs = allDocsForMember.filter(doc => doc.obrigatorio);
+							const optionalDocs = allDocsForMember.filter(doc => !doc.obrigatorio);
+							const validatedMandatory = mandatoryDocs.filter(doc => {
 								const relatedFiles = buyerSpecificFiles.filter(f => f.type === doc.id);
 								return relatedFiles.length > 0 && relatedFiles.every(f => f.validated === true);
 							}).length;
@@ -194,16 +196,16 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 										</div>
 										<div className="text-right">
 											<span className="text-sm font-bold text-slate-800 tabular-nums">
-												{validatedCount}/{buyerDocuments.length}
+												{validatedMandatory}/{mandatoryDocs.length}
 											</span>
-											<span className="text-xs text-slate-400 ml-1">docs</span>
+											<span className="text-xs text-slate-400 ml-1">obrigatorios</span>
 										</div>
 									</div>
 
-									{/* Documentos obrigatórios deste comprador */}
+									{/* Mandatory documents */}
 									<div className="space-y-3 pl-2">
-										{buyerDocuments.length > 0 ? (
-											buyerDocuments.map((doc) => (
+										{mandatoryDocs.length > 0 ? (
+											mandatoryDocs.map((doc) => (
 												<DocumentRequirementItem
 													key={`${doc.id}_${doc.de || 'generic'}_${member.id}`}
 													documentId={doc.id}
@@ -221,10 +223,33 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 										) : (
 											<div className="text-center py-12 text-slate-500">
 												<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
-												<p className="text-sm text-slate-500">Carregando documentos necessários...</p>
+												<p className="text-sm text-slate-500">Carregando documentos necessarios...</p>
 											</div>
 										)}
 									</div>
+
+									{/* Optional documents */}
+									{optionalDocs.length > 0 && (
+										<div className="space-y-3 pl-2">
+											<p className="text-[11px] uppercase tracking-wide font-medium text-slate-400 mt-4 mb-1">Opcionais</p>
+											{optionalDocs.map((doc) => (
+												<DocumentRequirementItem
+													key={`${doc.id}_${doc.de || 'generic'}_${member.id}_opt`}
+													documentId={doc.id}
+													documentName={doc.nome}
+													description={doc.observacao}
+													uploadedFiles={buyerSpecificFiles}
+													allFiles={buyerFiles}
+													onFileUpload={handleFileUpload}
+													onRemoveFile={onRemoveFile}
+													onLinkExistingFile={handleLinkExistingFile}
+													personId={member.id}
+													linkingFileId={linkingFileId}
+													isOptional
+												/>
+											))}
+										</div>
+									)}
 								</div>
 							);
 						});
@@ -249,10 +274,12 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 						const buyerSpecificFiles = buyerFiles.filter(f => f.personId === buyer.id);
 						const isSpouse = buyer.isSpouse || false;
 						const expectedDe = isSpouse ? 'conjuge' : 'titular';
-						const buyerDocuments = requiredDocuments.filter(doc =>
+						const allDocsForBuyer = requiredDocuments.filter(doc =>
 							!doc.de || doc.de === expectedDe
 						);
-						const validatedCount = buyerDocuments.filter(doc => {
+						const mandatoryDocs = allDocsForBuyer.filter(doc => doc.obrigatorio);
+						const optionalDocs = allDocsForBuyer.filter(doc => !doc.obrigatorio);
+						const validatedMandatory = mandatoryDocs.filter(doc => {
 							const relatedFiles = buyerSpecificFiles.filter(f => f.type === doc.id);
 							return relatedFiles.length > 0 && relatedFiles.every(f => f.validated === true);
 						}).length;
@@ -272,16 +299,16 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 									</div>
 									<div className="text-right">
 										<span className="text-sm font-bold text-slate-800 tabular-nums">
-											{validatedCount}/{buyerDocuments.length}
+											{validatedMandatory}/{mandatoryDocs.length}
 										</span>
-										<span className="text-xs text-slate-400 ml-1">docs</span>
+										<span className="text-xs text-slate-400 ml-1">obrigatorios</span>
 									</div>
 								</div>
 
-								{/* Documentos obrigatórios deste comprador */}
+								{/* Mandatory documents */}
 								<div className="space-y-3 pl-2">
-									{buyerDocuments.length > 0 ? (
-										buyerDocuments.map((doc) => (
+									{mandatoryDocs.length > 0 ? (
+										mandatoryDocs.map((doc) => (
 											<DocumentRequirementItem
 												key={`${doc.id}_${doc.de || 'generic'}_${buyer.id}`}
 												documentId={doc.id}
@@ -299,10 +326,33 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 									) : (
 										<div className="text-center py-12 text-slate-500">
 											<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
-											<p className="text-sm text-slate-500">Carregando documentos necessários...</p>
+											<p className="text-sm text-slate-500">Carregando documentos necessarios...</p>
 										</div>
 									)}
 								</div>
+
+								{/* Optional documents */}
+								{optionalDocs.length > 0 && (
+									<div className="space-y-3 pl-2">
+										<p className="text-[11px] uppercase tracking-wide font-medium text-slate-400 mt-4 mb-1">Opcionais</p>
+										{optionalDocs.map((doc) => (
+											<DocumentRequirementItem
+												key={`${doc.id}_${doc.de || 'generic'}_${buyer.id}_opt`}
+												documentId={doc.id}
+												documentName={doc.nome}
+												description={doc.observacao}
+												uploadedFiles={buyerSpecificFiles}
+												allFiles={buyerFiles}
+												onFileUpload={handleFileUpload}
+												onRemoveFile={onRemoveFile}
+												onLinkExistingFile={handleLinkExistingFile}
+												personId={buyer.id}
+												linkingFileId={linkingFileId}
+												isOptional
+											/>
+										))}
+									</div>
+								)}
 							</div>
 						);
 					}

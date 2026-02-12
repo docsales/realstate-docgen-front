@@ -18,6 +18,7 @@ interface DocumentRequirementItemProps {
 	personId?: string;
 	maxFiles?: number;
 	linkingFileId?: string | null;
+	isOptional?: boolean;
 }
 
 const fileSatisfiesType = (file: UploadedFile, documentType: string): boolean => {
@@ -37,7 +38,8 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 	onLinkExistingFile,
 	personId,
 	maxFiles = 5,
-	linkingFileId
+	linkingFileId,
+	isOptional = false
 }) => {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [isDragging, setIsDragging] = useState(false);
@@ -130,7 +132,9 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 					? 'border-primary bg-blue-50/40 shadow-sm'
 					: hasError
 						? 'border-red-200 bg-white'
-						: 'border-slate-200 bg-white hover:border-slate-300'
+						: isOptional
+							? 'border-dashed border-slate-200 bg-white hover:border-slate-300'
+							: 'border-slate-200 bg-white hover:border-slate-300'
 				}
 				${canAddMore ? 'cursor-pointer' : ''}
 			`}
@@ -159,7 +163,10 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 					{/* Document name */}
 					<div className="flex-1 min-w-0">
 						<div className="flex items-center gap-2">
-							<h4 className="text-sm font-semibold text-slate-800 truncate">{documentName}</h4>
+							<h4 className={`text-sm font-semibold truncate ${isOptional ? 'text-slate-500' : 'text-slate-800'}`}>{documentName}</h4>
+							{isOptional && (
+								<span className="flex-shrink-0 text-[10px] uppercase tracking-wide font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Opcional</span>
+							)}
 							{isValidated && (
 								<CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
 							)}
