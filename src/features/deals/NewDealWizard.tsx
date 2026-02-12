@@ -970,6 +970,7 @@ export const NewDealWizard: React.FC = () => {
                   dealName={configData.name}
                   mappedCount={Object.keys(mappings).length}
                   onGenerate={nextStep}
+                  onBack={prevStep}
                 />
               )}
               {step === 5 && (
