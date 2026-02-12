@@ -1,11 +1,8 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, FileText, Home, Users, DollarSign, User, XCircle, Edit, Send, Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, FileText, Home, Users, DollarSign, User, Edit, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { ConfirmModal } from '../../components/ConfirmModal';
-import { ErrorModal } from '../../components/ErrorModal';
-import { SuccessModal } from './components/SuccessModal';
-import { useDeal, useRemoveSignatoryFromDeal, useSendContract } from './hooks/useDeals';
+import { useDeal, useRemoveSignatoryFromDeal } from './hooks/useDeals';
 import type { DealStatus, DealDocument, Signatory } from '../../types/types';
 import { mergeDealData, formatCPF } from './utils/extractDealData';
 import { SignerCard } from './components/SignerCard';
@@ -19,188 +16,12 @@ export const DealDetailsView: React.FC = () => {
 	const dealId = id || '';
 
 	const { data: dealData, isLoading, isError, error } = useDeal(dealId);
-	const sendContractMutation = useSendContract();
 
 	const [removeSignerLoading, setRemoveSignerLoading] = useState(false);
 	const removeSignatoryMutation = useRemoveSignatoryFromDeal();
 
-	const [activeTab, setActiveTab] = useState<'data' | 'docs' | 'signers'>('data');
+	const [activeTab, setActiveTab] = useState<'data' | 'docs' | 'signers' | 'validations'>('data');
 	const [selectedDoc, setSelectedDoc] = useState<DealDocument | null>(null);
-	const [isSending, setIsSending] = useState(false);
-	const [showConfirmModal, setShowConfirmModal] = useState(false);
-	const [showErrorModal, setShowErrorModal] = useState(false);
-	const [showSuccessModal, setShowSuccessModal] = useState(false);
-	const [errorTitle, setErrorTitle] = useState('');
-	const [errorMessage, setErrorMessage] = useState('');
-	const [errorDetails, setErrorDetails] = useState<string[]>([]);
-
-	/**
-	 * Valida se o deal possui todos os dados necessários para envio
-	 */
-	const validateDealForSending = () => {
-		if (!dealData) return [];
-
-		const errors: string[] = [];
-		const deal = mergeDealData(dealData);
-
-		// Verificar se há compradores
-		if (!deal.buyers || deal.buyers.length === 0) {
-			errors.push('Adicione pelo menos um comprador');
-		}
-
-		// Verificar se há vendedores
-		if (!deal.sellers || deal.sellers.length === 0) {
-			errors.push('Adicione pelo menos um vendedor');
-		}
-
-		// Verificar se há informações do imóvel
-		const hasPropertyData = deal.address !== 'Não informado' ||
-			deal.matricula !== 'Não informado' ||
-			deal.area !== 'Não informado';
-
-		if (!hasPropertyData) {
-			errors.push('Adicione as informações do imóvel');
-		}
-
-		// Verificar se há preview gerado
-		if (!dealData.consolidated?.draftPreviewUrl && !dealData.consolidated?.generatedDocId) {
-			errors.push('Gere o preview do documento antes de enviar');
-		}
-
-		// Verificar se há signatários
-		if (!dealData.signers || dealData.signers.length === 0) {
-			errors.push('Adicione pelo menos um signatário');
-		}
-
-		return errors;
-	};
-
-	const handleSendContractClick = () => {
-		const validationErrors = validateDealForSending();
-
-		if (validationErrors.length > 0) {
-			setErrorTitle('Dados Incompletos');
-			setErrorMessage('Não é possível enviar o contrato pois alguns dados obrigatórios estão faltando:');
-			setErrorDetails(validationErrors);
-			setShowErrorModal(true);
-			return;
-		}
-
-		setShowConfirmModal(true);
-	};
-
-	/**
-	 * Extrai e formata a mensagem de erro da API
-	 */
-	const extractErrorMessage = (error: any): { title: string; message: string; details: string[] } => {
-		const details: string[] = [];
-		let title = 'Erro ao Enviar Contrato';
-		let message = 'Ocorreu um erro ao tentar enviar o contrato para assinatura.';
-
-		// Verificar se há resposta da API
-		if (error?.response?.data) {
-			const data = error.response.data;
-			const status = error.response.status;
-
-			// Erro 422 - Validação/Dados incompletos
-			if (status === 422) {
-				title = 'Dados Incompletos ou Inválidos';
-				message = 'O contrato não pode ser enviado devido a problemas nos dados:';
-
-				// Tentar extrair detalhes do erro
-				if (data.message) {
-					if (Array.isArray(data.message)) {
-						details.push(...data.message);
-					} else {
-						details.push(data.message);
-					}
-				} else if (data.erro) {
-					details.push(data.erro);
-				} else if (data.errors && Array.isArray(data.errors)) {
-					details.push(...data.errors);
-				}
-
-				// Se não conseguimos extrair detalhes, adicionar mensagem genérica
-				if (details.length === 0) {
-					details.push('Verifique se todos os dados do contrato estão completos');
-					details.push('Certifique-se de que o preview foi gerado');
-				}
-			}
-			// Erro 400 - Bad Request
-			else if (status === 400) {
-				title = 'Requisição Inválida';
-				message = 'A requisição não pôde ser processada:';
-				details.push(data.message || data.erro || 'Dados inválidos fornecidos');
-			}
-			// Erro 404 - Não encontrado
-			else if (status === 404) {
-				title = 'Contrato Não Encontrado';
-				message = 'O contrato não foi encontrado no sistema.';
-				details.push('Verifique se o contrato ainda existe');
-				details.push('Tente recarregar a página');
-			}
-			// Erro 500 - Erro do servidor
-			else if (status >= 500) {
-				title = 'Erro do Servidor';
-				message = 'Ocorreu um erro no servidor ao processar sua requisição.';
-				details.push('Tente novamente em alguns instantes');
-				details.push('Se o problema persistir, entre em contato com o suporte');
-			}
-			// Outros erros
-			else {
-				if (data.message) {
-					details.push(data.message);
-				} else if (data.erro) {
-					details.push(data.erro);
-				}
-			}
-		}
-		// Erro de rede ou timeout
-		else if (error?.message) {
-			if (error.message.includes('timeout') || error.message.includes('Network Error')) {
-				title = 'Erro de Conexão';
-				message = 'Não foi possível conectar ao servidor.';
-				details.push('Verifique sua conexão com a internet');
-				details.push('Tente novamente em alguns instantes');
-			} else {
-				details.push(error.message);
-			}
-		}
-
-		// Se não há detalhes, adicionar mensagem genérica
-		if (details.length === 0) {
-			details.push('Erro desconhecido. Tente novamente.');
-		}
-
-		return { title, message, details };
-	};
-
-	const handleConfirmSend = async () => {
-		if (!dealId) return;
-
-		setIsSending(true);
-		try {
-			await sendContractMutation.mutateAsync({ dealId });
-			setShowConfirmModal(false);
-
-			// Mostrar modal de sucesso
-			setTimeout(() => {
-				setShowSuccessModal(true);
-			}, 300);
-		} catch (error: any) {
-			console.error('Erro ao enviar contrato:', error);
-			setShowConfirmModal(false);
-
-			// Extrair e formatar a mensagem de erro
-			const errorInfo = extractErrorMessage(error);
-			setErrorTitle(errorInfo.title);
-			setErrorMessage(errorInfo.message);
-			setErrorDetails(errorInfo.details);
-			setShowErrorModal(true);
-		} finally {
-			setIsSending(false);
-		}
-	};
 
 	const removeSigner = async (signerId: string) => {
 		if (!dealId) return;
@@ -209,9 +30,9 @@ export const DealDetailsView: React.FC = () => {
 		try {
 			setRemoveSignerLoading(true);
 			await removeSignatoryMutation.mutateAsync({ dealId, signatoryId: signerId });
-			console.log('✅ Signatário removido do banco de dados');
+			console.log('Signatario removido do banco de dados');
 		} catch (error) {
-			console.error('❌ Erro ao remover signatário do banco:', error);
+			console.error('Erro ao remover signatario do banco:', error);
 		} finally {
 			setRemoveSignerLoading(false);
 		}
@@ -229,7 +50,7 @@ export const DealDetailsView: React.FC = () => {
 			case 'SENT': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Enviado para assinatura</span>;
 			case 'READ': return <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Visualizado</span>;
 			case 'PARTIALLY_SIGNED': return <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Parcialmente assinado</span>;
-			case 'DRAFT': return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Rascunho</span>;
+			case 'DRAFT': return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">{"Preparação do documento"}</span>;
 			case 'CANCELED': return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Cancelado</span>;
 			case 'REJECTED': return <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Rejeitado</span>;
 			default: return <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">{status}</span>;
@@ -302,6 +123,36 @@ export const DealDetailsView: React.FC = () => {
 	// Processar dados do deal com extração de documentos
 	const deal = mergeDealData(dealData);
 
+	/**
+	 * Determina o step contextual para o botão "Continuar a preparação do documento"
+	 * - sem documentos => step 1
+	 * - com documentos => step 2
+	 * - com variáveis do contrato configuradas => step 3
+	 * - com preview gerado => step 4
+	 */
+	const getContextualStep = (): number => {
+		const hasDocuments = dealData.documents && dealData.documents.length > 0;
+		const hasContractFields = (() => {
+			try {
+				if (!dealData.contractFields) return false;
+				const fields = typeof dealData.contractFields === 'string'
+					? JSON.parse(dealData.contractFields)
+					: dealData.contractFields;
+				return fields && Object.keys(fields).length > 0;
+			} catch {
+				return false;
+			}
+		})();
+		const hasPreview = !!(dealData.consolidated?.draftPreviewUrl || dealData.consolidated?.generatedDocId);
+
+		if (hasPreview) return 4;
+		if (hasContractFields) return 3;
+		if (hasDocuments) return 2;
+		return 1;
+	};
+
+	const hasAlerts = deal.alerts && deal.alerts.length > 0;
+
 	return (
 		<div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
 			{/* Header */}
@@ -334,42 +185,14 @@ export const DealDetailsView: React.FC = () => {
 							<Button
 								variant="secondary"
 								className="h-10 px-4 text-sm whitespace-nowrap"
-								onClick={() => navigate(`/deals/${dealId}/edit?step=1`)}
-								disabled={isSending}
+								onClick={() => navigate(`/deals/${dealId}/edit?step=${getContextualStep()}`)}
 							>
-								<Edit className="w-4 h-4 mr-2" /> Editar
-							</Button>
-							<Button
-								className="h-10 px-4 text-sm whitespace-nowrap"
-								onClick={handleSendContractClick}
-								disabled={isSending}
-								isLoading={isSending}
-							>
-								<Send className="w-4 h-4 mr-2" /> Enviar para assinatura
+								<Edit className="w-4 h-4 mr-2" /> {"Continuar a preparação do documento"}
 							</Button>
 						</div>
 					)}
 				</div>
 			</div>
-
-			{/* Alertas */}
-			{deal.alerts && deal.alerts.length > 0 && (
-				<div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
-					<div className="flex items-start gap-3">
-						<AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-						<div className="flex-1">
-							<h3 className="font-bold text-amber-900 mb-2">Alertas e Observações</h3>
-							<ul className="space-y-1">
-								{deal.alerts.map((alert, idx) => (
-									<li key={idx} className="text-sm text-amber-800">
-										• {alert}
-									</li>
-								))}
-							</ul>
-						</div>
-					</div>
-				</div>
-			)}
 
 			{/* Contextual Banner */}
 			<div className="mb-6">
@@ -394,7 +217,7 @@ export const DealDetailsView: React.FC = () => {
 								<div className="flex items-center justify-between w-full">
 									<div className="flex items-center gap-2">
 										<Home className="w-5 h-5" />
-										<h3 className="font-bold text-lg text-slate-800">Imóvel</h3>
+										<h3 className="font-bold text-lg text-slate-800">{"Imóvel"}</h3>
 									</div>
 
 									{renderNavigateToSpecificStepButton(1, 'do imóvel')}
@@ -402,21 +225,21 @@ export const DealDetailsView: React.FC = () => {
 							</div>
 							<div className="space-y-4">
 								<div>
-									<label className="text-xs text-slate-400 block mb-1">Endereço</label>
+									<label className="text-xs text-slate-400 block mb-1">{"Endereço"}</label>
 									<p className="text-slate-700 font-medium">{deal.address}</p>
 								</div>
 								<div className="grid grid-cols-2 gap-4">
 									<div>
-										<label className="text-xs text-slate-400 block mb-1">Matrícula</label>
+										<label className="text-xs text-slate-400 block mb-1">{"Matrícula"}</label>
 										<p className="text-slate-800 font-bold">{deal.matricula}</p>
 									</div>
 									<div>
-										<label className="text-xs text-slate-400 block mb-1">Área</label>
+										<label className="text-xs text-slate-400 block mb-1">{"Área"}</label>
 										<p className="text-slate-800 font-bold">{deal.area}</p>
 									</div>
 								</div>
 								<div>
-									<label className="text-xs text-slate-400 block mb-1">Cartório</label>
+									<label className="text-xs text-slate-400 block mb-1">{"Cartório"}</label>
 									<p className="text-slate-700">{deal.cartorio}</p>
 								</div>
 							</div>
@@ -426,7 +249,7 @@ export const DealDetailsView: React.FC = () => {
 						<div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
 							<div className="flex items-center gap-2 mb-4 text-primary">
 								<DollarSign className="w-5 h-5" />
-								<h3 className="font-bold text-lg text-slate-800">Condições Comerciais</h3>
+								<h3 className="font-bold text-lg text-slate-800">{"Condições Comerciais"}</h3>
 							</div>
 							<div className="grid grid-cols-2 gap-6 mb-4">
 								<div>
@@ -448,7 +271,7 @@ export const DealDetailsView: React.FC = () => {
 									<p className="text-slate-800 font-medium">{deal.fgts}</p>
 								</div>
 								<div>
-									<label className="text-xs text-slate-400 block mb-1">Consórcio</label>
+									<label className="text-xs text-slate-400 block mb-1">{"Consórcio"}</label>
 									<p className="text-slate-800 font-medium">{deal.consorcio}</p>
 								</div>
 							</div>
@@ -467,7 +290,6 @@ export const DealDetailsView: React.FC = () => {
 							</p>
 							{deal.buyers.length > 0 ? (
 								deal.buyers.map((buyer: any, idx: number) => {
-									// Garantir que temos strings válidas
 									const buyerName = typeof buyer.name === 'string' ? buyer.name : 'Sem nome';
 									const buyerEmail = typeof buyer.email === 'string' ? buyer.email : '';
 									const buyerPhone = typeof buyer.phone === 'string' ? buyer.phone : '';
@@ -488,7 +310,7 @@ export const DealDetailsView: React.FC = () => {
 												{buyerPhone && <p className="text-xs text-slate-500">{buyerPhone}</p>}
 												{buyerDataSource && (
 													<p className="text-xs text-blue-600 mt-1">
-														📄 Extraído de: {buyerDataSource}
+														{"Extraído de: "}{buyerDataSource}
 													</p>
 												)}
 											</div>
@@ -496,7 +318,7 @@ export const DealDetailsView: React.FC = () => {
 									);
 								})
 							) : (
-								<p className="text-sm text-slate-400 italic">Nenhum comprador cadastrado</p>
+								<p className="text-sm text-slate-400 italic">{"Nenhum comprador cadastrado"}</p>
 							)}
 						</div>
 
@@ -515,7 +337,6 @@ export const DealDetailsView: React.FC = () => {
 							</p>
 							{deal.sellers.length > 0 ? (
 								deal.sellers.map((seller: any, idx: number) => {
-									// Garantir que temos strings válidas
 									const sellerName = typeof seller.name === 'string' ? seller.name : 'Sem nome';
 									const sellerEmail = typeof seller.email === 'string' ? seller.email : '';
 									const sellerPhone = typeof seller.phone === 'string' ? seller.phone : '';
@@ -536,7 +357,7 @@ export const DealDetailsView: React.FC = () => {
 												{sellerPhone && <p className="text-xs text-slate-500">{sellerPhone}</p>}
 												{sellerDataSource && (
 													<p className="text-xs text-blue-600 mt-1">
-														📄 Extraído de: {sellerDataSource}
+														{"Extraído de: "}{sellerDataSource}
 													</p>
 												)}
 											</div>
@@ -544,7 +365,7 @@ export const DealDetailsView: React.FC = () => {
 									);
 								})
 							) : (
-								<p className="text-sm text-slate-400 italic">Nenhum vendedor cadastrado</p>
+								<p className="text-sm text-slate-400 italic">{"Nenhum vendedor cadastrado"}</p>
 							)}
 						</div>
 					</div>
@@ -580,7 +401,7 @@ export const DealDetailsView: React.FC = () => {
 							<FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
 							<p className="text-slate-500">Nenhum documento anexado</p>
 							<p className="text-xs text-slate-400 mt-1">
-								Clique em "Editar" para adicionar documentos
+								{"Clique em \"Continuar a preparação do documento\" para adicionar documentos"}
 							</p>
 						</div>
 					)}
@@ -591,12 +412,12 @@ export const DealDetailsView: React.FC = () => {
 					type="radio"
 					name="deal_details_tabs"
 					className={`tab px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'signers' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
-					aria-label="Signatários"
+					aria-label={"Signatários"}
 					onChange={() => setActiveTab('signers')}
 				/>
 				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-6">
 					<div className="flex items-center justify-between w-full">
-						<h3 className="font-bold text-lg text-slate-800 mb-1">Signatários</h3>
+						<h3 className="font-bold text-lg text-slate-800 mb-1">{"Signatários"}</h3>
 
 						{renderNavigateToSpecificStepButton(5, 'de signatários')}
 					</div>
@@ -607,9 +428,9 @@ export const DealDetailsView: React.FC = () => {
 					{dealData.signers?.length === 0 ? (
 						<div className="p-8 text-center">
 							<Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-							<p className="text-slate-500">Nenhum signatário adicionado</p>
+							<p className="text-slate-500">{"Nenhum signatário adicionado"}</p>
 							<p className="text-xs text-slate-400 mt-1">
-								Clique em "Editar" para adicionar signatários
+								{"Clique em \"Continuar a preparação do documento\" para adicionar signatários"}
 							</p>
 						</div>
 					) : (
@@ -631,41 +452,46 @@ export const DealDetailsView: React.FC = () => {
 						</div>
 					)}
 				</div>
+
+				{/* Aba Validações */}
+				<input
+					type="radio"
+					name="deal_details_tabs"
+					className={`tab px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'validations' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
+					aria-label={hasAlerts ? "\u26A0\uFE0F Validações" : "Validações"}
+					onChange={() => setActiveTab('validations')}
+				/>
+				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-6">
+					<h3 className="font-bold text-lg text-slate-800 mb-4">{"Validações"}</h3>
+
+					{hasAlerts ? (
+						<div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+							<div className="flex items-start gap-3">
+								<AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+								<div className="flex-1">
+									<h4 className="font-bold text-amber-900 mb-2">{"Alertas e Observações"}</h4>
+									<ul className="space-y-1">
+										{deal.alerts.map((alert: string, idx: number) => (
+											<li key={idx} className="text-sm text-amber-800 flex items-start gap-2">
+												<span className="mt-0.5">{"•"}</span>
+												<span>{alert}</span>
+											</li>
+										))}
+									</ul>
+								</div>
+							</div>
+						</div>
+					) : (
+						<div className="p-8 text-center">
+							<CheckCircle2 className="w-12 h-12 text-green-300 mx-auto mb-3" />
+							<p className="text-slate-500">{"Nenhuma pendência encontrada"}</p>
+							<p className="text-xs text-slate-400 mt-1">
+								{"Todos os documentos e dados estão em conformidade."}
+							</p>
+						</div>
+					)}
+				</div>
 			</div>
-
-			{/* Modal de confirmação para envio */}
-			<ConfirmModal
-				isOpen={showConfirmModal}
-				onClose={() => setShowConfirmModal(false)}
-				onConfirm={handleConfirmSend}
-				title="Enviar para Assinatura"
-				message="Deseja enviar este contrato para assinatura? Os signatários receberão o documento por e-mail do DocSales e poderão assinar digitalmente."
-				confirmText="Enviar Contrato"
-				cancelText="Cancelar"
-				isLoading={isSending}
-			/>
-
-			{/* Modal de erro customizado */}
-			<ErrorModal
-				isOpen={showErrorModal}
-				onClose={() => setShowErrorModal(false)}
-				title={errorTitle}
-				message={errorMessage}
-				details={errorDetails}
-				actionText="Ir para Edição"
-				onAction={() => {
-					setShowErrorModal(false);
-					navigate(`/deals/${dealId}/edit`);
-				}}
-			/>
-
-			{/* Modal de sucesso */}
-			<SuccessModal
-				isOpen={showSuccessModal}
-				onClose={() => setShowSuccessModal(false)}
-				title="Contrato Enviado!"
-				description="O contrato foi enviado para assinatura com sucesso. Os signatários receberão o documento por e-mail do DocSales e poderão assinar digitalmente."
-			/>
 
 			{/* Document data drawer */}
 			<DocumentDataDrawer
