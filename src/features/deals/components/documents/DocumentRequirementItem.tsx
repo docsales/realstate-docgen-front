@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { CheckCircle2, AlertCircle, Upload, X, Link2, ChevronDown, FileText, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Upload, X, Link2, ChevronDown, FileText, Loader2, Plus } from 'lucide-react';
 import type { UploadedFile } from '@/types/types';
 import { OcrStatusLoader } from './OcrStatusLoader';
 import { OcrStatus } from '@/types/ocr.types';
@@ -195,11 +195,16 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 
 				{/* Empty state (no files yet) */}
 				{relatedFiles.length === 0 && !isDragging && (
-					<div className="mt-2 flex items-center gap-2">
-						<Upload className="w-3.5 h-3.5 text-slate-300" />
-						<span className="text-xs text-slate-400">
-							Clique ou arraste para enviar ({maxFilesLabel})
-						</span>
+					<div className="mt-3 flex flex-col gap-2">
+						<div className="flex items-center justify-center gap-2 py-3 border border-dashed border-slate-300 rounded-md bg-slate-50/50 hover:bg-slate-50 hover:border-slate-400 transition-colors">
+							<Upload className="w-4 h-4 text-slate-400" />
+							<span className="text-xs text-slate-500">
+								Clique para enviar ou arraste aqui
+							</span>
+						</div>
+						<p className="text-[11px] text-slate-400 text-center">
+							PDF, JPG ou PNG {maxFiles > 1 ? ` \u00b7 ate ${maxFiles} arquivos` : ''}
+						</p>
 
 						{/* Link existing file button */}
 						{onLinkExistingFile && reusableFiles.length > 0 && canAddMore && (
@@ -211,7 +216,7 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 									setShowLinkMenu(!showLinkMenu);
 								}}
 								disabled={!!linkingFileId}
-								className={`cursor-pointer ml-auto text-xs px-2 py-0.5 text-primary hover:bg-slate-50 rounded border border-slate-200 flex items-center gap-1 transition-colors ${linkingFileId ? 'opacity-50 cursor-not-allowed' : ''}`}
+								className={`cursor-pointer self-center text-xs px-2.5 py-1 text-primary hover:bg-slate-50 rounded border border-slate-200 flex items-center gap-1 transition-colors ${linkingFileId ? 'opacity-50 cursor-not-allowed' : ''}`}
 							>
 								{linkingFileId ? (
 									<>
@@ -221,7 +226,7 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 								) : (
 									<>
 										<Link2 className="w-3 h-3" />
-										<span>Usar existente</span>
+										<span>Usar documento existente</span>
 										<ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showLinkMenu ? 'rotate-180' : ''}`} />
 									</>
 								)}
@@ -232,8 +237,8 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 
 				{/* Drag feedback */}
 				{isDragging && (
-					<div className="mt-2 flex items-center gap-2">
-						<Upload className="w-3.5 h-3.5 text-primary animate-bounce" />
+					<div className="mt-3 flex items-center justify-center gap-2 py-3 border border-dashed border-primary rounded-md bg-blue-50/50">
+						<Upload className="w-4 h-4 text-primary animate-bounce" />
 						<span className="text-xs text-primary font-medium">Solte aqui para enviar</span>
 					</div>
 				)}
@@ -331,6 +336,26 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 					</div>
 				)}
 
+				{/* Add more files button -- visible when files exist but slots remain */}
+				{relatedFiles.length > 0 && canAddMore && !isDragging && (
+					<div className="mt-2 flex items-center gap-2">
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation();
+								fileInputRef.current?.click();
+							}}
+							className="cursor-pointer flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium px-2 py-1 rounded border border-dashed border-primary/30 hover:border-primary/50 hover:bg-blue-50/50 transition-colors"
+						>
+							<Plus className="w-3 h-3" />
+							Adicionar arquivo
+						</button>
+						<span className="text-[11px] text-slate-400 tabular-nums">
+							{maxFiles - relatedFiles.length} restante{maxFiles - relatedFiles.length !== 1 ? 's' : ''}
+						</span>
+					</div>
+				)}
+
 				{/* Link existing file menu */}
 				{showLinkMenu && reusableFiles.length > 0 && (
 					<div data-link-menu className="mt-3 p-2 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
@@ -365,10 +390,11 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 				)}
 
 				{/* Max files reached */}
-				{!canAddMore && (
-					<p className="text-[11px] text-slate-400 mt-2">
-						Limite de {maxFiles} {maxFiles === 1 ? 'arquivo' : 'arquivos'} atingido
-					</p>
+				{!canAddMore && relatedFiles.length > 0 && (
+					<div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400">
+						<CheckCircle2 className="w-3 h-3 text-slate-300" />
+						<span>{maxFiles}/{maxFiles} arquivos enviados</span>
+					</div>
 				)}
 			</div>
 		</div>
