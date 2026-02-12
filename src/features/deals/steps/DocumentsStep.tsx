@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/Button';
-import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, RefreshCcw, RotateCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, RefreshCcw } from 'lucide-react';
 import type { UploadedFile, DealConfig, Person } from '@/types/types';
 import { BuyerDocumentsTab } from '../components/documents/BuyerDocumentsTab';
 import { SellerDocumentsTab } from '../components/documents/SellerDocumentsTab';
@@ -9,6 +9,7 @@ import { ProposalDocumentsTab } from '../components/documents/ProposalDocumentsT
 import { documentChecklistService } from '../services/document-checklist.service';
 import type { ConsolidatedChecklist, ChecklistRequestDTO } from '@/types/checklist.types';
 import { ChecklistSummary } from '../components/documents/ChecklistSummary';
+import { DocumentStatusPanel } from '../components/documents/DocumentStatusPanel';
 import { useOcr } from '@/hooks/useOcr';
 import { useRemoveDocumentFromDeal } from '../hooks/useDeals';
 import { useCoupleValidation } from '../hooks/useCoupleValidation';
@@ -746,76 +747,21 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 
 	return (
 		<div className="space-y-6 animate-in fade-in duration-500">
-			{/* Checklist Summary */}
+			{/* Block 1 - Checklist Summary (static info: mandatory count, complexity, deadline) */}
 			{checklist && (
 				<ChecklistSummary
 					checklist={checklist}
-					uploadedFiles={files}
 					config={config}
 				/>
 			)}
 
-			{/* OCR Processing Bar -- only visible while uploading/processing, hidden when all done */}
-			{files.length > 0 && (ocrStats.processing > 0 || ocrStats.uploading > 0 || ocrStats.error > 0) && (
-				<div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-					<div className="flex items-center justify-between gap-4">
-						{/* Left: processing status */}
-						<div className="flex items-center gap-4">
-							<div className="flex items-center gap-2">
-								<Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
-								<span className="text-xs font-medium text-slate-600">
-									Processando {ocrStats.uploading + ocrStats.processing} de {ocrStats.total} documento{ocrStats.total !== 1 ? 's' : ''}
-								</span>
-							</div>
-
-							{ocrStats.error > 0 && (
-								<div className="flex items-center gap-1.5">
-									<span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-									<span className="text-xs text-red-600 font-medium">{ocrStats.error} erro{ocrStats.error !== 1 ? 's' : ''}</span>
-								</div>
-							)}
-						</div>
-
-						{/* Right: progress bar + refresh */}
-						<div className="flex items-center gap-3 flex-shrink-0">
-							<div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-								<div
-									className="h-full bg-primary rounded-full transition-all duration-500"
-									style={{ width: `${ocrStats.total > 0 ? Math.round((ocrStats.completed / ocrStats.total) * 100) : 0}%` }}
-								/>
-							</div>
-							<span className="text-[11px] text-slate-400 tabular-nums min-w-[32px] text-right">
-								{ocrStats.total > 0 ? Math.round((ocrStats.completed / ocrStats.total) * 100) : 0}%
-							</span>
-
-							<button
-								onClick={handleManualRefresh}
-								disabled={isCheckingStatus}
-								className="cursor-pointer p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-50"
-								title="Atualizar status"
-							>
-								<RotateCw className={`w-3.5 h-3.5 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-							</button>
-						</div>
-					</div>
-				</div>
-			)}
-
-			{/* Errors-only bar -- when processing is done but errors remain */}
-			{files.length > 0 && ocrStats.processing === 0 && ocrStats.uploading === 0 && ocrStats.error > 0 && (
-				<div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center justify-between">
-					<span className="text-xs font-medium text-red-600">
-						{ocrStats.error} documento{ocrStats.error !== 1 ? 's' : ''} com erro de processamento
-					</span>
-					<button
-						onClick={handleManualRefresh}
-						disabled={isCheckingStatus}
-						className="cursor-pointer text-xs text-red-500 hover:text-red-700 font-medium"
-					>
-						Tentar novamente
-					</button>
-				</div>
-				)}
+			{/* Block 2 - Document Status (dynamic: uploaded, processing, completed, errors + progress bar) */}
+			<DocumentStatusPanel
+				files={files}
+				ocrStats={ocrStats}
+				isCheckingStatus={isCheckingStatus}
+				onManualRefresh={handleManualRefresh}
+			/>
 
 				{/* Tabs Navigation */}
 			<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">

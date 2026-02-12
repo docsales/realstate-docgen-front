@@ -1,108 +1,48 @@
 import React from 'react';
-import { CheckCircle2, Calendar, Shield } from 'lucide-react';
+import { FileText, Calendar, Shield } from 'lucide-react';
 import type { ConsolidatedChecklist } from '@/types/checklist.types';
-import type { DealConfig, UploadedFile } from '@/types/types';
+import type { DealConfig } from '@/types/types';
 
 interface ChecklistSummaryProps {
   checklist: ConsolidatedChecklist;
-  uploadedFiles: UploadedFile[];
   config: DealConfig;
 }
 
 export const ChecklistSummary: React.FC<ChecklistSummaryProps> = ({ 
   checklist, 
-  uploadedFiles,
   config
 }) => {
-  const fileSatisfiesType = (file: UploadedFile, documentType: string): boolean => {
-    if (file.type === documentType) return true;
-    if (file.types && file.types.includes(documentType)) return true;
-    return false;
-  };
-
   const deedCountClamped = Math.min(Math.max(config.deedCount || 1, 1), 5);
 
-  // --- MANDATORY documents count ---
+  // Count mandatory documents expected from the checklist definition
   let totalMandatory = 0;
-  let validatedMandatory = 0;
 
-  // Sellers mandatory
   const sellerMandatoryDocs = checklist.vendedores.documentos.filter(d => d.obrigatorio);
   config.sellers.forEach((seller) => {
     const expectedDe = (seller.isSpouse || false) ? 'conjuge' : 'titular';
-    const docsForSeller = sellerMandatoryDocs.filter(doc => !doc.de || doc.de === expectedDe);
-    const sellerFiles = uploadedFiles.filter(f => f.category === 'sellers' && f.personId === seller.id);
-    totalMandatory += docsForSeller.length;
-    validatedMandatory += docsForSeller.filter(doc =>
-      sellerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true)
-    ).length;
+    totalMandatory += sellerMandatoryDocs.filter(doc => !doc.de || doc.de === expectedDe).length;
   });
 
-  // Buyers mandatory
   const buyerMandatoryDocs = checklist.compradores.documentos.filter(d => d.obrigatorio);
   config.buyers.forEach((buyer) => {
     const expectedDe = (buyer.isSpouse || false) ? 'conjuge' : 'titular';
-    const docsForBuyer = buyerMandatoryDocs.filter(doc => !doc.de || doc.de === expectedDe);
-    const buyerFiles = uploadedFiles.filter(f => f.category === 'buyers' && f.personId === buyer.id);
-    totalMandatory += docsForBuyer.length;
-    validatedMandatory += docsForBuyer.filter(doc =>
-      buyerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true)
-    ).length;
+    totalMandatory += buyerMandatoryDocs.filter(doc => !doc.de || doc.de === expectedDe).length;
   });
 
-  // Property mandatory
   const propertyMandatoryDocs = checklist.imovel.documentos.filter(d => d.obrigatorio);
-  const propertyFiles = uploadedFiles.filter(f => f.category === 'property');
   propertyMandatoryDocs.forEach(doc => {
-    if (doc.id === 'MATRICULA') {
-      totalMandatory += deedCountClamped;
-      const validatedCount = propertyFiles.filter(f => fileSatisfiesType(f, doc.id) && f.validated === true).length;
-      validatedMandatory += Math.min(validatedCount, deedCountClamped);
-      return;
-    }
-    totalMandatory += 1;
-    validatedMandatory += propertyFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true) ? 1 : 0;
+    totalMandatory += doc.id === 'MATRICULA' ? deedCountClamped : 1;
   });
 
-  // --- OPTIONAL documents count ---
-  const totalOptionalDocs =
+  // Count optional
+  const totalOptional =
     checklist.vendedores.documentos.filter(d => !d.obrigatorio).length +
     checklist.compradores.documentos.filter(d => !d.obrigatorio).length +
     checklist.imovel.documentos.filter(d => !d.obrigatorio).length;
 
-  // Count optional docs that have at least one validated file uploaded
-  let optionalUploaded = 0;
-  const sellerOptionalDocs = checklist.vendedores.documentos.filter(d => !d.obrigatorio);
-  config.sellers.forEach((seller) => {
-    const sellerFiles = uploadedFiles.filter(f => f.category === 'sellers' && f.personId === seller.id);
-    optionalUploaded += sellerOptionalDocs.filter(doc =>
-      sellerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true)
-    ).length;
-  });
-  const buyerOptionalDocs = checklist.compradores.documentos.filter(d => !d.obrigatorio);
-  config.buyers.forEach((buyer) => {
-    const buyerFiles = uploadedFiles.filter(f => f.category === 'buyers' && f.personId === buyer.id);
-    optionalUploaded += buyerOptionalDocs.filter(doc =>
-      buyerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true)
-    ).length;
-  });
-  const propertyOptionalDocs = checklist.imovel.documentos.filter(d => !d.obrigatorio);
-  optionalUploaded += propertyOptionalDocs.filter(doc =>
-    propertyFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true)
-  ).length;
-
-  // Proposal docs (always optional)
-  const proposalFiles = uploadedFiles.filter(f => f.category === 'proposal');
-  const proposalUploaded = proposalFiles.filter(f => f.validated === true).length;
-
-  // Progress bar is ONLY for mandatory
-  const mandatoryProgress = totalMandatory > 0 ? Math.round((validatedMandatory / totalMandatory) * 100) : 0;
-  const isMandatoryComplete = mandatoryProgress === 100;
-
-  // Deadline
-  const formatShortDate = (dateString: string) => {
+  const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   };
 
   const translateComplexity = (complexity: string) => {
@@ -117,54 +57,55 @@ export const ChecklistSummary: React.FC<ChecklistSummaryProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
-      {/* Top section: Mandatory progress */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-slate-400" />
-          <h3 className="text-sm font-semibold text-slate-800">Documentos obrigatorios</h3>
-        </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-lg font-bold text-slate-800 tabular-nums">{validatedMandatory}</span>
-          <span className="text-sm text-slate-400 font-normal">de {totalMandatory}</span>
-          {isMandatoryComplete && (
-            <CheckCircle2 className="w-4 h-4 text-emerald-500 ml-1" />
-          )}
-        </div>
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <FileText className="w-4 h-4 text-slate-400" />
+        <h3 className="text-sm font-semibold text-slate-800">Resumo do Checklist</h3>
       </div>
 
-      {/* Progress bar -- mandatory only */}
-      <div className="w-full bg-slate-100 rounded-full h-2 mb-4 overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ease-out ${isMandatoryComplete ? 'bg-emerald-500' : 'bg-primary'}`}
-          style={{ width: `${mandatoryProgress}%` }}
-        />
-      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Mandatory docs */}
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">Obrigatorios</p>
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-slate-400" />
+            <p className="text-lg font-bold text-slate-800 tabular-nums">{totalMandatory}</p>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {config.sellers.length}V, {config.buyers.length}C, {deedCountClamped}M
+          </p>
+        </div>
 
-      {/* Metadata chips row */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Deadline chip */}
-        <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1">
-          <Calendar className="w-3 h-3 text-slate-400" />
-          {checklist.resumo.prazoEstimadoDias} dias ({formatShortDate(checklist.resumo.dataEstimadaConclusao)})
-        </span>
+        {/* Complexity */}
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">Complexidade</p>
+          <p className="text-lg font-bold text-slate-800">
+            {translateComplexity(checklist.resumo.complexidadeMaxima)}
+          </p>
+        </div>
 
-        {/* Complexity chip */}
-        <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1">
-          Complexidade: {translateComplexity(checklist.resumo.complexidadeMaxima)}
-        </span>
+        {/* Deadline */}
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">Prazo estimado</p>
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            <p className="text-lg font-bold text-slate-800 tabular-nums">
+              {checklist.resumo.prazoEstimadoDias}
+              <span className="text-sm font-normal text-slate-500 ml-1">dias</span>
+            </p>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {formatDate(checklist.resumo.dataEstimadaConclusao)}
+          </p>
+        </div>
 
-        {/* Breakdown chip */}
-        <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1">
-          {config.sellers.length}V, {config.buyers.length}C, {deedCountClamped}M
-        </span>
-
-        {/* Optional docs chip (only if there are optional docs) */}
-        {(totalOptionalDocs > 0 || proposalFiles.length > 0) && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 border border-slate-100 rounded-md px-2.5 py-1">
-            {optionalUploaded + proposalUploaded} opcional{optionalUploaded + proposalUploaded !== 1 ? 'is' : ''} enviado{optionalUploaded + proposalUploaded !== 1 ? 's' : ''}
-          </span>
-        )}
+        {/* Optional count */}
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">Opcionais</p>
+          <p className="text-lg font-bold text-slate-800 tabular-nums">
+            {totalOptional}
+          </p>
+        </div>
       </div>
     </div>
   );
