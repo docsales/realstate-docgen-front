@@ -213,14 +213,15 @@ function DocGeneratedStage({
         </div>
       </button>
 
-      {/* CTA */}
+      {/* CTA - Navegar para configurar signatários */}
       <Button
         size="sm"
+        variant="secondary"
         onClick={() => navigate(`/deals/${deal.id}/edit?step=5`)}
         className="flex-shrink-0"
       >
-        <Send className="w-4 h-4" />
-        Enviar para assinatura
+        <ArrowRight className="w-4 h-4" />
+        Configurar signatários
       </Button>
     </div>
   );

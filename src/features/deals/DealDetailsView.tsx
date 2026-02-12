@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, FileText, Home, Users, DollarSign, User, Edit, AlertCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, FileText, Home, Users, DollarSign, User, Edit, AlertCircle, AlertTriangle, X, Eye } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { useDeal, useRemoveSignatoryFromDeal } from './hooks/useDeals';
 import type { DealStatus, DealDocument, Signatory } from '../../types/types';
@@ -22,6 +22,7 @@ export const DealDetailsView: React.FC = () => {
 
 	const [activeTab, setActiveTab] = useState<'data' | 'docs' | 'signers' | 'validations'>('data');
 	const [selectedDoc, setSelectedDoc] = useState<DealDocument | null>(null);
+	const [showContractDetailsModal, setShowContractDetailsModal] = useState(false);
 
 	const removeSigner = async (signerId: string) => {
 		if (!dealId) return;
@@ -100,35 +101,11 @@ export const DealDetailsView: React.FC = () => {
 		}).format(value);
 	}
 
-	const renderNavigateToSpecificStepButton = (step: number, description: string) => {
-		if (deal.status !== 'DRAFT') return <></>;
-
-		return (
-			<Button
-				onClick={() => handleNavigateToSpecificStep(step)}
-				variant="secondary"
-				size="sm"
-				className="tooltip tooltip-left flex items-center gap-2"
-				data-tip={`Acesse as configurações ${description} para visualizar os dados`}
-				disabled={deal.status !== 'DRAFT'}
-			>
-				<div className="flex items-center gap-2">
-					<Edit className="w-4 h-4 mr-2" />
-					<span className="text-sm">Visualizar</span>
-				</div>
-			</Button>
-		);
-	}
-
 	// Processar dados do deal com extração de documentos
 	const deal = mergeDealData(dealData);
 
 	/**
 	 * Determina o step contextual para o botão "Continuar a preparação do documento"
-	 * - sem documentos => step 1
-	 * - com documentos => step 2
-	 * - com variáveis do contrato configuradas => step 3
-	 * - com preview gerado => step 4
 	 */
 	const getContextualStep = (): number => {
 		const hasDocuments = dealData.documents && dealData.documents.length > 0;
@@ -152,6 +129,70 @@ export const DealDetailsView: React.FC = () => {
 	};
 
 	const hasAlerts = deal.alerts && deal.alerts.length > 0;
+
+	/**
+	 * Parse contract fields to get all variables grouped by section
+	 */
+	const getContractFieldsSections = () => {
+		try {
+			if (!dealData.contractFields) return null;
+			const fields = typeof dealData.contractFields === 'string'
+				? JSON.parse(dealData.contractFields)
+				: dealData.contractFields;
+			if (!fields || Object.keys(fields).length === 0) return null;
+
+			const sections: Record<string, { key: string; value: string }[]> = {
+				'Compradores': [],
+				'Vendedores': [],
+				'Imóvel': [],
+				'Condições Comerciais': [],
+				'Outros': [],
+			};
+
+			Object.entries(fields).forEach(([key, value]) => {
+				const displayValue = typeof value === 'string' ? value : JSON.stringify(value);
+				const lk = key.toLowerCase();
+
+				if (lk.startsWith('buyers') || lk.startsWith('buyer') || lk.includes('comprador')) {
+					sections['Compradores'].push({ key, value: displayValue });
+				} else if (lk.startsWith('sellers') || lk.startsWith('seller') || lk.includes('vendedor')) {
+					sections['Vendedores'].push({ key, value: displayValue });
+				} else if (lk.includes('imovel') || lk.includes('property') || lk.includes('matricula') || lk.includes('cartorio') || lk.includes('endereco')) {
+					sections['Imóvel'].push({ key, value: displayValue });
+				} else if (lk.includes('valor') || lk.includes('pagamento') || lk.includes('financ') || lk.includes('fgts') || lk.includes('entrada') || lk.includes('parcela')) {
+					sections['Condições Comerciais'].push({ key, value: displayValue });
+				} else {
+					sections['Outros'].push({ key, value: displayValue });
+				}
+			});
+
+			// Filter empty sections
+			return Object.fromEntries(
+				Object.entries(sections).filter(([, items]) => items.length > 0)
+			);
+		} catch {
+			return null;
+		}
+	};
+
+	const contractSections = getContractFieldsSections();
+
+	/**
+	 * Friendly label from field key
+	 */
+	const formatFieldLabel = (key: string): string => {
+		return key
+			.replace(/\./g, ' > ')
+			.replace(/_/g, ' ')
+			.replace(/\b\w/g, c => c.toUpperCase());
+	};
+
+	// Metadata from step 1
+	const templateName = dealData.docTemplateId || null;
+	const metaConfig = dealData.metadata || {};
+	const useFgts = metaConfig.useFgts ? 'Sim' : 'Não';
+	const bankFinancing = metaConfig.bankFinancing ? 'Sim' : 'Não';
+	const consortiumLetter = metaConfig.consortiumLetter ? 'Sim' : 'Não';
 
 	return (
 		<div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -209,165 +250,148 @@ export const DealDetailsView: React.FC = () => {
 					defaultChecked
 					onChange={() => setActiveTab('data')}
 				/>
-				<div className="tab-content">
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-						{/* Imóvel */}
-						<div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
-							<div className="flex items-center gap-2 mb-4 text-primary">
-								<div className="flex items-center justify-between w-full">
-									<div className="flex items-center gap-2">
-										<Home className="w-5 h-5" />
-										<h3 className="font-bold text-lg text-slate-800">{"Imóvel"}</h3>
+				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-6">
+					{/* Resumo do Deal */}
+					<div className="space-y-6">
+						{/* Info Geral */}
+						<div>
+							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+								<FileText className="w-5 h-5 text-slate-500" />
+								{"Informações Gerais"}
+							</h3>
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+								<div className="bg-slate-50 rounded-lg p-4">
+									<label className="text-xs text-slate-400 block mb-1">{"Data de Criação"}</label>
+									<p className="text-slate-800 font-medium">{deal.date}</p>
+								</div>
+								<div className="bg-slate-50 rounded-lg p-4">
+									<label className="text-xs text-slate-400 block mb-1">{"Tipo"}</label>
+									<p className="text-slate-800 font-medium">{deal.type}</p>
+								</div>
+								{templateName && (
+									<div className="bg-slate-50 rounded-lg p-4">
+										<label className="text-xs text-slate-400 block mb-1">{"Template"}</label>
+										<p className="text-slate-800 font-medium text-sm truncate">{templateName}</p>
 									</div>
-
-									{renderNavigateToSpecificStepButton(1, 'do imóvel')}
-								</div>
-							</div>
-							<div className="space-y-4">
-								<div>
-									<label className="text-xs text-slate-400 block mb-1">{"Endereço"}</label>
-									<p className="text-slate-700 font-medium">{deal.address}</p>
-								</div>
-								<div className="grid grid-cols-2 gap-4">
-									<div>
-										<label className="text-xs text-slate-400 block mb-1">{"Matrícula"}</label>
-										<p className="text-slate-800 font-bold">{deal.matricula}</p>
-									</div>
-									<div>
-										<label className="text-xs text-slate-400 block mb-1">{"Área"}</label>
-										<p className="text-slate-800 font-bold">{deal.area}</p>
-									</div>
-								</div>
-								<div>
-									<label className="text-xs text-slate-400 block mb-1">{"Cartório"}</label>
-									<p className="text-slate-700">{deal.cartorio}</p>
-								</div>
+								)}
 							</div>
 						</div>
 
-						{/* Condições Comerciais */}
-						<div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
-							<div className="flex items-center gap-2 mb-4 text-primary">
-								<DollarSign className="w-5 h-5" />
-								<h3 className="font-bold text-lg text-slate-800">{"Condições Comerciais"}</h3>
-							</div>
-							<div className="grid grid-cols-2 gap-6 mb-4">
-								<div>
-									<label className="text-xs text-slate-400 block mb-1">Valor Total</label>
-									<p className="text-primary font-bold text-lg">{getDealValue()}</p>
+						{/* Condições Comerciais resumo */}
+						<div>
+							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+								<DollarSign className="w-5 h-5 text-slate-500" />
+								{"Condições Comerciais"}
+							</h3>
+							<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+								<div className="bg-slate-50 rounded-lg p-4">
+									<label className="text-xs text-slate-400 block mb-1">{"Valor Total"}</label>
+									<p className="text-slate-800 font-bold">{getDealValue()}</p>
 								</div>
-								<div>
-									<label className="text-xs text-slate-400 block mb-1">Entrada</label>
-									<p className="text-slate-800 font-medium text-lg">{deal.entrada}</p>
+								<div className="bg-slate-50 rounded-lg p-4">
+									<label className="text-xs text-slate-400 block mb-1">{"FGTS"}</label>
+									<p className="text-slate-800 font-medium">{useFgts}</p>
 								</div>
-							</div>
-							<div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-100">
-								<div>
-									<label className="text-xs text-slate-400 block mb-1">Financiamento</label>
-									<p className="text-slate-800 font-medium">{deal.financiamento}</p>
+								<div className="bg-slate-50 rounded-lg p-4">
+									<label className="text-xs text-slate-400 block mb-1">{"Financiamento"}</label>
+									<p className="text-slate-800 font-medium">{bankFinancing}</p>
 								</div>
-								<div>
-									<label className="text-xs text-slate-400 block mb-1">FGTS</label>
-									<p className="text-slate-800 font-medium">{deal.fgts}</p>
-								</div>
-								<div>
+								<div className="bg-slate-50 rounded-lg p-4">
 									<label className="text-xs text-slate-400 block mb-1">{"Consórcio"}</label>
-									<p className="text-slate-800 font-medium">{deal.consorcio}</p>
+									<p className="text-slate-800 font-medium">{consortiumLetter}</p>
 								</div>
 							</div>
 						</div>
 
-						{/* Comprador */}
-						<div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
-							<div className="flex items-center gap-2 mb-2 text-primary">
-								{getUsersIcon(deal.buyers.length)}
-								<h3 className="font-bold text-lg text-slate-800">
-									{`Comprador${deal.buyers.length > 1 ? 'es' : ''} (${deal.buyers.length})`}
-								</h3>
+						{/* Imóvel */}
+						<div>
+							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+								<Home className="w-5 h-5 text-slate-500" />
+								{"Imóvel"}
+							</h3>
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div className="bg-slate-50 rounded-lg p-4">
+									<label className="text-xs text-slate-400 block mb-1">{"Endereço"}</label>
+									<p className="text-slate-800 font-medium">{deal.address}</p>
+								</div>
+								<div className="bg-slate-50 rounded-lg p-4">
+									<label className="text-xs text-slate-400 block mb-1">{"Matrícula"}</label>
+									<p className="text-slate-800 font-bold">{deal.matricula}</p>
+								</div>
 							</div>
-							<p className="text-xs text-slate-400 mb-4">
-								{deal.buyers.length || 0} Pessoa(s)
-							</p>
-							{deal.buyers.length > 0 ? (
-								deal.buyers.map((buyer: any, idx: number) => {
-									const buyerName = typeof buyer.name === 'string' ? buyer.name : 'Sem nome';
-									const buyerEmail = typeof buyer.email === 'string' ? buyer.email : '';
-									const buyerPhone = typeof buyer.phone === 'string' ? buyer.phone : '';
-									const buyerCpf = typeof buyer.cpf === 'string' ? buyer.cpf : '';
-									const buyerDataSource = typeof buyer.dataSource === 'string' ? buyer.dataSource : '';
+						</div>
 
-									return (
-										<div key={idx} className="bg-slate-50 p-3 rounded-lg flex items-start gap-3 mb-2">
+						{/* Compradores */}
+						<div>
+							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+								{getUsersIcon(deal.buyers.length)}
+								{`Comprador${deal.buyers.length > 1 ? 'es' : ''} (${deal.buyers.length})`}
+							</h3>
+							{deal.buyers.length > 0 ? (
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+									{deal.buyers.map((buyer: any, idx: number) => (
+										<div key={idx} className="bg-slate-50 p-4 rounded-lg flex items-start gap-3">
 											<div className="bg-white p-2 rounded-full border border-slate-200">
 												<User className="w-4 h-4 text-slate-400" />
 											</div>
-											<div className="flex-1">
-												<p className="font-medium text-slate-800">{buyerName}</p>
-												{buyerCpf && (
-													<p className="text-xs text-slate-600 font-mono">CPF: {formatCPF(buyerCpf)}</p>
+											<div className="flex-1 min-w-0">
+												<p className="font-medium text-slate-800">{typeof buyer.name === 'string' ? buyer.name : 'Sem nome'}</p>
+												{buyer.cpf && (
+													<p className="text-xs text-slate-600 font-mono">CPF: {formatCPF(buyer.cpf)}</p>
 												)}
-												{buyerEmail && <p className="text-xs text-slate-500">{buyerEmail}</p>}
-												{buyerPhone && <p className="text-xs text-slate-500">{buyerPhone}</p>}
-												{buyerDataSource && (
-													<p className="text-xs text-blue-600 mt-1">
-														{"Extraído de: "}{buyerDataSource}
-													</p>
-												)}
+												{buyer.email && <p className="text-xs text-slate-500">{buyer.email}</p>}
+												{buyer.phone && <p className="text-xs text-slate-500">{buyer.phone}</p>}
 											</div>
 										</div>
-									);
-								})
+									))}
+								</div>
 							) : (
 								<p className="text-sm text-slate-400 italic">{"Nenhum comprador cadastrado"}</p>
 							)}
 						</div>
 
-						{/* Vendedor */}
-						<div className="bg-white p-6 rounded-md border border-slate-200 shadow-sm">
-							<div className="flex items-center gap-2 mb-2 text-primary">
-								<div className="flex items-center gap-2">
-									{getUsersIcon(deal.sellers.length)}
-									<h3 className="font-bold text-lg text-slate-800">
-										{`Vendedor${deal.sellers.length > 1 ? 'es' : ''} (${deal.sellers.length})`}
-									</h3>
-								</div>
-							</div>
-							<p className="text-xs text-slate-400 mb-4">
-								{deal.sellers.length || 0} Pessoa(s)
-							</p>
+						{/* Vendedores */}
+						<div>
+							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+								{getUsersIcon(deal.sellers.length)}
+								{`Vendedor${deal.sellers.length > 1 ? 'es' : ''} (${deal.sellers.length})`}
+							</h3>
 							{deal.sellers.length > 0 ? (
-								deal.sellers.map((seller: any, idx: number) => {
-									const sellerName = typeof seller.name === 'string' ? seller.name : 'Sem nome';
-									const sellerEmail = typeof seller.email === 'string' ? seller.email : '';
-									const sellerPhone = typeof seller.phone === 'string' ? seller.phone : '';
-									const sellerCpf = typeof seller.cpf === 'string' ? seller.cpf : '';
-									const sellerDataSource = typeof seller.dataSource === 'string' ? seller.dataSource : '';
-
-									return (
-										<div key={idx} className="bg-slate-50 p-3 rounded-lg flex items-start gap-3 mb-2">
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+									{deal.sellers.map((seller: any, idx: number) => (
+										<div key={idx} className="bg-slate-50 p-4 rounded-lg flex items-start gap-3">
 											<div className="bg-white p-2 rounded-full border border-slate-200">
 												<User className="w-4 h-4 text-slate-400" />
 											</div>
-											<div className="flex-1">
-												<p className="font-medium text-slate-800">{sellerName}</p>
-												{sellerCpf && (
-													<p className="text-xs text-slate-600 font-mono">CPF: {formatCPF(sellerCpf)}</p>
+											<div className="flex-1 min-w-0">
+												<p className="font-medium text-slate-800">{typeof seller.name === 'string' ? seller.name : 'Sem nome'}</p>
+												{seller.cpf && (
+													<p className="text-xs text-slate-600 font-mono">CPF: {formatCPF(seller.cpf)}</p>
 												)}
-												{sellerEmail && <p className="text-xs text-slate-500">{sellerEmail}</p>}
-												{sellerPhone && <p className="text-xs text-slate-500">{sellerPhone}</p>}
-												{sellerDataSource && (
-													<p className="text-xs text-blue-600 mt-1">
-														{"Extraído de: "}{sellerDataSource}
-													</p>
-												)}
+												{seller.email && <p className="text-xs text-slate-500">{seller.email}</p>}
+												{seller.phone && <p className="text-xs text-slate-500">{seller.phone}</p>}
 											</div>
 										</div>
-									);
-								})
+									))}
+								</div>
 							) : (
 								<p className="text-sm text-slate-400 italic">{"Nenhum vendedor cadastrado"}</p>
 							)}
 						</div>
+
+						{/* Botão ver detalhes do contrato - só aparece se houver contractFields */}
+						{contractSections && (
+							<div className="pt-4 border-t border-slate-100">
+								<Button
+									variant="secondary"
+									className="w-full justify-center"
+									onClick={() => setShowContractDetailsModal(true)}
+								>
+									<Eye className="w-4 h-4 mr-2" />
+									{"Ver todos os detalhes do contrato"}
+								</Button>
+							</div>
+						)}
 					</div>
 				</div>
 
@@ -383,7 +407,6 @@ export const DealDetailsView: React.FC = () => {
 					<div className="p-6 border-b border-slate-100">
 						<div className="flex items-center justify-between w-full">
 							<h3 className="font-bold text-lg text-slate-800">Documentos do Contrato</h3>
-							{renderNavigateToSpecificStepButton(2, 'de documentos')}
 						</div>
 						<p className="text-sm text-slate-500">
 							{deal.docs.length > 0
@@ -418,8 +441,6 @@ export const DealDetailsView: React.FC = () => {
 				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-6">
 					<div className="flex items-center justify-between w-full">
 						<h3 className="font-bold text-lg text-slate-800 mb-1">{"Signatários"}</h3>
-
-						{renderNavigateToSpecificStepButton(5, 'de signatários')}
 					</div>
 					<p className="text-sm text-slate-500 mb-4">
 						{dealData.signers?.length || 0} {dealData.signers?.length !== 1 ? 'Signatários' : 'Signatário'} adicionado(s) para o contrato
@@ -458,7 +479,7 @@ export const DealDetailsView: React.FC = () => {
 					type="radio"
 					name="deal_details_tabs"
 					className={`tab px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'validations' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
-					aria-label={hasAlerts ? "\u26A0\uFE0F Validações" : "Validações"}
+					aria-label={hasAlerts ? "\u26A0 Validações" : "Validações"}
 					onChange={() => setActiveTab('validations')}
 				/>
 				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-6">
@@ -499,6 +520,74 @@ export const DealDetailsView: React.FC = () => {
 				open={!!selectedDoc}
 				onClose={() => setSelectedDoc(null)}
 			/>
+
+			{/* Modal de detalhes do contrato */}
+			{showContractDetailsModal && contractSections && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+					{/* Backdrop */}
+					<div
+						className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+						onClick={() => setShowContractDetailsModal(false)}
+					/>
+
+					{/* Modal */}
+					<div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+						{/* Header */}
+						<div className="flex items-center justify-between p-6 border-b border-slate-200">
+							<div>
+								<h2 className="text-xl font-bold text-slate-800">{"Detalhes do Contrato"}</h2>
+								<p className="text-sm text-slate-500 mt-0.5">{"Variáveis extraídas e configuradas"}</p>
+							</div>
+							<button
+								onClick={() => setShowContractDetailsModal(false)}
+								className="cursor-pointer p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
+							>
+								<X className="w-5 h-5" />
+							</button>
+						</div>
+
+						{/* Body */}
+						<div className="flex-1 overflow-y-auto p-6 space-y-6">
+							{Object.entries(contractSections).map(([sectionName, items]) => {
+								const sectionIcon = sectionName === 'Compradores' || sectionName === 'Vendedores'
+									? <Users className="w-4 h-4 text-slate-400" />
+									: sectionName === 'Imóvel'
+										? <Home className="w-4 h-4 text-slate-400" />
+										: sectionName === 'Condições Comerciais'
+											? <DollarSign className="w-4 h-4 text-slate-400" />
+											: <FileText className="w-4 h-4 text-slate-400" />;
+
+								return (
+									<div key={sectionName}>
+										<h3 className="font-semibold text-slate-700 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
+											{sectionIcon}
+											{sectionName}
+										</h3>
+										<div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200">
+											{(items as { key: string; value: string }[]).map(({ key, value }, idx) => (
+												<div key={idx} className="flex items-start gap-4 p-3 px-4">
+													<span className="text-xs text-slate-400 font-mono min-w-[180px] pt-0.5 break-all">{formatFieldLabel(key)}</span>
+													<span className="text-sm text-slate-800 flex-1 break-words">{value || '-'}</span>
+												</div>
+											))}
+										</div>
+									</div>
+								);
+							})}
+						</div>
+
+						{/* Footer */}
+						<div className="p-4 border-t border-slate-200 flex justify-end">
+							<Button
+								variant="secondary"
+								onClick={() => setShowContractDetailsModal(false)}
+							>
+								Fechar
+							</Button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };
