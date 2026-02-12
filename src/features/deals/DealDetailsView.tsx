@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, FileText, Home, Users, DollarSign, User, Edit, AlertCircle, AlertTriangle, X, Eye } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, FileText, Home, Users, DollarSign, User, Edit, AlertCircle, AlertTriangle, X, Eye, ExternalLink } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { useDeal, useRemoveSignatoryFromDeal } from './hooks/useDeals';
 import type { DealStatus, DealDocument, Signatory } from '../../types/types';
@@ -9,6 +9,17 @@ import { SignerCard } from './components/SignerCard';
 import { DealContextBanner } from './components/DealContextBanner';
 import { DocumentCategorizedList } from './components/DocumentCategorizedList';
 import { DocumentDataDrawer } from './components/DocumentDataDrawer';
+
+/* ------------------------------------------------------------------ */
+/*  Marital-state label helper                                         */
+/* ------------------------------------------------------------------ */
+const MARITAL_LABELS: Record<string, string> = {
+	solteiro: 'Solteiro(a)',
+	casado: 'Casado(a)',
+	viuvo: 'Viúvo(a)',
+	divorciado: 'Divorciado(a)',
+	uniao_estavel: 'União Estável',
+};
 
 export const DealDetailsView: React.FC = () => {
 	const { id } = useParams<{ id: string }>();
@@ -22,7 +33,7 @@ export const DealDetailsView: React.FC = () => {
 
 	const [activeTab, setActiveTab] = useState<'data' | 'docs' | 'signers' | 'validations'>('data');
 	const [selectedDoc, setSelectedDoc] = useState<DealDocument | null>(null);
-	const [showContractDetailsModal, setShowContractDetailsModal] = useState(false);
+	const [contractModalSection, setContractModalSection] = useState<string | null>(null);
 
 	const removeSigner = async (signerId: string) => {
 		if (!dealId) return;
@@ -31,7 +42,6 @@ export const DealDetailsView: React.FC = () => {
 		try {
 			setRemoveSignerLoading(true);
 			await removeSignatoryMutation.mutateAsync({ dealId, signatoryId: signerId });
-			console.log('Signatario removido do banco de dados');
 		} catch (error) {
 			console.error('Erro ao remover signatario do banco:', error);
 		} finally {
@@ -41,20 +51,19 @@ export const DealDetailsView: React.FC = () => {
 
 	const handleNavigateToSpecificStep = (step: number) => {
 		if (deal.status !== 'DRAFT') return;
-
 		navigate(`/deals/${dealId}/edit?step=${step}`);
 	}
 
 	const getStatusBadge = (status: DealStatus) => {
 		switch (status) {
-			case 'SIGNED': return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Assinado</span>;
-			case 'SENT': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Enviado para assinatura</span>;
-			case 'READ': return <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Visualizado</span>;
-			case 'PARTIALLY_SIGNED': return <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Parcialmente assinado</span>;
-			case 'DRAFT': return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">{"Preparação do documento"}</span>;
-			case 'CANCELED': return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Cancelado</span>;
-			case 'REJECTED': return <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">Rejeitado</span>;
-			default: return <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-bold uppercase w-fit">{status}</span>;
+			case 'SIGNED': return <span className="bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase w-fit">Assinado</span>;
+			case 'SENT': return <span className="bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase w-fit">Enviado para assinatura</span>;
+			case 'READ': return <span className="bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase w-fit">Visualizado</span>;
+			case 'PARTIALLY_SIGNED': return <span className="bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase w-fit">Parcialmente assinado</span>;
+			case 'DRAFT': return <span className="bg-yellow-100 text-yellow-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase w-fit">{"Preparação do documento"}</span>;
+			case 'CANCELED': return <span className="bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase w-fit">Cancelado</span>;
+			case 'REJECTED': return <span className="bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase w-fit">Rejeitado</span>;
+			default: return <span className="bg-gray-100 text-gray-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase w-fit">{status}</span>;
 		}
 	};
 
@@ -63,7 +72,7 @@ export const DealDetailsView: React.FC = () => {
 		return (
 			<div className="flex flex-col items-center justify-center min-h-[60vh]">
 				<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
-				<p className="text-slate-600">Carregando dados do contrato...</p>
+				<p className="text-slate-600 text-sm">Carregando dados do contrato...</p>
 			</div>
 		);
 	}
@@ -73,23 +82,13 @@ export const DealDetailsView: React.FC = () => {
 		return (
 			<div className="flex flex-col items-center justify-center min-h-[60vh]">
 				<AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-				<p className="text-red-700 font-semibold">Erro ao carregar contrato</p>
-				<p className="text-red-600 text-sm">{error instanceof Error ? error.message : 'Contrato não encontrado'}</p>
+				<p className="text-red-700 font-semibold text-sm">Erro ao carregar contrato</p>
+				<p className="text-red-600 text-xs">{error instanceof Error ? error.message : 'Contrato não encontrado'}</p>
 				<Button onClick={() => navigate('/dashboard')} className="mt-4" variant="secondary">
 					<ArrowLeft className="w-4 h-4 mr-2" /> Voltar
 				</Button>
 			</div>
 		);
-	}
-
-	const getDealValue = () => {
-		if (deal.valor !== 'Não informado' && deal.valor !== '' || !deal.metadata?.contractValue) return deal.valor;
-		return formatCurrency(Number(deal.metadata?.contractValue) / 100);
-	}
-
-	const getUsersIcon = (count: number) => {
-		if (count > 1) return <Users className="w-5 h-5" />;
-		return <User className="w-5 h-5" />;
 	}
 
 	const formatCurrency = (value: number) => {
@@ -101,8 +100,18 @@ export const DealDetailsView: React.FC = () => {
 		}).format(value);
 	}
 
-	// Processar dados do deal com extração de documentos
+	// Processar dados do deal
 	const deal = mergeDealData(dealData);
+
+	const getDealValue = () => {
+		if (deal.valor !== 'Não informado' && deal.valor !== '' || !deal.metadata?.contractValue) return deal.valor;
+		return formatCurrency(Number(deal.metadata?.contractValue) / 100);
+	}
+
+	const getUsersIcon = (count: number) => {
+		if (count > 1) return <Users className="w-4 h-4" />;
+		return <User className="w-4 h-4" />;
+	}
 
 	/**
 	 * Determina o step contextual para o botão "Continuar a preparação do documento"
@@ -131,7 +140,7 @@ export const DealDetailsView: React.FC = () => {
 	const hasAlerts = deal.alerts && deal.alerts.length > 0;
 
 	/**
-	 * Parse contract fields to get all variables grouped by section
+	 * Parse contract fields to get variables grouped by section
 	 */
 	const getContractFieldsSections = () => {
 		try {
@@ -166,7 +175,6 @@ export const DealDetailsView: React.FC = () => {
 				}
 			});
 
-			// Filter empty sections
 			return Object.fromEntries(
 				Object.entries(sections).filter(([, items]) => items.length > 0)
 			);
@@ -177,9 +185,6 @@ export const DealDetailsView: React.FC = () => {
 
 	const contractSections = getContractFieldsSections();
 
-	/**
-	 * Friendly label from field key
-	 */
 	const formatFieldLabel = (key: string): string => {
 		return key
 			.replace(/\./g, ' > ')
@@ -194,41 +199,49 @@ export const DealDetailsView: React.FC = () => {
 	const bankFinancing = metaConfig.bankFinancing ? 'Sim' : 'Não';
 	const consortiumLetter = metaConfig.consortiumLetter ? 'Sim' : 'Não';
 
+	// Marital state from metadata.buyers / metadata.sellers
+	const metaBuyers: any[] = metaConfig.buyers || [];
+	const metaSellers: any[] = metaConfig.sellers || [];
+
+	const getMaritalLabel = (persons: any[], idx: number) => {
+		const p = persons[idx];
+		if (!p?.maritalState) return null;
+		return MARITAL_LABELS[p.maritalState] || p.maritalState;
+	};
+
+	// Preview URL
+	const previewUrl = dealData.consolidated?.draftPreviewUrl;
+
 	return (
-		<div className="p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+		<div className="p-4 md:p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
 			{/* Header */}
-			<div className="mb-6">
-				<button onClick={() => navigate('/dashboard')} className="cursor-pointer flex items-center text-slate-500 hover:text-slate-700 text-sm mb-4 transition-colors">
-					<div className="flex items-center gap-2">
-						<ArrowLeft className="w-4 h-4" />
-						<span className="text-sm font-medium">
-							Voltar para listagem
-						</span>
-					</div>
+			<div className="mb-5">
+				<button onClick={() => navigate('/dashboard')} className="cursor-pointer flex items-center text-slate-500 hover:text-slate-700 text-xs mb-3 transition-colors">
+					<ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+					<span className="font-medium">Voltar para listagem</span>
 				</button>
 
-				<div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+				<div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
 					<div>
-						<div className="flex flex-col md:flex-row md:items-center gap-4">
-							<h1 className="text-3xl font-bold text-slate-800">{deal.name}</h1>
+						<div className="flex flex-col md:flex-row md:items-center gap-3">
+							<h1 className="text-2xl font-bold text-slate-800">{deal.name}</h1>
 							{getStatusBadge(deal.status)}
 						</div>
-						<div className="text-slate-500 mt-1 flex items-center gap-2 text-sm">
+						<div className="text-slate-400 mt-1 flex items-center gap-2 text-xs">
 							<span>{deal.type}</span>
 							<span className="w-1 h-1 bg-slate-300 rounded-full"></span>
 							<span>Criado em {deal.date}</span>
 						</div>
 					</div>
 
-					{/* Action Buttons - Only if preparation/draft */}
 					{(deal.status === 'PREPARATION' || deal.status === 'DRAFT') && (
-						<div className="flex flex-wrap gap-3">
+						<div className="flex flex-wrap gap-2">
 							<Button
 								variant="secondary"
-								className="h-10 px-4 text-sm whitespace-nowrap"
+								className="h-9 px-3 text-xs whitespace-nowrap"
 								onClick={() => navigate(`/deals/${dealId}/edit?step=${getContextualStep()}`)}
 							>
-								<Edit className="w-4 h-4 mr-2" /> {"Continuar a preparação do documento"}
+								<Edit className="w-3.5 h-3.5 mr-1.5" /> {"Continuar a preparação do documento"}
 							</Button>
 						</div>
 					)}
@@ -236,162 +249,214 @@ export const DealDetailsView: React.FC = () => {
 			</div>
 
 			{/* Contextual Banner */}
-			<div className="mb-6">
+			<div className="mb-5">
 				<DealContextBanner deal={dealData} />
 			</div>
 
-			<div className="tabs tabs-box bg-slate-100 gap-2 p-4 mb-6">
+			{/* Generated document preview inline */}
+			{previewUrl && (
+				<div className="mb-5 flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+					<div className="flex-shrink-0 w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
+						<FileText className="w-4 h-4 text-emerald-600" />
+					</div>
+					<div className="flex-1 min-w-0">
+						<p className="text-xs font-semibold text-slate-700">Minuta gerada</p>
+						<p className="text-[11px] text-slate-500 truncate">Documento pronto para revisão</p>
+					</div>
+					<button
+						type="button"
+						onClick={() => window.open(previewUrl, '_blank')}
+						className="cursor-pointer flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-900 px-3 py-1.5 rounded-md hover:bg-emerald-100 transition-colors"
+					>
+						<ExternalLink className="w-3.5 h-3.5" />
+						Abrir documento
+					</button>
+				</div>
+			)}
+
+			<div className="tabs tabs-box bg-slate-100 gap-2 p-3 mb-5">
 				{/* Aba Dados Tratados */}
 				<input
 					type="radio"
 					name="deal_details_tabs"
-					className={`tab px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'data' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
+					className={`tab px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${activeTab === 'data' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
 					aria-label="Dados Tratados"
 					defaultChecked
 					onChange={() => setActiveTab('data')}
 				/>
-				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-6">
-					{/* Resumo do Deal */}
-					<div className="space-y-6">
-						{/* Info Geral */}
-						<div>
-							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-								<FileText className="w-5 h-5 text-slate-500" />
-								{"Informações Gerais"}
-							</h3>
-							<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-								<div className="bg-slate-50 rounded-lg p-4">
-									<label className="text-xs text-slate-400 block mb-1">{"Data de Criação"}</label>
-									<p className="text-slate-800 font-medium">{deal.date}</p>
-								</div>
-								<div className="bg-slate-50 rounded-lg p-4">
-									<label className="text-xs text-slate-400 block mb-1">{"Tipo"}</label>
-									<p className="text-slate-800 font-medium">{deal.type}</p>
-								</div>
-								{templateName && (
-									<div className="bg-slate-50 rounded-lg p-4">
-										<label className="text-xs text-slate-400 block mb-1">{"Template"}</label>
-										<p className="text-slate-800 font-medium text-sm truncate">{templateName}</p>
+				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-4">
+					{/* Grid layout compacto */}
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+						{/* Coluna esquerda: Info geral + Imóvel + Condições */}
+						<div className="space-y-4">
+							{/* Info Geral */}
+							<div>
+								<h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+									<FileText className="w-3.5 h-3.5" />
+									{"Informações Gerais"}
+								</h4>
+								<div className="grid grid-cols-2 gap-2">
+									<div className="bg-slate-50 rounded-lg px-3 py-2">
+										<span className="text-[10px] text-slate-400 block">{"Data de Criação"}</span>
+										<span className="text-xs text-slate-800 font-medium">{deal.date}</span>
 									</div>
+									<div className="bg-slate-50 rounded-lg px-3 py-2">
+										<span className="text-[10px] text-slate-400 block">{"Tipo"}</span>
+										<span className="text-xs text-slate-800 font-medium">{deal.type}</span>
+									</div>
+									{templateName && (
+										<div className="bg-slate-50 rounded-lg px-3 py-2 col-span-2">
+											<span className="text-[10px] text-slate-400 block">{"Template"}</span>
+											<span className="text-xs text-slate-800 font-medium truncate block">{templateName}</span>
+										</div>
+									)}
+								</div>
+							</div>
+
+							{/* Imóvel */}
+							<div>
+								<h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+									<Home className="w-3.5 h-3.5" />
+									{"Imóvel"}
+								</h4>
+								<div className="grid grid-cols-2 gap-2">
+									<div className="bg-slate-50 rounded-lg px-3 py-2">
+										<span className="text-[10px] text-slate-400 block">{"Endereço"}</span>
+										<span className="text-xs text-slate-800 font-medium">{deal.address}</span>
+									</div>
+									<div className="bg-slate-50 rounded-lg px-3 py-2">
+										<span className="text-[10px] text-slate-400 block">{"Matrícula"}</span>
+										<span className="text-xs text-slate-800 font-bold">{deal.matricula}</span>
+									</div>
+								</div>
+								{contractSections?.['Imóvel'] && (
+									<button
+										onClick={() => setContractModalSection('Imóvel')}
+										className="cursor-pointer mt-2 text-[11px] text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
+									>
+										<Eye className="w-3 h-3" /> Ver detalhes do contrato
+									</button>
+								)}
+							</div>
+
+							{/* Condições Comerciais */}
+							<div>
+								<h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+									<DollarSign className="w-3.5 h-3.5" />
+									{"Condições Comerciais"}
+								</h4>
+								<div className="grid grid-cols-2 gap-2">
+									<div className="bg-slate-50 rounded-lg px-3 py-2">
+										<span className="text-[10px] text-slate-400 block">{"Valor"}</span>
+										<span className="text-xs text-slate-800 font-bold">{getDealValue()}</span>
+									</div>
+									<div className="bg-slate-50 rounded-lg px-3 py-2">
+										<span className="text-[10px] text-slate-400 block">{"FGTS"}</span>
+										<span className="text-xs text-slate-800 font-medium">{useFgts}</span>
+									</div>
+									<div className="bg-slate-50 rounded-lg px-3 py-2">
+										<span className="text-[10px] text-slate-400 block">{"Financiamento"}</span>
+										<span className="text-xs text-slate-800 font-medium">{bankFinancing}</span>
+									</div>
+									<div className="bg-slate-50 rounded-lg px-3 py-2">
+										<span className="text-[10px] text-slate-400 block">{"Consórcio"}</span>
+										<span className="text-xs text-slate-800 font-medium">{consortiumLetter}</span>
+									</div>
+								</div>
+								{contractSections?.['Condições Comerciais'] && (
+									<button
+										onClick={() => setContractModalSection('Condições Comerciais')}
+										className="cursor-pointer mt-2 text-[11px] text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
+									>
+										<Eye className="w-3 h-3" /> Ver detalhes do contrato
+									</button>
 								)}
 							</div>
 						</div>
 
-						{/* Condições Comerciais resumo */}
-						<div>
-							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-								<DollarSign className="w-5 h-5 text-slate-500" />
-								{"Condições Comerciais"}
-							</h3>
-							<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-								<div className="bg-slate-50 rounded-lg p-4">
-									<label className="text-xs text-slate-400 block mb-1">{"Valor Total"}</label>
-									<p className="text-slate-800 font-bold">{getDealValue()}</p>
-								</div>
-								<div className="bg-slate-50 rounded-lg p-4">
-									<label className="text-xs text-slate-400 block mb-1">{"FGTS"}</label>
-									<p className="text-slate-800 font-medium">{useFgts}</p>
-								</div>
-								<div className="bg-slate-50 rounded-lg p-4">
-									<label className="text-xs text-slate-400 block mb-1">{"Financiamento"}</label>
-									<p className="text-slate-800 font-medium">{bankFinancing}</p>
-								</div>
-								<div className="bg-slate-50 rounded-lg p-4">
-									<label className="text-xs text-slate-400 block mb-1">{"Consórcio"}</label>
-									<p className="text-slate-800 font-medium">{consortiumLetter}</p>
-								</div>
+						{/* Coluna direita: Compradores + Vendedores */}
+						<div className="space-y-4">
+							{/* Compradores */}
+							<div>
+								<h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+									{getUsersIcon(deal.buyers.length)}
+									{`Comprador${deal.buyers.length > 1 ? 'es' : ''} (${deal.buyers.length})`}
+								</h4>
+								{deal.buyers.length > 0 ? (
+									<div className="space-y-1.5">
+										{deal.buyers.map((buyer: any, idx: number) => {
+											const marital = getMaritalLabel(metaBuyers, idx);
+											return (
+												<div key={idx} className="bg-slate-50 px-3 py-2 rounded-lg flex items-center gap-2.5">
+													<div className="bg-white p-1.5 rounded-full border border-slate-200">
+														<User className="w-3 h-3 text-slate-400" />
+													</div>
+													<div className="flex-1 min-w-0">
+														<span className="text-xs font-medium text-slate-800 block truncate">
+															{typeof buyer.name === 'string' ? buyer.name : 'Sem nome'}
+														</span>
+														{marital && (
+															<span className="text-[10px] text-slate-500">{marital}</span>
+														)}
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								) : (
+									<p className="text-[11px] text-slate-400 italic">{"Nenhum comprador cadastrado"}</p>
+								)}
+								{contractSections?.['Compradores'] && (
+									<button
+										onClick={() => setContractModalSection('Compradores')}
+										className="cursor-pointer mt-2 text-[11px] text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
+									>
+										<Eye className="w-3 h-3" /> Ver detalhes do contrato
+									</button>
+								)}
+							</div>
+
+							{/* Vendedores */}
+							<div>
+								<h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+									{getUsersIcon(deal.sellers.length)}
+									{`Vendedor${deal.sellers.length > 1 ? 'es' : ''} (${deal.sellers.length})`}
+								</h4>
+								{deal.sellers.length > 0 ? (
+									<div className="space-y-1.5">
+										{deal.sellers.map((seller: any, idx: number) => {
+											const marital = getMaritalLabel(metaSellers, idx);
+											return (
+												<div key={idx} className="bg-slate-50 px-3 py-2 rounded-lg flex items-center gap-2.5">
+													<div className="bg-white p-1.5 rounded-full border border-slate-200">
+														<User className="w-3 h-3 text-slate-400" />
+													</div>
+													<div className="flex-1 min-w-0">
+														<span className="text-xs font-medium text-slate-800 block truncate">
+															{typeof seller.name === 'string' ? seller.name : 'Sem nome'}
+														</span>
+														{marital && (
+															<span className="text-[10px] text-slate-500">{marital}</span>
+														)}
+													</div>
+												</div>
+											);
+										})}
+									</div>
+								) : (
+									<p className="text-[11px] text-slate-400 italic">{"Nenhum vendedor cadastrado"}</p>
+								)}
+								{contractSections?.['Vendedores'] && (
+									<button
+										onClick={() => setContractModalSection('Vendedores')}
+										className="cursor-pointer mt-2 text-[11px] text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
+									>
+										<Eye className="w-3 h-3" /> Ver detalhes do contrato
+									</button>
+								)}
 							</div>
 						</div>
-
-						{/* Imóvel */}
-						<div>
-							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-								<Home className="w-5 h-5 text-slate-500" />
-								{"Imóvel"}
-							</h3>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div className="bg-slate-50 rounded-lg p-4">
-									<label className="text-xs text-slate-400 block mb-1">{"Endereço"}</label>
-									<p className="text-slate-800 font-medium">{deal.address}</p>
-								</div>
-								<div className="bg-slate-50 rounded-lg p-4">
-									<label className="text-xs text-slate-400 block mb-1">{"Matrícula"}</label>
-									<p className="text-slate-800 font-bold">{deal.matricula}</p>
-								</div>
-							</div>
-						</div>
-
-						{/* Compradores */}
-						<div>
-							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-								{getUsersIcon(deal.buyers.length)}
-								{`Comprador${deal.buyers.length > 1 ? 'es' : ''} (${deal.buyers.length})`}
-							</h3>
-							{deal.buyers.length > 0 ? (
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-									{deal.buyers.map((buyer: any, idx: number) => (
-										<div key={idx} className="bg-slate-50 p-4 rounded-lg flex items-start gap-3">
-											<div className="bg-white p-2 rounded-full border border-slate-200">
-												<User className="w-4 h-4 text-slate-400" />
-											</div>
-											<div className="flex-1 min-w-0">
-												<p className="font-medium text-slate-800">{typeof buyer.name === 'string' ? buyer.name : 'Sem nome'}</p>
-												{buyer.cpf && (
-													<p className="text-xs text-slate-600 font-mono">CPF: {formatCPF(buyer.cpf)}</p>
-												)}
-												{buyer.email && <p className="text-xs text-slate-500">{buyer.email}</p>}
-												{buyer.phone && <p className="text-xs text-slate-500">{buyer.phone}</p>}
-											</div>
-										</div>
-									))}
-								</div>
-							) : (
-								<p className="text-sm text-slate-400 italic">{"Nenhum comprador cadastrado"}</p>
-							)}
-						</div>
-
-						{/* Vendedores */}
-						<div>
-							<h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-								{getUsersIcon(deal.sellers.length)}
-								{`Vendedor${deal.sellers.length > 1 ? 'es' : ''} (${deal.sellers.length})`}
-							</h3>
-							{deal.sellers.length > 0 ? (
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-									{deal.sellers.map((seller: any, idx: number) => (
-										<div key={idx} className="bg-slate-50 p-4 rounded-lg flex items-start gap-3">
-											<div className="bg-white p-2 rounded-full border border-slate-200">
-												<User className="w-4 h-4 text-slate-400" />
-											</div>
-											<div className="flex-1 min-w-0">
-												<p className="font-medium text-slate-800">{typeof seller.name === 'string' ? seller.name : 'Sem nome'}</p>
-												{seller.cpf && (
-													<p className="text-xs text-slate-600 font-mono">CPF: {formatCPF(seller.cpf)}</p>
-												)}
-												{seller.email && <p className="text-xs text-slate-500">{seller.email}</p>}
-												{seller.phone && <p className="text-xs text-slate-500">{seller.phone}</p>}
-											</div>
-										</div>
-									))}
-								</div>
-							) : (
-								<p className="text-sm text-slate-400 italic">{"Nenhum vendedor cadastrado"}</p>
-							)}
-						</div>
-
-						{/* Botão ver detalhes do contrato - só aparece se houver contractFields */}
-						{contractSections && (
-							<div className="pt-4 border-t border-slate-100">
-								<Button
-									variant="secondary"
-									className="w-full justify-center"
-									onClick={() => setShowContractDetailsModal(true)}
-								>
-									<Eye className="w-4 h-4 mr-2" />
-									{"Ver todos os detalhes do contrato"}
-								</Button>
-							</div>
-						)}
 					</div>
 				</div>
 
@@ -399,16 +464,14 @@ export const DealDetailsView: React.FC = () => {
 				<input
 					type="radio"
 					name="deal_details_tabs"
-					className={`tab px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'docs' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
+					className={`tab px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${activeTab === 'docs' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
 					aria-label="Documentos"
 					onChange={() => setActiveTab('docs')}
 				/>
 				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-0">
-					<div className="p-6 border-b border-slate-100">
-						<div className="flex items-center justify-between w-full">
-							<h3 className="font-bold text-lg text-slate-800">Documentos do Contrato</h3>
-						</div>
-						<p className="text-sm text-slate-500">
+					<div className="p-4 border-b border-slate-100">
+						<h3 className="font-semibold text-sm text-slate-800">Documentos do Contrato</h3>
+						<p className="text-[11px] text-slate-500">
 							{deal.docs.length > 0
 								? `${deal.docs.length} documento${deal.docs.length !== 1 ? 's' : ''} anexado${deal.docs.length !== 1 ? 's' : ''}`
 								: 'Nenhum documento anexado ainda'}
@@ -420,10 +483,10 @@ export const DealDetailsView: React.FC = () => {
 							onSelectDocument={(doc) => setSelectedDoc(doc)}
 						/>
 					) : (
-						<div className="p-8 text-center">
-							<FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-							<p className="text-slate-500">Nenhum documento anexado</p>
-							<p className="text-xs text-slate-400 mt-1">
+						<div className="p-6 text-center">
+							<FileText className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+							<p className="text-xs text-slate-500">Nenhum documento anexado</p>
+							<p className="text-[11px] text-slate-400 mt-0.5">
 								{"Clique em \"Continuar a preparação do documento\" para adicionar documentos"}
 							</p>
 						</div>
@@ -434,28 +497,26 @@ export const DealDetailsView: React.FC = () => {
 				<input
 					type="radio"
 					name="deal_details_tabs"
-					className={`tab px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'signers' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
+					className={`tab px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${activeTab === 'signers' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
 					aria-label={"Signatários"}
 					onChange={() => setActiveTab('signers')}
 				/>
-				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-6">
-					<div className="flex items-center justify-between w-full">
-						<h3 className="font-bold text-lg text-slate-800 mb-1">{"Signatários"}</h3>
-					</div>
-					<p className="text-sm text-slate-500 mb-4">
-						{dealData.signers?.length || 0} {dealData.signers?.length !== 1 ? 'Signatários' : 'Signatário'} adicionado(s) para o contrato
+				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-4">
+					<h3 className="font-semibold text-sm text-slate-800 mb-0.5">{"Signatários"}</h3>
+					<p className="text-[11px] text-slate-500 mb-3">
+						{dealData.signers?.length || 0} {dealData.signers?.length !== 1 ? 'signatários' : 'signatário'} adicionado(s)
 					</p>
 
 					{dealData.signers?.length === 0 ? (
-						<div className="p-8 text-center">
-							<Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-							<p className="text-slate-500">{"Nenhum signatário adicionado"}</p>
-							<p className="text-xs text-slate-400 mt-1">
+						<div className="p-6 text-center">
+							<Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+							<p className="text-xs text-slate-500">{"Nenhum signatário adicionado"}</p>
+							<p className="text-[11px] text-slate-400 mt-0.5">
 								{"Clique em \"Continuar a preparação do documento\" para adicionar signatários"}
 							</p>
 						</div>
 					) : (
-						<div className="space-y-4">
+						<div className="space-y-3">
 							{dealData.signers?.map((signer: Signatory) => (
 								<SignerCard
 									key={signer.id} signer={signer}
@@ -478,22 +539,22 @@ export const DealDetailsView: React.FC = () => {
 				<input
 					type="radio"
 					name="deal_details_tabs"
-					className={`tab px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'validations' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
-					aria-label={hasAlerts ? "\u26A0 Validações" : "Validações"}
+					className={`tab px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${activeTab === 'validations' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
+					aria-label={hasAlerts ? "\u26A0\uFE0E Validações" : "Validações"}
 					onChange={() => setActiveTab('validations')}
 				/>
-				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-6">
-					<h3 className="font-bold text-lg text-slate-800 mb-4">{"Validações"}</h3>
+				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-4">
+					<h3 className="font-semibold text-sm text-slate-800 mb-3">{"Validações"}</h3>
 
 					{hasAlerts ? (
-						<div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-							<div className="flex items-start gap-3">
-								<AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+						<div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+							<div className="flex items-start gap-2.5">
+								<AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
 								<div className="flex-1">
-									<h4 className="font-bold text-amber-900 mb-2">{"Alertas e Observações"}</h4>
-									<ul className="space-y-1">
+									<h4 className="font-semibold text-xs text-amber-900 mb-1.5">{"Alertas e Observações"}</h4>
+									<ul className="space-y-0.5">
 										{deal.alerts.map((alert: string, idx: number) => (
-											<li key={idx} className="text-sm text-amber-800 flex items-start gap-2">
+											<li key={idx} className="text-[11px] text-amber-800 flex items-start gap-1.5">
 												<span className="mt-0.5">{"•"}</span>
 												<span>{alert}</span>
 											</li>
@@ -503,10 +564,10 @@ export const DealDetailsView: React.FC = () => {
 							</div>
 						</div>
 					) : (
-						<div className="p-8 text-center">
-							<CheckCircle2 className="w-12 h-12 text-green-300 mx-auto mb-3" />
-							<p className="text-slate-500">{"Nenhuma pendência encontrada"}</p>
-							<p className="text-xs text-slate-400 mt-1">
+						<div className="p-6 text-center">
+							<CheckCircle2 className="w-10 h-10 text-green-300 mx-auto mb-2" />
+							<p className="text-xs text-slate-500">{"Nenhuma pendência encontrada"}</p>
+							<p className="text-[11px] text-slate-400 mt-0.5">
 								{"Todos os documentos e dados estão em conformidade."}
 							</p>
 						</div>
@@ -521,66 +582,53 @@ export const DealDetailsView: React.FC = () => {
 				onClose={() => setSelectedDoc(null)}
 			/>
 
-			{/* Modal de detalhes do contrato */}
-			{showContractDetailsModal && contractSections && (
+			{/* Modal de detalhes do contrato por seção */}
+			{contractModalSection && contractSections?.[contractModalSection] && (
 				<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-					{/* Backdrop */}
 					<div
 						className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-						onClick={() => setShowContractDetailsModal(false)}
+						onClick={() => setContractModalSection(null)}
 					/>
 
-					{/* Modal */}
-					<div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+					<div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
 						{/* Header */}
-						<div className="flex items-center justify-between p-6 border-b border-slate-200">
+						<div className="flex items-center justify-between p-5 border-b border-slate-200">
 							<div>
-								<h2 className="text-xl font-bold text-slate-800">{"Detalhes do Contrato"}</h2>
-								<p className="text-sm text-slate-500 mt-0.5">{"Variáveis extraídas e configuradas"}</p>
+								<h2 className="text-base font-bold text-slate-800">
+									{contractModalSection === 'Compradores' && 'Detalhes dos Compradores'}
+									{contractModalSection === 'Vendedores' && 'Detalhes dos Vendedores'}
+									{contractModalSection === 'Imóvel' && 'Detalhes do Imóvel'}
+									{contractModalSection === 'Condições Comerciais' && 'Detalhes das Condições Comerciais'}
+									{contractModalSection === 'Outros' && 'Outros Detalhes'}
+								</h2>
+								<p className="text-[11px] text-slate-500 mt-0.5">{"Variáveis extraídas do contrato"}</p>
 							</div>
 							<button
-								onClick={() => setShowContractDetailsModal(false)}
-								className="cursor-pointer p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
+								onClick={() => setContractModalSection(null)}
+								className="cursor-pointer p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
 							>
-								<X className="w-5 h-5" />
+								<X className="w-4 h-4" />
 							</button>
 						</div>
 
 						{/* Body */}
-						<div className="flex-1 overflow-y-auto p-6 space-y-6">
-							{Object.entries(contractSections).map(([sectionName, items]) => {
-								const sectionIcon = sectionName === 'Compradores' || sectionName === 'Vendedores'
-									? <Users className="w-4 h-4 text-slate-400" />
-									: sectionName === 'Imóvel'
-										? <Home className="w-4 h-4 text-slate-400" />
-										: sectionName === 'Condições Comerciais'
-											? <DollarSign className="w-4 h-4 text-slate-400" />
-											: <FileText className="w-4 h-4 text-slate-400" />;
-
-								return (
-									<div key={sectionName}>
-										<h3 className="font-semibold text-slate-700 mb-3 flex items-center gap-2 text-sm uppercase tracking-wide">
-											{sectionIcon}
-											{sectionName}
-										</h3>
-										<div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200">
-											{(items as { key: string; value: string }[]).map(({ key, value }, idx) => (
-												<div key={idx} className="flex items-start gap-4 p-3 px-4">
-													<span className="text-xs text-slate-400 font-mono min-w-[180px] pt-0.5 break-all">{formatFieldLabel(key)}</span>
-													<span className="text-sm text-slate-800 flex-1 break-words">{value || '-'}</span>
-												</div>
-											))}
-										</div>
+						<div className="flex-1 overflow-y-auto p-5">
+							<div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200">
+								{(contractSections[contractModalSection] as { key: string; value: string }[]).map(({ key, value }, idx) => (
+									<div key={idx} className="flex items-start gap-3 p-3 px-4">
+										<span className="text-[10px] text-slate-400 font-mono min-w-[150px] pt-0.5 break-all">{formatFieldLabel(key)}</span>
+										<span className="text-xs text-slate-800 flex-1 break-words">{value || '-'}</span>
 									</div>
-								);
-							})}
+								))}
+							</div>
 						</div>
 
 						{/* Footer */}
 						<div className="p-4 border-t border-slate-200 flex justify-end">
 							<Button
 								variant="secondary"
-								onClick={() => setShowContractDetailsModal(false)}
+								className="text-xs h-8"
+								onClick={() => setContractModalSection(null)}
 							>
 								Fechar
 							</Button>
