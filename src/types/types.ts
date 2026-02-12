@@ -24,7 +24,7 @@ export interface Deal {
   createdAt: string;
   updatedAt: string;
   signers?: Signatory[];
-  documents?: any[];
+  documents?: DealDocument[];
 }
 
 export interface GeneratePreviewResponse {
@@ -47,6 +47,22 @@ export interface ConsolidatedDealData {
   draftPreviewUrl: string;
   generatedDocId: string;
   docsalesPdfUrl: string;
+}
+
+export interface DealDocument {
+  id: string;
+  documentType: string;
+  originalFilename: string;
+  status: 'UPLOADED' | 'OCR_PROCESSING' | 'OCR_DONE' | 'EXTRACTED' | 'ERROR' | string;
+  category: 'buyers' | 'sellers' | 'property' | 'proposal';
+  personId?: string;
+  variables?: Record<string, any>;
+  fileSize?: number;
+  mimeType?: string;
+  fileUrl?: string;
+  whisperHash?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Signatory {

@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Circle, FileText, Home, Users, DollarSign, User, XCircle, Edit, Send, Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, FileText, Home, Users, DollarSign, User, XCircle, Edit, Send, Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { ErrorModal } from '../../components/ErrorModal';
 import { SuccessModal } from './components/SuccessModal';
 import { useDeal, useRemoveSignatoryFromDeal, useSendContract } from './hooks/useDeals';
-import type { DealStatus, Signatory } from '../../types/types';
+import type { DealStatus, DealDocument, Signatory } from '../../types/types';
 import { mergeDealData, formatCPF } from './utils/extractDealData';
 import { SignerCard } from './components/SignerCard';
+import { DealContextBanner } from './components/DealContextBanner';
+import { DocumentCategorizedList } from './components/DocumentCategorizedList';
+import { DocumentDataDrawer } from './components/DocumentDataDrawer';
 
 export const DealDetailsView: React.FC = () => {
 	const { id } = useParams<{ id: string }>();
@@ -22,6 +25,7 @@ export const DealDetailsView: React.FC = () => {
 	const removeSignatoryMutation = useRemoveSignatoryFromDeal();
 
 	const [activeTab, setActiveTab] = useState<'data' | 'docs' | 'signers'>('data');
+	const [selectedDoc, setSelectedDoc] = useState<DealDocument | null>(null);
 	const [isSending, setIsSending] = useState(false);
 	const [showConfirmModal, setShowConfirmModal] = useState(false);
 	const [showErrorModal, setShowErrorModal] = useState(false);
@@ -367,6 +371,11 @@ export const DealDetailsView: React.FC = () => {
 				</div>
 			)}
 
+			{/* Contextual Banner */}
+			<div className="mb-6">
+				<DealContextBanner deal={dealData} />
+			</div>
+
 			<div className="tabs tabs-box bg-slate-100 gap-2 p-4 mb-6">
 				{/* Aba Dados Tratados */}
 				<input
@@ -553,62 +562,19 @@ export const DealDetailsView: React.FC = () => {
 					<div className="p-6 border-b border-slate-100">
 						<div className="flex items-center justify-between w-full">
 							<h3 className="font-bold text-lg text-slate-800">Documentos do Contrato</h3>
-
 							{renderNavigateToSpecificStepButton(2, 'de documentos')}
 						</div>
 						<p className="text-sm text-slate-500">
 							{deal.docs.length > 0
-								? 'Documentos anexados ao contrato'
+								? `${deal.docs.length} documento${deal.docs.length !== 1 ? 's' : ''} anexado${deal.docs.length !== 1 ? 's' : ''}`
 								: 'Nenhum documento anexado ainda'}
 						</p>
 					</div>
 					{deal.docs.length > 0 ? (
-						<div className="divide-y divide-slate-100">
-							{deal.docs.map((doc: any, idx: number) => (
-								<div key={idx} className="p-4 flex flex-col sm:flex-row sm:items-center rounded-lg justify-between gap-4 hover:bg-slate-50 transition-colors">
-									<div className="flex items-center gap-3">
-										<div className="bg-blue-50 p-2 rounded text-primary">
-											<FileText className="w-4 h-4" />
-										</div>
-										<div>
-											<span className="font-medium text-slate-700 block">
-												{doc.originalFilename || doc.documentType || 'Documento'}
-											</span>
-											<span className="text-xs text-slate-400">
-												{doc.documentType || 'Tipo não especificado'}
-											</span>
-										</div>
-									</div>
-									<div className="flex gap-4">
-										<div className="flex items-center gap-1.5 min-w-[100px]">
-											{doc.status === 'EXTRACTED' || doc.status === 'OCR_DONE' ? (
-												<CheckCircle2 className="w-4 h-4 text-green-500" />
-											) : doc.status === 'OCR_PROCESSING' ? (
-												<Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-											) : doc.status === 'ERROR' ? (
-												<XCircle className="w-4 h-4 text-red-500" />
-											) : (
-												<Circle className="w-4 h-4 text-slate-300" />
-											)}
-											<span className={`text-sm ${doc.status === 'EXTRACTED' || doc.status === 'OCR_DONE'
-												? 'text-green-600'
-												: doc.status === 'OCR_PROCESSING'
-													? 'text-blue-600'
-													: doc.status === 'ERROR'
-														? 'text-red-600'
-														: 'text-slate-400'
-												}`}>
-												{doc.status === 'EXTRACTED' ? 'Processado' :
-													doc.status === 'OCR_DONE' ? 'OCR Concluído' :
-														doc.status === 'OCR_PROCESSING' ? 'Processando' :
-															doc.status === 'ERROR' ? 'Erro' :
-																doc.status || 'Pendente'}
-											</span>
-										</div>
-									</div>
-								</div>
-							))}
-						</div>
+						<DocumentCategorizedList
+							documents={deal.docs}
+							onSelectDocument={(doc) => setSelectedDoc(doc)}
+						/>
 					) : (
 						<div className="p-8 text-center">
 							<FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
@@ -699,6 +665,13 @@ export const DealDetailsView: React.FC = () => {
 				onClose={() => setShowSuccessModal(false)}
 				title="Contrato Enviado!"
 				description="O contrato foi enviado para assinatura com sucesso. Os signatários receberão o documento por e-mail do DocSales e poderão assinar digitalmente."
+			/>
+
+			{/* Document data drawer */}
+			<DocumentDataDrawer
+				document={selectedDoc}
+				open={!!selectedDoc}
+				onClose={() => setSelectedDoc(null)}
 			/>
 		</div>
 	);

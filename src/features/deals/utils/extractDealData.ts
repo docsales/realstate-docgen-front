@@ -52,7 +52,7 @@ interface MergedDealData {
   consorcio: string;
   buyers: ExtractedPerson[];
   sellers: ExtractedPerson[];
-  docs: any[];
+  docs: import('@/types/types').DealDocument[];
   alerts?: string[];
   statusJuridico?: any;
   createdAt: string;
