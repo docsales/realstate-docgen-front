@@ -33,7 +33,9 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 	const deedLabel = deedCountClamped === 1 ? '1 matrícula' : `${deedCountClamped} matrículas`;
 	
 	// Obter documentos da API ou fallback para array vazio
-	const requiredDocuments = checklist?.imovel.documentos || [];
+	const allDocuments = checklist?.imovel.documentos || [];
+	const mandatoryDocuments = allDocuments.filter(d => d.obrigatorio);
+	const optionalDocuments = allDocuments.filter(d => !d.obrigatorio);
 	const alerts = checklist?.imovel.alertas || [];
 
 	const handleFileUpload = (files: File[], documentType: string) => {
@@ -156,14 +158,14 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 				)}
 			</div>
 
-			{/* Lista de documentos obrigatórios */}
+			{/* Mandatory documents */}
 			<div className="space-y-3">
-				{requiredDocuments.length > 0 ? (
-					requiredDocuments.map((doc) => {
+				{mandatoryDocuments.length > 0 ? (
+					mandatoryDocuments.map((doc) => {
 						const isMatricula = doc.id === 'MATRICULA';
 						const extraHint =
 							deedCountClamped > 1 && isMatricula
-								? `\n\nObrigatório: envie ${deedLabel}.`
+								? `\n\nEnvie ${deedLabel}.`
 								: '';
 
 						return (
@@ -185,10 +187,36 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 				) : (
 					<div className="text-center py-12 text-slate-500">
 						<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
-						<p className="text-sm text-slate-500">Carregando documentos necessários...</p>
+						<p className="text-sm text-slate-500">Carregando documentos necessarios...</p>
 					</div>
 				)}
 			</div>
+
+			{/* Optional documents */}
+			{optionalDocuments.length > 0 && (
+				<div className="space-y-3">
+					<p className="text-[11px] uppercase tracking-wide font-medium text-slate-400 mt-4 mb-1">Opcionais</p>
+					{optionalDocuments.map((doc) => {
+						const isMatricula = doc.id === 'MATRICULA';
+						return (
+							<DocumentRequirementItem
+								key={`${doc.id}_opt`}
+								documentId={doc.id}
+								documentName={doc.nome}
+								description={doc.observacao || undefined}
+								uploadedFiles={propertyFiles}
+								allFiles={propertyFiles}
+								onFileUpload={handleFileUpload}
+								onRemoveFile={onRemoveFile}
+								onLinkExistingFile={handleLinkExistingFile}
+								linkingFileId={linkingFileId}
+								maxFiles={isMatricula ? deedCountClamped : 5}
+								isOptional
+							/>
+						);
+					})}
+				</div>
+			)}
 		</div>
 	);
 };

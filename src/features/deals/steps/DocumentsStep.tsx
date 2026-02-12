@@ -755,84 +755,69 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 				/>
 			)}
 
-			{/* Status Panel - compact inline bar */}
-			{files.length > 0 && (ocrStats.processing > 0 || ocrStats.uploading > 0 || ocrStats.completed > 0) && (
-				<div className="bg-white border border-slate-200 rounded-xl px-5 py-4">
+			{/* OCR Processing Bar -- only visible while uploading/processing, hidden when all done */}
+			{files.length > 0 && (ocrStats.processing > 0 || ocrStats.uploading > 0 || ocrStats.error > 0) && (
+				<div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
 					<div className="flex items-center justify-between gap-4">
-						{/* Left: stats row */}
-						<div className="flex items-center gap-5">
-							<div className="flex items-center gap-1.5">
-								<span className="text-xs text-slate-500">Total</span>
-								<span className="text-sm font-semibold text-slate-800 tabular-nums">{ocrStats.total}</span>
-							</div>
-
-							{ocrStats.uploading > 0 && (
-								<div className="flex items-center gap-1.5">
-									<span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" />
-									<span className="text-xs text-slate-500">Enviando</span>
-									<span className="text-sm font-semibold text-slate-700 tabular-nums">{ocrStats.uploading}</span>
-								</div>
-							)}
-
-							{ocrStats.processing > 0 && (
-								<div className="flex items-center gap-1.5">
-									<span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-									<span className="text-xs text-slate-500">Processando</span>
-									<span className="text-sm font-semibold text-slate-700 tabular-nums">{ocrStats.processing}</span>
-								</div>
-							)}
-
-							<div className="flex items-center gap-1.5">
-								<span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-								<span className="text-xs text-slate-500">Concluidos</span>
-								<span className="text-sm font-semibold text-slate-700 tabular-nums">{ocrStats.completed}</span>
+						{/* Left: processing status */}
+						<div className="flex items-center gap-4">
+							<div className="flex items-center gap-2">
+								<Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+								<span className="text-xs font-medium text-slate-600">
+									Processando {ocrStats.uploading + ocrStats.processing} de {ocrStats.total} documento{ocrStats.total !== 1 ? 's' : ''}
+								</span>
 							</div>
 
 							{ocrStats.error > 0 && (
 								<div className="flex items-center gap-1.5">
 									<span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-									<span className="text-xs text-slate-500">Erros</span>
-									<span className="text-sm font-semibold text-red-600 tabular-nums">{ocrStats.error}</span>
+									<span className="text-xs text-red-600 font-medium">{ocrStats.error} erro{ocrStats.error !== 1 ? 's' : ''}</span>
 								</div>
 							)}
 						</div>
 
 						{/* Right: progress bar + refresh */}
 						<div className="flex items-center gap-3 flex-shrink-0">
-							{/* Mini progress bar */}
-							{ocrStats.total > 0 && (
-								<div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-									<div
-										className="h-full bg-primary rounded-full transition-all duration-500"
-										style={{ width: `${Math.round((ocrStats.completed / ocrStats.total) * 100)}%` }}
-									/>
-								</div>
-							)}
+							<div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+								<div
+									className="h-full bg-primary rounded-full transition-all duration-500"
+									style={{ width: `${ocrStats.total > 0 ? Math.round((ocrStats.completed / ocrStats.total) * 100) : 0}%` }}
+								/>
+							</div>
+							<span className="text-[11px] text-slate-400 tabular-nums min-w-[32px] text-right">
+								{ocrStats.total > 0 ? Math.round((ocrStats.completed / ocrStats.total) * 100) : 0}%
+							</span>
 
-							{ocrStats.processing > 0 && (
-								<button
-									onClick={handleManualRefresh}
-									disabled={isCheckingStatus}
-									className="cursor-pointer p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
-									title="Atualizar status"
-								>
-									<RotateCw className={`w-4 h-4 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-								</button>
-							)}
+							<button
+								onClick={handleManualRefresh}
+								disabled={isCheckingStatus}
+								className="cursor-pointer p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors disabled:opacity-50"
+								title="Atualizar status"
+							>
+								<RotateCw className={`w-3.5 h-3.5 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+							</button>
 						</div>
 					</div>
-
-					{/* Processing message */}
-					{isOcrProcessing && (
-						<div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-							<Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
-							<span>Processando documentos...</span>
-						</div>
-					)}
 				</div>
 			)}
 
-			{/* Tabs Navigation */}
+			{/* Errors-only bar -- when processing is done but errors remain */}
+			{files.length > 0 && ocrStats.processing === 0 && ocrStats.uploading === 0 && ocrStats.error > 0 && (
+				<div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center justify-between">
+					<span className="text-xs font-medium text-red-600">
+						{ocrStats.error} documento{ocrStats.error !== 1 ? 's' : ''} com erro de processamento
+					</span>
+					<button
+						onClick={handleManualRefresh}
+						disabled={isCheckingStatus}
+						className="cursor-pointer text-xs text-red-500 hover:text-red-700 font-medium"
+					>
+						Tentar novamente
+					</button>
+				</div>
+				)}
+
+				{/* Tabs Navigation */}
 			<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
 				<div ref={documentsTabRef} className="border-b border-slate-200 bg-slate-50/30">
 					<div className="flex">

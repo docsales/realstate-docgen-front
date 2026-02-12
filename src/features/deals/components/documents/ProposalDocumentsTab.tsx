@@ -41,6 +41,7 @@ export const ProposalDocumentsTab: React.FC<ProposalDocumentsTabProps> = ({
 			<div className="flex items-center gap-2 mb-4">
 				<FileText className="w-4 h-4 text-slate-400" />
 				<h3 className="text-sm font-semibold text-slate-700">Proposta Comercial</h3>
+				<span className="text-[10px] uppercase tracking-wide font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Opcional</span>
 			</div>
 
 			{/* Erro de vinculação */}
@@ -65,17 +66,17 @@ export const ProposalDocumentsTab: React.FC<ProposalDocumentsTabProps> = ({
 				</p>
 			</div>
 
-			{/* Lista de documentos obrigatórios */}
 			<div className="space-y-3">
 				<DocumentRequirementItem
 					documentId="PROPOSTA_COMERCIAL"
 					documentName="Proposta Comercial"
-					description="Pode ser formulário, e-mail, WhatsApp, manuscrito digitalizado, etc. O OCR é agnóstico ao formato."
+					description="Pode ser formulario, e-mail, WhatsApp, manuscrito digitalizado, etc."
 					uploadedFiles={proposalFiles}
 					allFiles={proposalFiles}
 					onFileUpload={handleFileUpload}
 					onRemoveFile={onRemoveFile}
 					maxFiles={5}
+					isOptional
 				/>
 			</div>
 		</div>
