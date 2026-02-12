@@ -120,12 +120,7 @@ export const OcrStatusLoader: React.FC<OcrStatusLoaderProps> = ({
             </p>
           )}
 
-          {/* Mensagem de sucesso */}
-          {status === 'completed' && (
-            <p className="text-xs text-green-600 mt-1 font-medium">
-              ✓ Dados extraídos com sucesso
-            </p>
-          )}
+
         </div>
       </div>
 

@@ -74,7 +74,7 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 
 	const getStatusIcon = () => {
 		if (isValidated) {
-			return <CheckCircle2 className="w-5 h-5 text-green-600" />;
+			return <CheckCircle2 className="w-5 h-5 text-green-500" />;
 		}
 		if (hasError) {
 			return <XCircle className="w-5 h-5 text-red-600" />;
@@ -87,17 +87,17 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 
 	const getStatusText = () => {
 		if (isValidated) {
-			return <span className="text-green-600 font-semibold text-sm">Validado</span>;
+			return <span className="text-green-600 font-medium text-xs">Concluido</span>;
 		}
 		if (hasError) {
-			return <span className="text-red-600 font-semibold text-sm">Erro na validação</span>;
+			return <span className="text-red-600 font-semibold text-sm">Erro na validacao</span>;
 		}
 		if (isPending) {
 			return <span className="text-yellow-600 font-semibold text-sm">Validando...</span>;
 		}
 		return (
 			<span className="text-slate-400 font-semibold text-sm">
-				Clique ou arraste para enviar (até {maxFilesLabel})
+				Clique ou arraste para enviar (ate {maxFilesLabel})
 			</span>
 		);
 	};
@@ -174,16 +174,16 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 	return (
 		<div
 			className={`
-				bg-white p-4 rounded-lg border-2 transition-all
+				p-4 rounded-lg border-2 transition-all
 				${isValidated
-					? 'border-green-200 bg-green-50/30'
+					? 'border-slate-200 bg-white'
 					: hasError
 						? 'border-red-200 bg-red-50/30'
 						: isPending
 							? 'border-yellow-200 bg-yellow-50/30'
 							: isDragging
 								? 'border-blue-400 bg-blue-50 border-dashed scale-[1.02] shadow-lg'
-								: 'border-slate-200 hover:border-slate-600 hover:bg-slate-50 border-dashed'
+								: 'border-slate-200 bg-white hover:border-slate-600 hover:bg-slate-50 border-dashed'
 				}
 				${canAddMore ? 'cursor-pointer' : ''}
 			`}
@@ -217,13 +217,14 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 					{relatedFiles.length > 0 && (
 						<div className="space-y-2 mb-3">
 							{relatedFiles.map((file) => {
-								// Verificar se tem status OCR
-								const hasOcrStatus = file.ocrStatus && file.ocrStatus !== OcrStatus.IDLE;
+								// Only show OCR loader for active states (uploading/processing), not completed
+								const isOcrActive = file.ocrStatus === OcrStatus.UPLOADING || file.ocrStatus === OcrStatus.PROCESSING;
+								const isOcrError = file.ocrStatus === OcrStatus.ERROR;
 
 								return (
 									<div key={file.id}>
-										{/* Mostrar loader OCR se estiver processando */}
-										{hasOcrStatus && (
+										{/* Show OCR loader only while actively processing or on error */}
+										{(isOcrActive || isOcrError) && (
 											<div className="mb-2">
 												<OcrStatusLoader
 													status={file.ocrStatus!}
@@ -234,23 +235,23 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 											</div>
 										)}
 
-										{/* Card do arquivo */}
+										{/* File card - compact, no redundant status badges */}
 										<div
-											className={`flex items-center justify-between gap-2 p-2 rounded border ${file.validated === true
-												? 'bg-green-50 border-green-200'
-												: file.validated === false
-													? 'bg-red-50 border-red-200'
-													: 'bg-yellow-50 border-yellow-200'
-												}`}
+											className={`flex items-center justify-between gap-2 p-2 rounded border ${file.validated === false
+												? 'bg-red-50 border-red-200'
+												: file.validated === undefined
+													? 'bg-yellow-50 border-yellow-200'
+													: 'bg-white border-slate-200'
+											}`}
 										>
 											<div className="flex-1 min-w-0">
 												<div className="flex items-center gap-2 flex-wrap">
-													<span className="text-xs font-bold text-slate-600 uppercase bg-white px-2 py-0.5 rounded">
+													<span className="text-xs font-bold text-slate-600 uppercase bg-slate-100 px-2 py-0.5 rounded">
 														{file.types && file.types.length > 1 ? UtilsService.getDocumentTypes(file.types) : UtilsService.getDocumentType(file.type)}
 													</span>
 													{file.types && file.types.length > 1 && (
 														<span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
-															✓ {file.types.length} docs
+															{file.types.length} docs
 														</span>
 													)}
 													<span className="text-xs text-slate-700 truncate font-medium">
@@ -259,14 +260,11 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 													<span className="text-xs text-slate-400">
 														({(file.file.size / 1024 / 1024).toFixed(2)} MB)
 													</span>
-													{file.validated === true && (
-														<span className="text-xs text-green-600 font-semibold">✓ Validado</span>
-													)}
 													{file.validated === false && (
-														<span className="text-xs text-red-600 font-semibold">✗ Erro</span>
+														<span className="text-xs text-red-600 font-semibold">Erro</span>
 													)}
 													{file.validated === undefined && (
-														<span className="text-xs text-yellow-600 font-semibold animate-pulse">⌛ Validando...</span>
+														<span className="text-xs text-yellow-600 font-semibold animate-pulse">Validando...</span>
 													)}
 												</div>
 												{file.validationError && (() => {

@@ -84,16 +84,10 @@ export const DocumentList: React.FC<DocumentListProps> = ({ files, onRemove }) =
 									<span>{(f.file.size / 1024 / 1024).toFixed(2)} MB</span>
 									<span>•</span>
 									<span className="text-primary font-semibold">{f.type}</span>
-									{f.validated === true && (
-										<>
-											<span>•</span>
-											<span className="text-green-600 font-semibold">Validado</span>
-										</>
-									)}
 									{f.validated === false && (
 										<>
 											<span>•</span>
-											<span className="text-red-600 font-semibold">Erro na validação</span>
+											<span className="text-red-600 font-semibold">Erro na validacao</span>
 										</>
 									)}
 								</div>
