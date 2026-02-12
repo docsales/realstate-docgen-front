@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/Button';
-import { AlertTriangle, ArrowLeft, ArrowRight, RefreshCcw, RotateCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, RefreshCcw, RotateCw } from 'lucide-react';
 import type { UploadedFile, DealConfig, Person } from '@/types/types';
 import { BuyerDocumentsTab } from '../components/documents/BuyerDocumentsTab';
 import { SellerDocumentsTab } from '../components/documents/SellerDocumentsTab';
@@ -755,69 +755,78 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 				/>
 			)}
 
-			{/* Status Panel */}
+			{/* Status Panel - compact inline bar */}
 			{files.length > 0 && (ocrStats.processing > 0 || ocrStats.uploading > 0 || ocrStats.completed > 0) && (
-				<div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200 rounded-2xl p-6 shadow-lg backdrop-blur-sm">
-					<div className="flex items-center justify-between mb-4">
-						<div className="flex items-center gap-3">
-							<div className="relative">
-								<div className="w-4 h-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-pulse"></div>
-								<div className="absolute inset-0 w-4 h-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-ping opacity-75"></div>
+				<div className="bg-white border border-slate-200 rounded-xl px-5 py-4">
+					<div className="flex items-center justify-between gap-4">
+						{/* Left: stats row */}
+						<div className="flex items-center gap-5">
+							<div className="flex items-center gap-1.5">
+								<span className="text-xs text-slate-500">Total</span>
+								<span className="text-sm font-semibold text-slate-800 tabular-nums">{ocrStats.total}</span>
 							</div>
-							<h3 className="font-bold text-lg text-slate-800">Status dos Documentos</h3>
-						</div>
 
-						{/* Botão de refresh manual */}
-						{ocrStats.processing > 0 && (
-							<button
-								onClick={handleManualRefresh}
-								disabled={isCheckingStatus}
-								className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-indigo-50 rounded-md border border-indigo-300 shadow-sm transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-								title="Atualizar status"
-							>
-								<RotateCw className={`w-4 h-4 text-indigo-600 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-								<span className="text-sm font-semibold text-indigo-800">
-									{isCheckingStatus ? 'Atualizando...' : 'Atualizar'}
-								</span>
-							</button>
-						)}
-					</div>
-
-					<div className="grid grid-cols-5 gap-4">
-						<div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 text-center border border-slate-200 shadow-sm">
-							<div className="text-3xl font-bold text-slate-800 mb-1">{ocrStats.total}</div>
-							<div className="text-xs font-medium text-slate-600 uppercase tracking-wide">Total</div>
-						</div>
-						<div className="bg-blue-50/80 backdrop-blur-sm rounded-xl p-4 text-center border border-blue-200 shadow-sm">
-							<div className="text-3xl font-bold text-blue-700 mb-1">{ocrStats.uploading}</div>
-							<div className="text-xs font-medium text-blue-600 uppercase tracking-wide">Enviando</div>
-						</div>
-						<div className="bg-gradient-to-br from-purple-50 to-indigo-50 backdrop-blur-sm rounded-xl p-4 text-center border border-purple-200 shadow-sm relative overflow-hidden">
-							{ocrStats.processing > 0 && (
-								<div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 to-indigo-400/20 animate-pulse"></div>
+							{ocrStats.uploading > 0 && (
+								<div className="flex items-center gap-1.5">
+									<span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" />
+									<span className="text-xs text-slate-500">Enviando</span>
+									<span className="text-sm font-semibold text-slate-700 tabular-nums">{ocrStats.uploading}</span>
+								</div>
 							)}
-							<div className="text-3xl font-bold text-purple-700 mb-1 flex items-center justify-center gap-2 relative z-10">
-								{ocrStats.processing}
-								{ocrStats.processing > 0 && (
-									<div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-								)}
+
+							{ocrStats.processing > 0 && (
+								<div className="flex items-center gap-1.5">
+									<span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+									<span className="text-xs text-slate-500">Processando</span>
+									<span className="text-sm font-semibold text-slate-700 tabular-nums">{ocrStats.processing}</span>
+								</div>
+							)}
+
+							<div className="flex items-center gap-1.5">
+								<span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+								<span className="text-xs text-slate-500">Concluidos</span>
+								<span className="text-sm font-semibold text-slate-700 tabular-nums">{ocrStats.completed}</span>
 							</div>
-							<div className="text-xs font-medium text-purple-600 uppercase tracking-wide relative z-10">Processando</div>
+
+							{ocrStats.error > 0 && (
+								<div className="flex items-center gap-1.5">
+									<span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+									<span className="text-xs text-slate-500">Erros</span>
+									<span className="text-sm font-semibold text-red-600 tabular-nums">{ocrStats.error}</span>
+								</div>
+							)}
 						</div>
-						<div className="bg-green-50/80 backdrop-blur-sm rounded-xl p-4 text-center border border-green-200 shadow-sm">
-							<div className="text-3xl font-bold text-green-700 mb-1">{ocrStats.completed}</div>
-							<div className="text-xs font-medium text-green-600 uppercase tracking-wide">Concluído</div>
-						</div>
-						<div className="bg-red-50/80 backdrop-blur-sm rounded-xl p-4 text-center border border-red-200 shadow-sm">
-							<div className="text-3xl font-bold text-red-700 mb-1">{ocrStats.error}</div>
-							<div className="text-xs font-medium text-red-600 uppercase tracking-wide">Erro</div>
+
+						{/* Right: progress bar + refresh */}
+						<div className="flex items-center gap-3 flex-shrink-0">
+							{/* Mini progress bar */}
+							{ocrStats.total > 0 && (
+								<div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+									<div
+										className="h-full bg-primary rounded-full transition-all duration-500"
+										style={{ width: `${Math.round((ocrStats.completed / ocrStats.total) * 100)}%` }}
+									/>
+								</div>
+							)}
+
+							{ocrStats.processing > 0 && (
+								<button
+									onClick={handleManualRefresh}
+									disabled={isCheckingStatus}
+									className="cursor-pointer p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+									title="Atualizar status"
+								>
+									<RotateCw className={`w-4 h-4 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+								</button>
+							)}
 						</div>
 					</div>
 
+					{/* Processing message */}
 					{isOcrProcessing && (
-						<div className="mt-4 flex items-center gap-3 text-sm text-slate-700 bg-white/60 backdrop-blur-sm rounded-lg px-4 py-2 border border-indigo-200">
-							<div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-							<span className="font-medium">Processando seus documentos...</span>
+						<div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+							<Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+							<span>Processando documentos...</span>
 						</div>
 					)}
 				</div>

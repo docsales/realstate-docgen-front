@@ -38,9 +38,9 @@ export const ProposalDocumentsTab: React.FC<ProposalDocumentsTabProps> = ({
 
 	return (
 		<div className="space-y-6">
-			<div className="flex items-center gap-3 mb-6">
-				<FileText className="w-6 h-6 text-primary" />
-				<h3 className="text-xl font-bold text-slate-800">Proposta Comercial</h3>
+			<div className="flex items-center gap-2 mb-4">
+				<FileText className="w-4 h-4 text-slate-400" />
+				<h3 className="text-sm font-semibold text-slate-700">Proposta Comercial</h3>
 			</div>
 
 			{/* Erro de vinculação */}
@@ -59,11 +59,9 @@ export const ProposalDocumentsTab: React.FC<ProposalDocumentsTabProps> = ({
 				</div>
 			)}
 
-			<div className="bg-gradient-to-r from-amber-50 to-amber-100 px-4 py-3 rounded-lg border border-amber-200">
-				<h4 className="font-bold text-amber-900">O que enviar</h4>
-				<p className="text-sm text-amber-800 mt-1">
-					Envie a proposta comercial (PDF/Imagem) ou prints de conversa (WhatsApp/e-mail) contendo os termos
-					da negociação. O sistema cuidará do resto automaticamente para apoiar o mapeamento das variáveis
+			<div className="px-1 py-2 border-b border-slate-100">
+				<p className="text-xs text-slate-400">
+					Envie a proposta comercial (PDF/Imagem) ou prints de conversa (WhatsApp/e-mail) contendo os termos da negociacao.
 				</p>
 			</div>
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Calendar, TrendingUp, CheckCircle2 } from 'lucide-react';
+import { FileText, CheckCircle2 } from 'lucide-react';
 import type { ConsolidatedChecklist } from '@/types/checklist.types';
 import type { DealConfig, UploadedFile } from '@/types/types';
 
@@ -76,24 +76,6 @@ export const ChecklistSummary: React.FC<ChecklistSummaryProps> = ({
   // Calcular progresso (apenas validados)
   const progress = totalRequired > 0 ? Math.round((validatedRequired / totalRequired) * 100) : 0;
 
-  // Cor da complexidade
-  const getComplexityColor = (complexity: string) => {
-    switch (complexity) {
-      case 'BAIXA':
-        return 'text-green-600 bg-green-50';
-      case 'MEDIA':
-        return 'text-blue-600 bg-blue-50';
-      case 'MEDIA_ALTA':
-        return 'text-yellow-600 bg-yellow-50';
-      case 'ALTA':
-        return 'text-orange-600 bg-orange-50';
-      case 'MUITO_ALTA':
-        return 'text-red-600 bg-red-50';
-      default:
-        return 'text-slate-600 bg-slate-50';
-    }
-  };
-
   // Formatar data
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -122,91 +104,83 @@ export const ChecklistSummary: React.FC<ChecklistSummaryProps> = ({
   };
 
   return (
-    <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl border border-primary/20 p-6 mb-6">
-      <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-        <FileText className="w-5 h-5 text-secondary" />
-        Resumo do Checklist
-      </h3>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {/* Total de Documentos */}
-        <div className="bg-white rounded-lg p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <FileText className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Total Necessário</p>
-              <p className="text-2xl font-bold text-slate-800">{totalRequired}</p>
-              <p className="text-xs text-slate-400 mt-1">
-                {config.sellers.length}V • {config.buyers.length}C • {deedCountClamped}M
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Complexidade */}
-        <div className="bg-white rounded-lg p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-accent/10 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-accent" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Complexidade</p>
-              <p className={`text-lg font-bold px-2 py-1 rounded-md uppercase inline-block ${getComplexityColor(checklist.resumo.complexidadeMaxima)}`}>
-                {translateComplexity(checklist.resumo.complexidadeMaxima)}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Prazo Estimado */}
-        <div className="bg-white rounded-lg p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Calendar className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Prazo Estimado</p>
-              <p className="text-2xl font-bold text-slate-800">{checklist.resumo.prazoEstimadoDias} dias</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Progresso */}
-        <div className="bg-white rounded-lg p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Validados</p>
-              <p className="text-2xl font-bold text-slate-800">{validatedRequired}/{totalRequired}</p>
-              {pendingCount > 0 && (
-                <p className="text-xs text-yellow-600 mt-1">
-                  +{pendingCount} validando
-                </p>
-              )}
-            </div>
-          </div>
+    <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+      {/* Header row with title + progress */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-slate-400" />
+          Resumo do Checklist
+        </h3>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">Progresso</span>
+          <span className="text-sm font-bold text-slate-800 tabular-nums">{progress}%</span>
         </div>
       </div>
 
-      {/* Barra de Progresso */}
-      <div className="bg-white rounded-lg p-4 shadow-sm">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-medium text-slate-700">Documentos Obrigatórios</span>
-          <span className="text-sm font-bold text-primary">{progress}%</span>
+      {/* Progress bar */}
+      <div className="w-full bg-slate-100 rounded-full h-1.5 mb-5 overflow-hidden">
+        <div
+          className="bg-primary h-full rounded-full transition-all duration-500 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total */}
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">Documentos</p>
+          <p className="text-lg font-bold text-slate-800 tabular-nums">
+            {validatedRequired}
+            <span className="text-slate-300 font-normal">/{totalRequired}</span>
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {config.sellers.length}V, {config.buyers.length}C, {deedCountClamped}M
+          </p>
         </div>
-        <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
-          <div
-            className="bg-gradient-to-r from-primary to-accent h-full rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${progress}%` }}
-          />
+
+        {/* Complexidade */}
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">Complexidade</p>
+          <p className="text-lg font-bold text-slate-800">
+            {translateComplexity(checklist.resumo.complexidadeMaxima)}
+          </p>
         </div>
-        <p className="text-xs text-slate-500 mt-2">
-          Conclusão estimada: {formatDate(checklist.resumo.dataEstimadaConclusao)}
-        </p>
+
+        {/* Prazo */}
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">Prazo estimado</p>
+          <p className="text-lg font-bold text-slate-800 tabular-nums">
+            {checklist.resumo.prazoEstimadoDias}
+            <span className="text-sm font-normal text-slate-500 ml-1">dias</span>
+          </p>
+        </div>
+
+        {/* Status */}
+        <div>
+          <p className="text-xs text-slate-400 mb-0.5">Status</p>
+          <div className="flex items-center gap-1.5">
+            {pendingCount > 0 ? (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                <p className="text-sm font-medium text-slate-600">{pendingCount} validando</p>
+              </>
+            ) : progress === 100 ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <p className="text-sm font-medium text-slate-600">Completo</p>
+              </>
+            ) : (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                <p className="text-sm font-medium text-slate-500">Em andamento</p>
+              </>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {formatDate(checklist.resumo.dataEstimadaConclusao)}
+          </p>
+        </div>
       </div>
     </div>
   );

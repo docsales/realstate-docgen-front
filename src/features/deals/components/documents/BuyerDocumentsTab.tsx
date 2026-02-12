@@ -116,9 +116,9 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 
 	return (
 		<div className="space-y-6">
-			<div className="flex items-center gap-3 mb-6">
-				<Users className="w-6 h-6 text-primary" />
-				<h3 className="text-xl font-bold text-slate-800">Documentos dos Compradores</h3>
+			<div className="flex items-center gap-2 mb-4">
+				<Users className="w-4 h-4 text-slate-400" />
+				<h3 className="text-sm font-semibold text-slate-700">Documentos dos Compradores</h3>
 			</div>
 
 			{/* Erro de vinculação */}
@@ -175,30 +175,28 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 							}).length;
 
 							result.push(
-								<div key={member.id} className="space-y-4 border-b-2 border-slate-100 last:border-b-0">
+								<div key={member.id} className="space-y-3">
 									{/* Header do comprador */}
-									<div className={`bg-gradient-to-r ${member.coupleId ? 'from-pink-50 to-pink-100 border-pink-200' : 'from-green-50 to-green-100 border-green-200'} px-4 py-3 rounded-lg border shadow-sm`}>
-										<div className="flex items-center justify-between">
-											<div className="flex items-center gap-2">
-												{member.coupleId && (
-													<Heart className="w-4 h-4 text-pink-600" />
-												)}
-												<div>
-													<h4 className={`font-bold text-lg ${member.coupleId ? 'text-pink-900' : 'text-green-900'}`}>
-														Comprador {++displayIndex} {member.isSpouse ? '(Cônjuge)' : ''}
-													</h4>
-													<p className={`text-sm mt-1 ${member.coupleId ? 'text-pink-700' : 'text-green-700'}`}>
-														{member.personType === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
-														{member.maritalState && ` • ${member.maritalState.replace('_', ' ')}`}
-													</p>
-												</div>
+									<div className="flex items-center justify-between px-1 py-2 border-b border-slate-100">
+										<div className="flex items-center gap-2">
+											{member.coupleId && (
+												<Heart className="w-3.5 h-3.5 text-slate-400" />
+											)}
+											<div>
+												<h4 className="font-semibold text-sm text-slate-800">
+													Comprador {++displayIndex} {member.isSpouse ? '(Conjuge)' : ''}
+												</h4>
+												<p className="text-xs text-slate-400 mt-0.5">
+													{member.personType === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica'}
+													{member.maritalState && ` - ${member.maritalState.replace('_', ' ')}`}
+												</p>
 											</div>
-											<div className="text-right">
-												<div className={`text-2xl font-bold ${member.coupleId ? 'text-pink-900' : 'text-green-900'}`}>
-													{validatedCount}/{buyerDocuments.length}
-												</div>
-												<div className={`text-xs ${member.coupleId ? 'text-pink-700' : 'text-green-700'}`}>documentos</div>
-											</div>
+										</div>
+										<div className="text-right">
+											<span className="text-sm font-bold text-slate-800 tabular-nums">
+												{validatedCount}/{buyerDocuments.length}
+											</span>
+											<span className="text-xs text-slate-400 ml-1">docs</span>
 										</div>
 									</div>
 
@@ -260,25 +258,23 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 						}).length;
 
 						result.push(
-							<div key={buyer.id} className="space-y-4 border-b-2 border-slate-100 last:border-b-0">
+							<div key={buyer.id} className="space-y-3">
 								{/* Header do comprador */}
-								<div className="bg-gradient-to-r from-green-50 to-green-100 px-4 py-3 rounded-lg border border-green-200 shadow-sm">
-									<div className="flex items-center justify-between">
-										<div>
-											<h4 className="font-bold text-green-900 text-lg">
-												Comprador {++displayIndex}
-											</h4>
-											<p className="text-sm text-green-700 mt-1">
-												{buyer.personType === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
-												{buyer.maritalState && ` • ${buyer.maritalState.replace('_', ' ')}`}
-											</p>
-										</div>
-										<div className="text-right">
-											<div className="text-2xl font-bold text-green-900">
-												{validatedCount}/{buyerDocuments.length}
-											</div>
-											<div className="text-xs text-green-700">documentos</div>
-										</div>
+								<div className="flex items-center justify-between px-1 py-2 border-b border-slate-100">
+									<div>
+										<h4 className="font-semibold text-sm text-slate-800">
+											Comprador {++displayIndex}
+										</h4>
+										<p className="text-xs text-slate-400 mt-0.5">
+											{buyer.personType === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica'}
+											{buyer.maritalState && ` - ${buyer.maritalState.replace('_', ' ')}`}
+										</p>
+									</div>
+									<div className="text-right">
+										<span className="text-sm font-bold text-slate-800 tabular-nums">
+											{validatedCount}/{buyerDocuments.length}
+										</span>
+										<span className="text-xs text-slate-400 ml-1">docs</span>
 									</div>
 								</div>
 

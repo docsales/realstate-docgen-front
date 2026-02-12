@@ -113,9 +113,9 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 
 	return (
 		<div className="space-y-6">
-			<div className="flex items-center gap-3 mb-6">
-				<Home className="w-6 h-6 text-primary" />
-				<h3 className="text-xl font-bold text-slate-800">Documentos do Imóvel</h3>
+			<div className="flex items-center gap-2 mb-4">
+				<Home className="w-4 h-4 text-slate-400" />
+				<h3 className="text-sm font-semibold text-slate-700">Documentos do Imovel</h3>
 			</div>
 
 			{/* Erro de vinculação */}
@@ -139,24 +139,20 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 				<AlertBanner alerts={alerts} />
 			)}
 
-			{/* Informações do imóvel */}
-			<div className="bg-gradient-to-r from-purple-50 to-purple-100 px-4 py-3 rounded-lg border border-purple-200">
-				<h4 className="font-bold text-purple-900">Informações do Imóvel</h4>
-				<div className="text-sm text-purple-700 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-					<span>Tipo: {propertyType === 'urbano' ? 'Urbano' : 'Rural'}</span>
-					<span>•</span>
-					<span>Situação: {propertyState.replace('_', ' ')}</span>
-					{deedCountClamped > 1 && (
-						<>
-							<span>•</span>
-							<span>{deedLabel}</span>
-						</>
-					)}
+			{/* Informacoes do imovel */}
+			<div className="flex items-center justify-between px-1 py-2 border-b border-slate-100">
+				<div>
+					<h4 className="font-semibold text-sm text-slate-800">Informacoes do Imovel</h4>
+					<div className="text-xs text-slate-400 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+						<span>{propertyType === 'urbano' ? 'Urbano' : 'Rural'}</span>
+						<span>{propertyState.replace('_', ' ')}</span>
+						{deedCountClamped > 1 && <span>{deedLabel}</span>}
+					</div>
 				</div>
 				{deedCountClamped > 1 && (
-					<div className="mt-2 text-sm font-semibold text-purple-900">
-						Faça upload de <span className="underline">{deedLabel}</span> (campo aceita até 5 documentos).
-					</div>
+					<p className="text-xs text-slate-500">
+						Envie {deedLabel}
+					</p>
 				)}
 			</div>
 
