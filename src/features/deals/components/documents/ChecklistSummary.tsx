@@ -34,11 +34,12 @@ export const ChecklistSummary: React.FC<ChecklistSummaryProps> = ({
     totalMandatory += doc.id === 'MATRICULA' ? deedCountClamped : 1;
   });
 
-  // Count optional
+  // Count optional (from checklist + 1 for Proposta Comercial which is always optional)
   const totalOptional =
     checklist.vendedores.documentos.filter(d => !d.obrigatorio).length +
     checklist.compradores.documentos.filter(d => !d.obrigatorio).length +
-    checklist.imovel.documentos.filter(d => !d.obrigatorio).length;
+    checklist.imovel.documentos.filter(d => !d.obrigatorio).length +
+    1; // Proposta Comercial
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
