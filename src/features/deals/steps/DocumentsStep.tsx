@@ -469,7 +469,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	}, [dealId]);
 
 	const validationGate = useCallback(() => {
-		return { canContinue: true, message: 'Validação desabilitada temporariamente' };
+		return { canContinue: true, message: '' };
 	}, [])
 
 	// Código original
