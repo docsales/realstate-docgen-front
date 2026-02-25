@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, FileText, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, FileText, CheckCircle, XCircle, Menu } from 'lucide-react';
 import type { DocumentTemplate } from '../../../types/settings.types';
 import { Button } from '@/components/Button';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -60,11 +60,12 @@ export function TemplatesSection({
           </h2>
         </div>
         <Button
+          type="button"
           onClick={onAdd}
+          icon={<Plus className="w-4 h-4" />}
           className="flex items-center gap-2 px-4 py-2 bg-[#ef0474] text-white border-none rounded-sm hover:bg-[#d00366] transition-colors"
           variant="primary"
         >
-          <Plus className="w-4 h-4" />
           Adicionar Template
         </Button>
       </div>
@@ -95,13 +96,55 @@ export function TemplatesSection({
                   className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors"
                 >
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-slate-800">{template.label}</h3>
+                    <div className="flex items-center justify-between sm:justify-start gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-slate-800">{template.label}</h3>
                       {template.isActive ? (
                         <CheckCircle className="w-4 h-4 text-green-500" />
                       ) : (
                         <XCircle className="w-4 h-4 text-slate-400" />
                       )}
+                      </div>
+
+                      <div className="block sm:hidden dropdown dropdown-end">
+                        <Button type="button" tabIndex={0} variant="link" size="sm" className="block sm:hidden" >
+                          <span className="text-slate-600 hover:text-slate-800 hover:bg-slate-50 rounded-lg transition-colors">
+                            <Menu className="w-4 h-4" />
+                          </span>
+                        </Button>
+                        <ul tabIndex={-1} className="flex items-center justify-start dropdown-content menu bg-white rounded-box z-1 p-2 gap-2 shadow-sm border border-slate-200">
+                          <li>
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              onClick={() => onEdit(template)}
+                              className="tooltip tooltip-auto p-2"
+                              data-tip="Editar template"
+                            >
+                              <span className="text-slate-600 hover:text-[#085995] hover:bg-slate-50 rounded-lg transition-colors">
+                                <Edit2 className="w-4 h-4" />
+                              </span>
+                            </Button>
+                          </li>
+                          <li>
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              onClick={() => handleDeleteClick(template.id)}
+                              disabled={deletingId === template.id}
+                              className="tooltip tooltip-auto p-2"
+                              data-tip="Deletar template"
+                            >
+                              <span className="text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                <Trash2 className="w-4 h-4" />
+                              </span>
+                            </Button>
+
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                     <p className="text-sm text-slate-600">
                       Template ID: <code className="px-2 py-0.5 bg-slate-100 rounded text-xs">{template.templateId}</code>
@@ -111,22 +154,32 @@ export function TemplatesSection({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 ml-4">
-                    <button
+                  <div className="hidden sm:flex items-center gap-2 ml-4">
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
                       onClick={() => onEdit(template)}
-                      className="cursor-pointer p-2 text-slate-600 hover:text-[#085995] hover:bg-slate-50 rounded-lg transition-colors"
-                      title="Editar template"
+                      className="tooltip tooltip-auto p-2"
+                      data-tip="Editar template"
                     >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
+                      <span className="text-slate-600 hover:text-[#085995] hover:bg-slate-50 rounded-lg transition-colors">
+                        <Edit2 className="w-4 h-4" />
+                      </span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
                       onClick={() => handleDeleteClick(template.id)}
                       disabled={deletingId === template.id}
-                      className="cursor-pointer p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                      title="Deletar template"
+                      className="tooltip tooltip-auto p-2"
+                      data-tip="Deletar template"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                      <span className="text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </span>
+                    </Button>
                   </div>
                 </div>
               ))}

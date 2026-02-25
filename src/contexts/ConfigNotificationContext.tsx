@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { settingsService } from '@/services/settings.service';
 import { webhooksService } from '@/services/webhooks.service';
 import type { DocumentTemplate, WebhookToken } from '@/types/settings.types';
+import { Button } from '@/components/Button';
 
 export interface ConfigNotificationContextType {
   missingConfigs: string[];
@@ -117,13 +118,14 @@ export const ConfigNotificationProvider: React.FC<{ children: ReactNode }> = ({ 
                   </Link>
                 </p>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                icon={<X className="w-3.5 h-3.5" />}
+                size="sm"
                 onClick={() => setIsDismissed(true)}
-                className="cursor-pointer text-yellow-600 hover:text-yellow-800 transition-colors"
-                title="Dispensar"
-              >
-                <X className="w-5 h-5" />
-              </button>
+                className="tooltip tooltip-left text-yellow-600 hover:text-yellow-800 transition-colors"
+                data-tip="Dispensar"
+              />
             </div>
           </div>
         </div>

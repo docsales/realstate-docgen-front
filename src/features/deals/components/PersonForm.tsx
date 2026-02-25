@@ -2,6 +2,7 @@ import React from 'react';
 import { Trash2, User, Building2, Heart } from 'lucide-react';
 import type { Person, PersonType, MaritalState, PropertyRegime } from '@/types/types';
 import { generateCoupleId, getSpouse } from '@/types/types';
+import { Button } from '@/components/Button';
 
 interface PersonFormProps {
   person: Person;
@@ -158,13 +159,13 @@ export const PersonForm: React.FC<PersonFormProps> = ({
             )}
           </div>
           {canRemove && (
-            <button
-              type="button"
+            <Button
+              variant="link"
+              size="sm"
               onClick={onRemove}
+              icon={<Trash2 className="w-4 h-4" />}
               className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            />
           )}
         </div>
 

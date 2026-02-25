@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Loader2, CheckCircle2, AlertCircle, Clock, Upload } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, Upload } from 'lucide-react';
 import type { OcrStatus } from '@/types/ocr.types';
 
 interface OcrStatusLoaderProps {
@@ -42,10 +42,10 @@ export const OcrStatusLoader: React.FC<OcrStatusLoaderProps> = ({
 
   const label =
     status === 'idle' ? 'Aguardando' :
-    status === 'uploading' ? 'Enviando...' :
-    status === 'processing' ? processingMessages[msgIdx] :
-    status === 'completed' ? 'Processado' :
-    'Erro ao processar';
+      status === 'uploading' ? 'Enviando...' :
+        status === 'processing' ? processingMessages[msgIdx] :
+          status === 'completed' ? 'Processado' :
+            'Erro ao processar';
 
   return (
     <div
@@ -58,7 +58,7 @@ export const OcrStatusLoader: React.FC<OcrStatusLoaderProps> = ({
       <div className={`flex-shrink-0 ${isError ? 'text-red-500' : 'text-slate-400'}`}>
         {status === 'idle' && <Clock className="w-4 h-4" />}
         {status === 'uploading' && <Upload className="w-4 h-4 animate-pulse" />}
-        {status === 'processing' && <Loader2 className="w-4 h-4 animate-spin" />}
+        {status === 'processing' && <span className="loading loading-spinner loading-sm text-slate-400" />}
         {status === 'completed' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
         {status === 'error' && <AlertCircle className="w-4 h-4" />}
       </div>
@@ -92,8 +92,8 @@ export const OcrStatusBadge: React.FC<{
 }> = ({ status, compact = false }) => {
   const statusConfig = {
     idle: { icon: Clock, label: 'Aguardando', color: 'bg-slate-100 text-slate-500' },
-    uploading: { icon: Loader2, label: 'Enviando', color: 'bg-slate-100 text-slate-600' },
-    processing: { icon: Loader2, label: 'Processando', color: 'bg-slate-100 text-slate-600' },
+    uploading: { icon: '', label: 'Enviando', color: 'bg-slate-100 text-slate-600' },
+    processing: { icon: '', label: 'Processando', color: 'bg-slate-100 text-slate-600' },
     completed: { icon: CheckCircle2, label: 'Concluido', color: 'bg-emerald-50 text-emerald-600' },
     error: { icon: AlertCircle, label: 'Erro', color: 'bg-red-50 text-red-600' },
   };
@@ -104,7 +104,10 @@ export const OcrStatusBadge: React.FC<{
 
   return (
     <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium ${config.color}`}>
-      <Icon className={`w-3 h-3 ${isAnimating ? 'animate-spin' : ''}`} />
+      {isAnimating
+        ? <Icon className="w-3 h-3" />
+        : <span className={`loading loading-spinner loading-sm ${config.color}`} />
+    }
       {!compact && <span>{config.label}</span>}
     </div>
   );

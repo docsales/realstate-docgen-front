@@ -291,9 +291,8 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 					{/* Navigation actions */}
 					<div className="flex flex-col gap-3">
 						{/* Main CTA: Advance to signatories */}
-						<Button onClick={onGenerate} className="w-full justify-center flex items-center gap-2">
-							<span>Avancar para Signatarios</span>
-							<ArrowRight className="w-4 h-4" />
+						<Button onClick={onGenerate} icon={<ArrowRight className="w-5 h-5" />} iconPosition="right">
+							Avancar para Signatarios
 						</Button>
 
 						{/* Secondary actions row */}
@@ -301,23 +300,24 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 							{onBack && (
 								<Button
 									variant="ghost"
-									size="sm"
-									className="flex-1 flex items-center gap-1.5 justify-center !text-sm"
+									size="md"
+									icon={<ArrowLeft className="w-3.5 h-3.5" />}
 									onClick={onBack}
+									className="flex-1"
 								>
-									<ArrowLeft className="w-3.5 h-3.5" />
-									<span>Ajustar variaveis</span>
+									Ajustar variaveis
 								</Button>
 							)}
 							<Button
 								variant="ghost"
-								size="sm"
-								className="flex-1 flex items-center gap-1.5 justify-center !text-sm"
+								size="md"
+								icon={<RefreshCw className="w-3.5 h-3.5" />}
+								className="flex-1"
 								onClick={() => handleGenerate(true)}
+								isLoading={startPreviewJobMutation.isPending}
 								disabled={startPreviewJobMutation.isPending}
 							>
-								<RefreshCw className={`w-3.5 h-3.5 ${startPreviewJobMutation.isPending ? 'animate-spin' : ''}`} />
-								<span>Regerar documento</span>
+								Regerar documento
 							</Button>
 						</div>
 					</div>

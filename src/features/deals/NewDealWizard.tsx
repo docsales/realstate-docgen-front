@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, CheckCircle2, Send, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Send, Save } from 'lucide-react';
 import { Button } from '@/components/Button';
 import type { DealConfig, Signatory, UploadedFile, MappingValue, OcrDataByPerson } from '@/types/types';
 import { createDefaultPerson } from '@/types/types';
@@ -36,25 +36,25 @@ const isValidEmail = (email: string): boolean => {
  */
 const validateSignatories = (signatories: Signatory[]): SignatoryValidationError[] => {
   const errors: SignatoryValidationError[] = [];
-  
+
   signatories.forEach(sig => {
     const missingFields: string[] = [];
-    
+
     if (!sig.name || sig.name.trim() === '' || sig.name === 'Sem nome') {
       missingFields.push('Nome');
     }
-    
+
     if (!sig.email || sig.email.trim() === '') {
       missingFields.push('Email');
     } else if (!isValidEmail(sig.email)) {
       missingFields.push('Email válido');
     }
-    
+
     if (missingFields.length > 0) {
       errors.push({ signatory: sig, missingFields });
     }
   });
-  
+
   return errors;
 };
 
@@ -443,7 +443,7 @@ export const NewDealWizard: React.FC = () => {
       case 5:
         if (signatories.length === 0) return false;
         // Validar que todos os signatários têm dados mínimos necessários
-        return signatories.every(sig => 
+        return signatories.every(sig =>
           sig.name && sig.name.trim() !== '' && sig.name !== 'Sem nome' &&
           sig.email && sig.email.trim() !== '' && isValidEmail(sig.email)
         );
@@ -671,7 +671,7 @@ export const NewDealWizard: React.FC = () => {
 
     // VALIDAÇÃO CLIENT-SIDE - Antes de enviar ao servidor
     const validationErrors = validateSignatories(signatories);
-    
+
     if (validationErrors.length > 0) {
       setSignatoriesValidationErrors(validationErrors);
       setSaveError('Alguns signatários estão com informações incompletas. Por favor, revise os dados antes de enviar.');
@@ -856,9 +856,7 @@ export const NewDealWizard: React.FC = () => {
       <div className="bg-white border-b border-slate-200 sticky top-16 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={handleGoBack} className="cursor-pointer p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
+            <Button variant="link" onClick={handleGoBack} icon={<ArrowLeft className="w-6 h-6" />} className="hover:bg-slate-100 rounded-full text-slate-500 transition-colors" />
             <div>
               <h2 className="font-bold text-slate-800 leading-tight">
                 {editDealId ? 'Editar Contrato' : 'Novo Contrato'}
@@ -1022,22 +1020,20 @@ export const NewDealWizard: React.FC = () => {
                     if (step === 3) handleSaveStep3();
                     if (step === 5) handleSaveStep5();
                   }}
+                  icon={!isSaving ? <Save className="w-4 h-4" /> : saveSuccess ? <CheckCircle2 className="w-4 h-4" /> : undefined}
                   disabled={isSaving || !currentStepValid}
                   className={`${isSaving ? 'opacity-50' : ''} ${saveSuccess ? '!bg-green-50 !border-green-500 !text-green-700' : ''}`}
                 >
                   {isSaving ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
                       Salvando...
                     </>
                   ) : saveSuccess ? (
                     <>
-                      <CheckCircle2 className="w-4 h-4" />
                       Salvo!
                     </>
                   ) : (
                     <>
-                      <Save className="w-4 h-4" />
                       Salvar
                     </>
                   )}
@@ -1057,9 +1053,11 @@ export const NewDealWizard: React.FC = () => {
                     onClick={nextStep}
                     disabled={!documentsGate.canContinue}
                     className={!documentsGate.canContinue ? 'opacity-50 grayscale' : ''}
+                    variant="primary"
+                    icon={<ArrowRight className="w-4 h-4" />}
+                    iconPosition="right"
                   >
                     Continuar
-                    <ArrowRight className="w-4 h-4" />
                   </Button>
                 </div>
               ) : step !== 4 && (
@@ -1067,23 +1065,22 @@ export const NewDealWizard: React.FC = () => {
                   onClick={step === 5 ? handleFinish : nextStep}
                   disabled={!currentStepValid || isCreatingDeal || isSavingMappings}
                   isLoading={isCreatingDeal || isSavingMappings}
+                  variant="primary"
+                  icon={step === 5 ? <Send className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                  iconPosition="right"
                   className={!currentStepValid ? 'opacity-50 grayscale' : ''}
                 >
                   {isCreatingDeal ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
                       Criando proposta...
                     </>
                   ) : isSavingMappings ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
                       Salvando variáveis...
                     </>
                   ) : (
                     <>
                       {step === 5 ? 'Finalizar e Enviar' : 'Continuar'}
-                      {step !== 5 && <ArrowRight className="w-4 h-4" />}
-                      {step === 5 && <Send className="w-4 h-4" />}
                     </>
                   )}
                 </Button>

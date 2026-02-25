@@ -4,6 +4,7 @@ import type { UploadedFile } from '@/types/types';
 import { DocumentRequirementItem } from './DocumentRequirementItem';
 import type { ConsolidatedChecklist } from '@/types/checklist.types';
 import { generateFileId } from '@/utils/generateFileId';
+import { Button } from '@/components/Button';
 
 interface ProposalDocumentsTabProps {
 	uploadedFiles: UploadedFile[];
@@ -51,12 +52,13 @@ export const ProposalDocumentsTab: React.FC<ProposalDocumentsTabProps> = ({
 					<div className="flex-1">
 						<p className="text-sm text-red-800">{linkError}</p>
 					</div>
-					<button
+					<Button
+						variant="link"
+						size="sm"
+						icon={<X className="w-4 h-4" />}
 						onClick={() => setLinkError(null)}
-						className="cursor-pointer text-red-400 hover:text-red-600 transition-colors"
-					>
-						<X className="w-4 h-4" />
-					</button>
+						className="text-red-400 hover:text-red-600 transition-colors"
+					/>
 				</div>
 			)}
 

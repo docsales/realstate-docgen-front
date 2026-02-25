@@ -124,11 +124,10 @@ function NoDocsStage({ dealId }: { dealId: string }) {
         </p>
       </div>
       <Button
-        size="sm"
+        icon={<Upload className="w-4 h-4" />}
         onClick={() => navigate(`/deals/${dealId}/edit?step=2`)}
         className="flex-shrink-0"
       >
-        <Upload className="w-4 h-4" />
         Enviar documentos
       </Button>
     </div>
@@ -173,11 +172,12 @@ function DocsUploadedStage({
       </div>
       <Button
         size="sm"
+        icon={<ArrowRight className="w-4 h-4" />}
+        iconPosition="right"
         onClick={() => navigate(`/deals/${dealId}/edit?step=3`)}
         className="flex-shrink-0"
       >
         Preencher variaveis
-        <ArrowRight className="w-4 h-4" />
       </Button>
     </div>
   );
@@ -188,28 +188,32 @@ function DocGeneratedStage({
 }: {
   deal: Deal;
 }) {
-  const navigate = useNavigate();
   const docUrl = deal.consolidated?.draftPreviewUrl;
 
   return (
-    <button
-      type="button"
-      onClick={() => docUrl && window.open(docUrl, '_blank')}
-      className="cursor-pointer flex items-center gap-4 p-5 w-full bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100/60 transition-colors group"
-    >
-      <div className="flex-shrink-0 w-11 h-11 rounded-lg bg-emerald-100 border border-emerald-200 flex items-center justify-center group-hover:bg-emerald-200/70 transition-colors">
-        <FileText className="w-5 h-5 text-emerald-600" />
-      </div>
-      <div className="text-left min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-700 truncate">
-          Minuta gerada
-        </p>
-        <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-1">
-          <ExternalLink className="w-3 h-3" />
-          Abrir documento
-        </p>
-      </div>
-    </button>
+    <div className="w-full bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100/60 transition-colors group">
+      <Button
+        variant="link"
+        size="sm"
+        onClick={() => docUrl && window.open(docUrl, '_blank')}
+        className="flex justify-start pl-5 py-10 w-full"
+      >
+        <div className="flex items-center gap-4">
+          <div className="flex-shrink-0 w-11 h-11 rounded-lg bg-emerald-100 border border-emerald-200 flex items-center justify-center group-hover:bg-emerald-200/70 transition-colors">
+            <FileText className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div className="text-left min-w-0 flex-1">
+            <p className="text-sm font-semibold text-slate-700 truncate">
+              Minuta gerada
+            </p>
+            <p className="text-xs text-emerald-600 mt-0.5 flex items-center gap-1">
+              <ExternalLink className="w-3 h-3" />
+              Abrir documento
+            </p>
+          </div>
+        </div>
+      </Button>
+    </div>
   );
 }
 
@@ -238,14 +242,14 @@ function SentForSignatureStage({ deal }: { deal: Deal }) {
         </div>
 
         {docUrl && (
-          <button
-            type="button"
+          <Button
+            variant="link"
+            size="sm"
+            icon={<FileText className="w-3.5 h-3.5" />}
             onClick={() => window.open(docUrl, '_blank')}
-            className="cursor-pointer flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 px-2.5 py-1.5 rounded-md hover:bg-white/60 transition-colors"
           >
-            <FileText className="w-3.5 h-3.5" />
             Abrir documento
-          </button>
+          </Button>
         )}
       </div>
 

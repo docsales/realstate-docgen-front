@@ -60,6 +60,7 @@ export const RegisterSuccessView: React.FC = () => {
         <div className="mt-8">
           <Button
             type="button"
+            variant="primary"
             className="btn-md w-full text-lg"
             onClick={() => navigate('/dashboard')}
           >

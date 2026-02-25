@@ -38,7 +38,7 @@ export function ApiKeysSection({ initialValue, onSave }: ApiKeysSectionProps) {
       <p className="text-sm text-slate-600 mb-4">
         Chave de API para integração com a plataforma DocSales.
       </p>
-      
+
       <div className="space-y-4">
         <div className="relative">
           <input
@@ -48,24 +48,27 @@ export function ApiKeysSection({ initialValue, onSave }: ApiKeysSectionProps) {
             placeholder="Digite sua API Key da DocSales"
             className="w-full px-4 py-2 pr-12 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#ef0474]"
           />
-          <button
-            type="button"
+          <Button
+            variant="link"
+            size="sm"
             onClick={() => setShowKey(!showKey)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+            className="absolute right-3 top-1/2 -translate-y-1/2"
           >
-            {showKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-          </button>
+            <span className="text-slate-400 hover:text-slate-600 transition-all duration-200">
+              {showKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </span>
+          </Button>
         </div>
 
         <div className="flex items-center gap-3">
           <Button
+            variant="primary"
             onClick={handleSave}
             disabled={isSaving || value.length === 0}
-            variant="primary"
             isLoading={isSaving}
+            icon={<Save className="w-4 h-4" />}
             className="bg-[#ef0474] text-white border-none rounded-sm hover:bg-[#d00366] transition-colors"
           >
-            <Save className="w-4 h-4" />
             {isSaving ? 'Salvando...' : 'Salvar'}
           </Button>
 

@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, FileText, Download, ExternalLink, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, FileText, Download, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { DealDocument } from '@/types/types';
+import { Button } from '@/components/Button';
 
 interface DocumentDataDrawerProps {
   document: DealDocument | null;
@@ -41,7 +42,7 @@ function getStatusBadge(status: string) {
     case 'OCR_PROCESSING':
       return (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-          <Loader2 className="w-3 h-3 animate-spin" /> Processando
+          <span className="loading loading-spinner loading-sm text-amber-500" /> Processando
         </span>
       );
     case 'ERROR':
@@ -210,116 +211,125 @@ export const DocumentDataDrawer: React.FC<DocumentDataDrawerProps> = ({
   open,
   onClose,
 }) => {
-  if (!open || !document) return null;
-
   const hasVariables =
-    document.variables && Object.keys(document.variables).length > 0;
+    document != null &&
+    document.variables != null &&
+    Object.keys(document.variables).length > 0;
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/20 z-40 transition-opacity"
-        onClick={onClose}
-      />
+      <div className="drawer drawer-end">
+        <input
+          id="document_data_drawer"
+          type="checkbox"
+          className="drawer-toggle"
+          checked={open}
+          onChange={(e) => { if (!e.target.checked) onClose(); }}
+        />
+        <div className="drawer-content">
+          {/* Page content here */}
+        </div>
+        <div className="drawer-side z-50">
+          <label
+            htmlFor="document_data_drawer"
+            aria-label="close sidebar"
+            className="drawer-overlay"
+            onClick={(e) => { e.preventDefault(); onClose(); }}
+          />
+          <div className="w-full max-w-md bg-white border-l border-slate-200">
+            {document ? (
+              <>
+                {/* Header */}
+                <div className="flex items-start gap-3 p-5 border-b border-slate-200 flex-shrink-0">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">
+                      {document.originalFilename || document.documentType}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-slate-500">
+                        {translateDocType(document.documentType)}
+                      </span>
+                      {getStatusBadge(document.status)}
+                    </div>
+                  </div>
+                  <label
+                    htmlFor="document_data_drawer"
+                    aria-label="close sidebar"
+                    onClick={(e) => { e.preventDefault(); onClose(); }}
+                    className="drawer-overlay cursor-pointer p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors tooltip tooltip-left"
+                    data-tip="Fechar"
+                  >
+                    <X className="w-5 h-5" />
+                  </label>
+                </div>
 
-      {/* Drawer panel */}
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-xl flex flex-col animate-in slide-in-from-right duration-200">
-        {/* Header */}
-        <div className="flex items-start gap-3 p-5 border-b border-slate-200 flex-shrink-0">
-          <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-            <FileText className="w-5 h-5 text-slate-500" />
+                {/* Actions bar */}
+                <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 flex-shrink-0">
+                  {document.fileUrl && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        onClick={() => window.open(document.fileUrl, '_blank')}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Visualizar
+                      </Button>
+                      <a
+                        href={document.fileUrl}
+                        download={document.originalFilename}
+                        className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 px-3 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Baixar
+                      </a>
+                    </>
+                  )}
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto p-5">
+                  {hasVariables ? (
+                    <>
+                      <p className="text-xs uppercase tracking-wide font-semibold text-slate-400 mb-4">
+                        Dados extraidos
+                      </p>
+                      <VariablesSection variables={document.variables!} />
+                    </>
+                  ) : document.status === 'OCR_PROCESSING' ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <span className="loading loading-spinner loading-md text-slate-300 mb-3" />
+                      <p className="text-sm text-slate-500">Processando documento...</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Os dados extraidos aparecerao aqui quando o processamento
+                        terminar.
+                      </p>
+                    </div>
+                  ) : document.status === 'ERROR' ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <AlertCircle className="w-8 h-8 text-red-300 mb-3" />
+                      <p className="text-sm text-slate-500">Erro ao processar documento</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Nao foi possivel extrair os dados deste documento.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <FileText className="w-8 h-8 text-slate-200 mb-3" />
+                      <p className="text-sm text-slate-500">Nenhum dado extraido</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Este documento ainda nao possui dados extraidos.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="p-5" />
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-800 truncate">
-              {document.originalFilename || document.documentType}
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-slate-500">
-                {translateDocType(document.documentType)}
-              </span>
-              {getStatusBadge(document.status)}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Actions bar */}
-        <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 flex-shrink-0">
-          {document.fileUrl && (
-            <>
-              <button
-                type="button"
-                onClick={() => window.open(document.fileUrl, '_blank')}
-                className="cursor-pointer flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 px-3 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                Visualizar
-              </button>
-              <a
-                href={document.fileUrl}
-                download={document.originalFilename}
-                className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 px-3 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Baixar
-              </a>
-            </>
-          )}
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-5">
-          {hasVariables ? (
-            <>
-              <p className="text-xs uppercase tracking-wide font-semibold text-slate-400 mb-4">
-                Dados extraidos
-              </p>
-              <VariablesSection variables={document.variables!} />
-            </>
-          ) : document.status === 'OCR_PROCESSING' ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Loader2 className="w-8 h-8 text-slate-300 animate-spin mb-3" />
-              <p className="text-sm text-slate-500">Processando documento...</p>
-              <p className="text-xs text-slate-400 mt-1">
-                Os dados extraidos aparecerao aqui quando o processamento
-                terminar.
-              </p>
-            </div>
-          ) : document.status === 'ERROR' ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <AlertCircle className="w-8 h-8 text-red-300 mb-3" />
-              <p className="text-sm text-slate-500">Erro ao processar documento</p>
-              <p className="text-xs text-slate-400 mt-1">
-                Nao foi possivel extrair os dados deste documento.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <FileText className="w-8 h-8 text-slate-200 mb-3" />
-              <p className="text-sm text-slate-500">Nenhum dado extraido</p>
-              <p className="text-xs text-slate-400 mt-1">
-                Este documento ainda nao possui dados extraidos.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex-shrink-0 p-4 border-t border-slate-200">
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer w-full py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            Fechar
-          </button>
         </div>
       </div>
     </>

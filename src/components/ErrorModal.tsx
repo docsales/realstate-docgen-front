@@ -43,12 +43,13 @@ export const ErrorModal: React.FC<ErrorModalProps> = ({
               {title}
             </h3>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            icon={<X className="w-3.5 h-3.5" />}
+            size="sm"
             onClick={onClose}
-            className="cursor-pointer text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+            className="transition-colors"
+          />
         </div>
 
         {/* Body */}

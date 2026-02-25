@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Webhook, Plus, Copy, CheckCircle2, Loader2, X, Eye } from 'lucide-react';
+import { Webhook, Plus, Copy, CheckCircle2, X, Eye } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { webhooksService } from '@/services/webhooks.service';
 import { useWebhookEventsInfinite } from '../hooks/useWebhooks';
@@ -134,7 +134,7 @@ export function WebhooksSection() {
       <div className="space-y-4">
         {isLoadingTokens ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-[#ef0474]" />
+            <span className="loading loading-spinner loading-md text-[#ef0474]" />
           </div>
         ) : tokens.length === 0 ? (
           <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-200">
@@ -162,23 +162,24 @@ export function WebhooksSection() {
                         {token.isActive ? 'Ativo' : 'Inativo'}
                       </span>
                     </div>
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => handleCopyToken(token.token, token.id)}
-                      className="cursor-pointer flex items-center gap-2 px-3 py-2 text-sm bg-white hover:bg-slate-100 border border-slate-200 rounded-md transition-colors"
-                      title="Copiar URL"
+                      icon={copiedToken === token.id ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                      className="tooltip tooltip-auto p-2"
+                      data-tip="Copiar URL"
                     >
                       {copiedToken === token.id ? (
                         <>
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
                           <span className="text-green-600">Copiado!</span>
                         </>
                       ) : (
                         <>
-                          <Copy className="w-4 h-4" />
                           <span>Copiar</span>
                         </>
                       )}
-                    </button>
+                    </Button>
                   </div>
                   <div className="bg-white border border-slate-200 rounded px-3 py-2 font-mono text-sm text-slate-700 break-all">
                     {`${API_URL}/webhooks/docsales/${token.token}`}
@@ -197,13 +198,13 @@ export function WebhooksSection() {
         )}
 
         <Button
+          variant="secondary"
           onClick={handleGenerateToken}
           disabled={isGenerating}
-          variant="secondary"
           isLoading={isGenerating}
+          icon={<Plus className="w-4 h-4" />}
           className="w-full"
         >
-          <Plus className="w-4 h-4" />
           {isGenerating ? 'Gerando...' : 'Gerar Novo Webhook'}
         </Button>
       </div>
@@ -227,7 +228,7 @@ export function WebhooksSection() {
             <div className="mt-4 space-y-3">
               {isLoadingEvents ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#ef0474]" />
+                  <span className="loading loading-spinner loading-md text-[#ef0474]" />
                 </div>
               ) : allEvents.length === 0 ? (
                 <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-200">
@@ -250,13 +251,18 @@ export function WebhooksSection() {
                               {event.processedAt && formatDate(event.processedAt)}
                             </span>
                             {isTruncated && (
-                              <button
+                              <Button
+                                variant="link"
+                                size="sm"
                                 onClick={() => setSelectedEvent(event)}
-                                className="cursor-pointer flex items-center gap-1 px-2 py-1 text-xs text-[#ef0474] hover:bg-[#ef0474]/10 rounded transition-colors"
+                                className="tooltip tooltip-auto p-2"
+                                data-tip="Ver evento completo"
                               >
-                                <Eye className="w-3 h-3" />
-                                Ver completo
-                              </button>
+                                <span className="text-slate-600 hover:text-[#ef0474] hover:bg-slate-50 rounded-lg transition-colors">
+                                  <Eye className="w-3 h-3" />
+                                  Ver completo
+                                </span>
+                              </Button>
                             )}
                           </div>
                           <div className="bg-slate-50 rounded p-3 font-mono text-xs overflow-x-auto">
@@ -292,16 +298,14 @@ export function WebhooksSection() {
 
       {/* Modal para visualizar evento completo */}
       {selectedEvent && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedEvent(null)}
+        <dialog
+          className="modal modal-open"
+          open
+          onClose={() => setSelectedEvent(null)}
         >
-          <div
-            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="modal-box bg-white max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col rounded-lg p-0">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200 relative">
               <div>
                 <h3 className="text-xl font-semibold text-slate-800">Evento Completo</h3>
                 {selectedEvent.processedAt && (
@@ -310,13 +314,16 @@ export function WebhooksSection() {
                   </p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedEvent(null)}
-                className="cursor-pointer text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
+
+              <form method="dialog">
+                <button
+                  type="submit"
+                  className="btn btn-sm btn-circle btn-ghost text-slate-600 hover:text-slate-800 transition-colors absolute right-2 top-2"
+                  aria-label="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </form>
             </div>
 
             {/* Body */}
@@ -329,17 +336,19 @@ export function WebhooksSection() {
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end p-6 border-t border-slate-200">
-              <Button
-                type="button"
-                onClick={() => setSelectedEvent(null)}
-                variant="secondary"
-              >
-                Fechar
-              </Button>
+            <div className="modal-action flex justify-end p-6 border-t border-slate-200 m-0">
+              <form method="dialog">
+                <Button type="submit" variant="secondary">
+                  Fechar
+                </Button>
+              </form>
             </div>
           </div>
-        </div>
+
+          <form method="dialog" className="modal-backdrop">
+            <button type="submit" className="sr-only">fechar</button>
+          </form>
+        </dialog>
       )}
     </div>
   );

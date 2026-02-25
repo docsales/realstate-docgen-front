@@ -465,7 +465,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 						<button
 							type="button"
 							onClick={() => onChange({ activePartyTab: 'sellers' } as any)}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${(!data.activePartyTab || data.activePartyTab === 'sellers')
+							className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${(!data.activePartyTab || data.activePartyTab === 'sellers')
 								? 'text-primary border-b-2 border-primary bg-white'
 								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
 								}`}
@@ -475,7 +475,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 						<button
 							type="button"
 							onClick={() => onChange({ activePartyTab: 'buyers' } as any)}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${data.activePartyTab === 'buyers'
+							className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${data.activePartyTab === 'buyers'
 								? 'text-primary border-b-2 border-primary bg-white'
 								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
 								}`}
@@ -485,7 +485,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 						<button
 							type="button"
 							onClick={() => onChange({ activePartyTab: 'property' } as any)}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${data.activePartyTab === 'property'
+							className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${data.activePartyTab === 'property'
 								? 'text-primary border-b-2 border-primary bg-white'
 								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
 								}`}

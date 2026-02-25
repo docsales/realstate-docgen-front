@@ -8,6 +8,7 @@ import type { ConsolidatedChecklist } from '@/types/checklist.types';
 import { generateFileId } from '@/utils/generateFileId';
 import { ocrService } from '@/services/ocr.service';
 import { getCoupleMembers } from '@/types/types';
+import { Button } from '@/components/Button';
 
 interface BuyerDocumentsTabProps {
 	buyers: Person[];
@@ -128,12 +129,13 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 					<div className="flex-1">
 						<p className="text-sm text-red-800">{linkError}</p>
 					</div>
-					<button
+					<Button
+						variant="link"
+						size="sm"
+						icon={<X className="w-4 h-4" />}
 						onClick={() => setLinkError(null)}
-						className="cursor-pointer text-red-400 hover:text-red-600 transition-colors"
-					>
-						<X className="w-4 h-4" />
-					</button>
+						className="text-red-400 hover:text-red-600 transition-colors"
+					/>
 				</div>
 			)}
 

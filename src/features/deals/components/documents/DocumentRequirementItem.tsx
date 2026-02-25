@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { CheckCircle2, AlertCircle, Upload, X, Link2, ChevronDown, FileText, Loader2, Plus } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Upload, X, Link2, ChevronDown, FileText, Plus } from 'lucide-react';
 import type { UploadedFile } from '@/types/types';
 import { OcrStatusLoader } from './OcrStatusLoader';
 import { OcrStatus } from '@/types/ocr.types';
 import { UtilsService } from '@/services/utils.service';
 import { translateValidationError } from '@/utils/validationErrorMessages';
+import { Button } from '@/components/Button';
 
 interface DocumentRequirementItemProps {
 	documentId: string;
@@ -208,29 +209,24 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 
 						{/* Link existing file button */}
 						{onLinkExistingFile && reusableFiles.length > 0 && canAddMore && (
-							<button
+							<Button
+								variant="link"
+								size="sm"
 								data-link-menu
-								type="button"
 								onClick={(e) => {
 									e.stopPropagation();
 									setShowLinkMenu(!showLinkMenu);
 								}}
+								isLoading={!!linkingFileId}
 								disabled={!!linkingFileId}
-								className={`cursor-pointer self-center text-xs px-2.5 py-1 text-primary hover:bg-slate-50 rounded border border-slate-200 flex items-center gap-1 transition-colors ${linkingFileId ? 'opacity-50 cursor-not-allowed' : ''}`}
+								className="text-primary hover:text-primary/80 transition-colors"
 							>
-								{linkingFileId ? (
-									<>
-										<Loader2 className="w-3 h-3 animate-spin" />
-										<span>Vinculando...</span>
-									</>
-								) : (
-									<>
-										<Link2 className="w-3 h-3" />
-										<span>Usar documento existente</span>
-										<ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showLinkMenu ? 'rotate-180' : ''}`} />
-									</>
-								)}
-							</button>
+								<span className="flex items-center gap-2">
+									<Link2 className="w-3 h-3" />
+									<span>Usar documento existente</span>
+									<ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showLinkMenu ? 'rotate-180' : ''}`} />
+								</span>
+							</Button>
 						)}
 					</div>
 				)}
@@ -266,11 +262,10 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 									{!isOcrActive && (
 										<div className="flex items-center gap-2 py-1.5 px-2 -mx-1 rounded hover:bg-slate-50 transition-colors">
 											{/* File icon */}
-											<FileText className={`w-3.5 h-3.5 flex-shrink-0 ${
-												file.validated === false ? 'text-red-400' :
+											<FileText className={`w-3.5 h-3.5 flex-shrink-0 ${file.validated === false ? 'text-red-400' :
 												file.validated === true ? 'text-slate-400' :
-												'text-slate-300'
-											}`} />
+													'text-slate-300'
+												}`} />
 
 											{/* File info */}
 											<div className="flex-1 min-w-0 flex items-center gap-1.5">
@@ -290,7 +285,7 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 											{/* Status indicator */}
 											<div className="flex items-center gap-1.5 flex-shrink-0">
 												{file.validated === undefined && (
-													<Loader2 className="w-3 h-3 text-slate-400 animate-spin" />
+													<span className="loading loading-spinner loading-sm text-slate-400" />
 												)}
 												{file.validated === true && (
 													<CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
@@ -302,17 +297,21 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 
 											{/* Remove button */}
 											{onRemoveFile && (
-												<button
+												<Button
+													variant="link"
+													size="sm"
 													data-remove-button
 													onClick={(e) => {
 														e.stopPropagation();
 														onRemoveFile(file.id);
 													}}
-													className="cursor-pointer p-0.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
-													title="Remover arquivo"
+													className="tooltip tooltip-bottom"
+													data-tip="Remover arquivo"
 												>
-													<X className="w-3.5 h-3.5" />
-												</button>
+													<span className="flex items-center gap-2 text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100">
+														<X className="w-3.5 h-3.5" />
+													</span>
+												</Button>
 											)}
 										</div>
 									)}
@@ -338,18 +337,23 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 
 				{/* Add more files button -- visible when files exist but slots remain */}
 				{relatedFiles.length > 0 && canAddMore && !isDragging && (
-					<div className="mt-2 flex items-center gap-2">
-						<button
+					<div className="mt-2 flex items-center">
+						<Button
+							variant="link"
+							size="sm"
 							type="button"
 							onClick={(e) => {
 								e.stopPropagation();
 								fileInputRef.current?.click();
 							}}
-							className="cursor-pointer flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium px-2 py-1 rounded border border-dashed border-primary/30 hover:border-primary/50 hover:bg-blue-50/50 transition-colors"
+							className="tooltip tooltip-bottom"
+							data-tip="Adicionar arquivo"
 						>
-							<Plus className="w-3 h-3" />
-							Adicionar arquivo
-						</button>
+							<span className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium px-2 py-1 rounded border border-dashed border-primary/30 hover:border-primary/50 hover:bg-blue-50/50 transition-colors">
+								<Plus className="w-3 h-3" />
+								Adicionar arquivo
+							</span>
+						</Button>
 						<span className="text-[11px] text-slate-400 tabular-nums">
 							{maxFiles - relatedFiles.length} restante{maxFiles - relatedFiles.length !== 1 ? 's' : ''}
 						</span>
@@ -365,25 +369,25 @@ export const DocumentRequirementItem: React.FC<DocumentRequirementItemProps> = (
 						{reusableFiles.map((file) => {
 							const isLinking = linkingFileId === file.id;
 							return (
-								<button
+								<Button
 									key={file.id}
-									type="button"
+									variant="link"
+									size="sm"
+									icon={<FileText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />}
+									isLoading={isLinking && !!linkingFileId}
+									disabled={isLinking && !!linkingFileId}
 									onClick={(e) => {
 										e.stopPropagation();
 										onLinkExistingFile?.(file.id, documentId);
 										setShowLinkMenu(false);
 									}}
-									disabled={!!linkingFileId}
-									className={`cursor-pointer w-full text-left px-2 py-1.5 bg-white border border-slate-200 hover:border-primary/30 rounded transition-colors flex items-center gap-2 ${linkingFileId ? 'opacity-50 cursor-not-allowed' : ''}`}
+									className={`w-full text-left px-2 py-1.5 bg-white border border-slate-200 hover:border-primary/30 rounded transition-colors flex items-center gap-2 ${linkingFileId ? 'opacity-50 cursor-not-allowed' : ''}`}
 								>
-									{isLinking && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
-									<FileText className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
 									<span className="text-xs text-slate-600 truncate flex-1">{file.file.name}</span>
 									{file.types && file.types.length > 1 && (
 										<span className="text-[11px] text-slate-400">{file.types.length} tipos</span>
 									)}
-									<Link2 className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
-								</button>
+								</Button>
 							);
 						})}
 					</div>

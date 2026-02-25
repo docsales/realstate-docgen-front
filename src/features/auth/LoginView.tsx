@@ -59,15 +59,17 @@ export const LoginView: React.FC = () => {
 
           {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
-          <Button type="submit" className="btn-md w-full text-lg" isLoading={loading}>Entrar</Button>
+          <Button type="submit" className="btn-md w-full text-lg" isLoading={loading}>
+            {loading ? 'Entrando...' : 'Entrar'}
+          </Button>
         </form>
 
         {/* TODO: Validar novo sistema de cadastro de conta e usuário */}
-        <div className="mt-6 text-center text-sm">
+        <div className="mt-6 text-center text-sm flex justify-center items-center gap-2">
           <span className="text-slate-500">Não tem uma conta? </span>
-          <button onClick={() => navigate('/register')} className="cursor-pointer text-primary font-semibold hover:underline">
+          <Button variant="link" onClick={() => navigate('/register')} className="m-0 p-0 text-primary font-semibold hover:underline">
             Cadastre-se
-          </button>
+          </Button>
         </div>
       </div>
     </div>

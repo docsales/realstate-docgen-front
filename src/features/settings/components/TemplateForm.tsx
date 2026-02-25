@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type React from 'react';
 import { X, Save, FileText } from 'lucide-react';
 import type { DocumentTemplate, CreateDocumentTemplateDto, UpdateDocumentTemplateDto } from '../../../types/settings.types';
@@ -11,7 +11,10 @@ interface TemplateFormProps {
   onClose: () => void;
 }
 
+const TEMPLATE_FORM_DIALOG_ID = 'template_form_modal';
+
 export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [label, setLabel] = useState(template?.label || '');
   const [templateId, setTemplateId] = useState(template?.templateId || '');
   const [description, setDescription] = useState(template?.description || '');
@@ -119,6 +122,19 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
     return 'Erro ao salvar template. Por favor, tente novamente.';
   };
 
+  // Mantemos o `<dialog>` aberto via atributo `open` + classe `modal-open`
+  // para evitar dependência de `showModal()` (que pode falhar dependendo do timing).
+
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    const handleClose = () => onClose();
+    el.addEventListener('close', handleClose);
+    return () => el.removeEventListener('close', handleClose);
+  }, [onClose]);
+
+  const handleClose = () => dialogRef.current?.close();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -141,7 +157,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
 
       // Aguarda um momento para mostrar a mensagem de sucesso antes de fechar
       setTimeout(() => {
-        onClose();
+        handleClose();
       }, 1000);
     } catch (error) {
       console.error('Erro ao salvar template:', error);
@@ -153,30 +169,33 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
   };
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
+    <dialog
+      id={TEMPLATE_FORM_DIALOG_ID}
+      ref={dialogRef}
+      className="modal modal-open"
+      open
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+      <div className="modal-box bg-white w-full md:max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 relative">
           <h2 className="text-2xl font-semibold text-slate-800 flex items-center gap-2">
             <FileText className="w-6 h-6 text-[#ef0474]" />
             {template ? 'Editar Template' : 'Novo Template'}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          <form method="dialog">
+            <Button
+              variant="link"
+              type="submit"
+              onClick={onClose}
+              className="absolute right-2 top-2"
+            >
+              <span className="text-slate-400 hover:text-slate-600 transition-colors">
+                <X className="w-6 h-6" />
+              </span>
+            </Button>
+          </form>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="w-full p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Descrição do Template *
@@ -187,7 +206,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
               onChange={(e) => setLabel(e.target.value)}
               placeholder="Ex.: Contrato de Financiamento"
               required
-              className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]"
+              className={`w-full ${templateId ? 'text-slate-600' : 'text-slate-400'} px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]`}
             />
           </div>
 
@@ -202,7 +221,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
               onBlur={() => handleExtractTemplateId(templateId)}
               placeholder="Ex.: 1a2B3c4D5e6F7g8H9i0J"
               required
-              className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]"
+              className={`w-full ${templateId ? 'text-slate-600' : 'text-slate-400'} px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]`}
             />
             {validationError && (
               <p className="text-xs text-red-500 mt-1">{validationError}</p>
@@ -221,7 +240,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Informações adicionais sobre este template..."
               rows={3}
-              className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474] resize-none"
+              className={`w-full ${description ? 'text-slate-600' : 'text-slate-400'} px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474] resize-none`}
             />
           </div>
 
@@ -234,7 +253,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
                 type="number"
                 value={order}
                 onChange={(e) => setOrder(parseInt(e.target.value) || 0)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]"
+                className={`w-full ${order ? 'text-slate-600' : 'text-slate-400'} px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]`}
               />
             </div>
 
@@ -267,27 +286,40 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
           <div className="flex justify-end items-center gap-3 pt-4">
             <Button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               variant="secondary"
+              icon={<X className="w-4 h-4" />}
               className="text-slate-700 rounded-sm hover:bg-slate-50 transition-colors"
             >
-              <X className="w-4 h-4" />
               Cancelar
             </Button>
             <Button
               type="submit"
-              disabled={isSaving || saveSuccess}
               variant="primary"
+              disabled={isSaving || saveSuccess}
               isLoading={isSaving}
+              icon={<Save className="w-4 h-4" />}
               className="bg-[#ef0474] text-white border-none rounded-sm hover:bg-[#d00366] transition-colors"
             >
-              {!isSaving && <Save className="w-4 h-4" />}
               {isSaving ? 'Salvando...' : saveSuccess ? 'Salvo!' : 'Salvar Template'}
             </Button>
           </div>
         </form>
       </div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <Button
+          variant="link"
+          size="sm"
+          type="submit"
+          onClick={onClose}
+          className="sr-only"
+        >
+          <span className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X className="w-6 h-6" />
+          </span>
+        </Button>
+      </form>
+    </dialog>
   );
 }
 

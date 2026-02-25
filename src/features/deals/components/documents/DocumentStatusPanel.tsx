@@ -1,6 +1,7 @@
 import React from 'react';
-import { CheckCircle2, Loader2, AlertCircle, Upload, RotateCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Upload, RotateCw } from 'lucide-react';
 import type { UploadedFile } from '@/types/types';
+import { Button } from '@/components/Button';
 
 interface OcrStats {
   total: number;
@@ -45,27 +46,28 @@ export const DocumentStatusPanel: React.FC<DocumentStatusPanelProps> = ({
 
         {/* Refresh button - only when processing */}
         {inProgress > 0 && (
-          <button
+          <Button
+            variant="link"
+            size="sm"
+            icon={<RotateCw className="w-3.5 h-3.5" />}
             onClick={onManualRefresh}
+            isLoading={isCheckingStatus}
             disabled={isCheckingStatus}
-            className="cursor-pointer p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
-            title="Atualizar status"
-          >
-            <RotateCw className={`w-3.5 h-3.5 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-          </button>
+            className="tooltip tooltip-bottom p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+            data-tip="Atualizar status"
+          />
         )}
       </div>
 
       {/* Progress bar */}
       <div className="w-full bg-slate-100 rounded-full h-2 mb-4 overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-500 ease-out ${
-            allDone && !hasErrors
+          className={`h-full rounded-full transition-all duration-500 ease-out ${allDone && !hasErrors
               ? 'bg-emerald-500'
               : hasErrors
                 ? 'bg-amber-500'
                 : 'bg-primary'
-          }`}
+            }`}
           style={{ width: `${progressPercent}%` }}
         />
       </div>
@@ -81,7 +83,7 @@ export const DocumentStatusPanel: React.FC<DocumentStatusPanelProps> = ({
         {/* Em andamento */}
         {inProgress > 0 && (
           <div className="flex items-center gap-1.5">
-            <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />
+            <span className="loading loading-spinner loading-sm text-amber-500" />
             <span className="text-xs text-slate-500">Em andamento</span>
             <span className="text-sm font-semibold text-amber-600 tabular-nums">{inProgress}</span>
           </div>

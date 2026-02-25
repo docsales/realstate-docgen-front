@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Inputs';
 import type { Signatory } from '@/types/types';
-import { Users, Info, AlertCircle } from 'lucide-react';
+import { Users, Info, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useDeal, useRemoveSignatoryFromDeal, useUpdateDeal } from '../hooks/useDeals';
 import { SignerCard } from '../components/SignerCard';
 import { mergeDealData, type ExtractedPerson } from '../utils/extractDealData';
@@ -36,11 +36,11 @@ function isValidEmail(email: string): boolean {
  */
 function isSignatoryValid(signatory: Signatory): boolean {
   return !!(
-    signatory.name && 
-    signatory.name.trim() !== '' && 
+    signatory.name &&
+    signatory.name.trim() !== '' &&
     signatory.name !== 'Sem nome' &&
-    signatory.email && 
-    signatory.email.trim() !== '' && 
+    signatory.email &&
+    signatory.email.trim() !== '' &&
     isValidEmail(signatory.email) &&
     signatory.phoneNumber &&
     signatory.phoneNumber.trim() !== ''
@@ -52,21 +52,21 @@ function isSignatoryValid(signatory: Signatory): boolean {
  */
 function getMissingFields(signatory: Signatory): string[] {
   const missing: string[] = [];
-  
+
   if (!signatory.name || signatory.name.trim() === '' || signatory.name === 'Sem nome') {
     missing.push('Nome');
   }
-  
+
   if (!signatory.email || signatory.email.trim() === '') {
     missing.push('Email');
   } else if (!isValidEmail(signatory.email)) {
     missing.push('Email válido');
   }
-  
+
   if (!signatory.phoneNumber || signatory.phoneNumber.trim() === '') {
     missing.push('Telefone');
   }
-  
+
   return missing;
 }
 
@@ -232,7 +232,7 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
           } else {
             // Todos válidos, limpar avisos e salvar no banco
             setIncompleteSignatories([]);
-            
+
             // Salvar automaticamente no banco para obter IDs reais
             try {
               await updateDealMutation.mutateAsync({
@@ -344,7 +344,7 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
         updatedSignatories = [...signatories, newSignatory];
       }
       onChange(updatedSignatories);
-      
+
       // Recalcular signatários incompletos
       const incompleteOnes: SignatoryValidationError[] = [];
       updatedSignatories.forEach(sig => {
@@ -354,7 +354,7 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
         }
       });
       setIncompleteSignatories(incompleteOnes);
-      
+
       setForm({ name: '', email: '', phoneNumber: '', role: 'buyer_part' });
     }
   };
@@ -469,7 +469,7 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
       newIgnoredChanges.add(changeKey);
     });
     setIgnoredChanges(newIgnoredChanges);
-    
+
     setShowSyncBanner(false);
     setPendingUpdates([]);
   };
@@ -503,12 +503,13 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
                   Clique no signatário abaixo para editar suas informações, ou volte à etapa de mapeamento para corrigir os dados na origem.
                 </p>
                 {onGoToStep && (
-                  <button
-                    onClick={() => onGoToStep(3)}
-                    className="cursor-pointer self-start px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                  <Button
+                    onClick={() => onGoToStep?.(3)}
+                    icon={<ArrowLeft className="w-4 h-4" />}
+                    className="self-start px-4 py-2 bg-red-600 text-white border-none rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
                   >
-                    ← Voltar ao Mapeamento (Etapa 3)
-                  </button>
+                    Voltar ao Mapeamento (Etapa 3)
+                  </Button>
                 )}
               </div>
             </div>
@@ -547,12 +548,13 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
                   <li>Voltar à etapa de mapeamento para adicionar as informações na origem dos dados</li>
                 </ul>
                 {onGoToStep && (
-                  <button
+                  <Button
                     onClick={() => onGoToStep(3)}
-                    className="cursor-pointer self-start px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+                    icon={<ArrowLeft className="w-4 h-4" />}
+                    className="self-start px-4 py-2 bg-amber-600 text-white border-none rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
                   >
-                    ← Voltar ao Mapeamento (Etapa 3)
-                  </button>
+                    Voltar ao Mapeamento (Etapa 3)
+                  </Button>
                 )}
               </div>
             </div>
@@ -579,18 +581,20 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
               ))}
             </ul>
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={handleSyncSignatories}
-                className="cursor-pointer px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium"
+                icon={<RefreshCw className="w-4 h-4" />}
+                className="px-4 py-2 bg-yellow-600 text-white border-none rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium"
               >
                 Sincronizar Dados
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={dismissSyncBanner}
-                className="cursor-pointer px-4 py-2 bg-white border border-yellow-300 text-yellow-900 rounded-lg hover:bg-yellow-50 transition-colors text-sm font-medium"
+                className="px-4 py-2 bg-white border border-yellow-300 text-yellow-900 border-none rounded-lg hover:bg-yellow-50 transition-colors text-sm font-medium"
               >
                 Manter Dados Atuais
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -668,9 +672,9 @@ export const SignatoriesStep: React.FC<SignatoriesStepProps> = ({ signatories, o
                   Telefone é obrigatório.
                 </p>
               )}
-              <Button 
-                onClick={saveSignatory} 
-                disabled={!form.name || !form.email || !isValidEmail(form.email) || !form.phoneNumber || form.phoneNumber.trim() === ''} 
+              <Button
+                onClick={saveSignatory}
+                disabled={!form.name || !form.email || !isValidEmail(form.email) || !form.phoneNumber || form.phoneNumber.trim() === ''}
                 className="w-full"
               >
                 {editingId ? 'Atualizar Signatário' : '+ Adicionar Signatário'}

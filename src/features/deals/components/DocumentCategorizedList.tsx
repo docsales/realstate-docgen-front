@@ -2,7 +2,6 @@ import React from 'react';
 import {
   FileText,
   CheckCircle2,
-  Loader2,
   XCircle,
   Circle,
   ExternalLink,
@@ -14,6 +13,7 @@ import {
   Receipt,
 } from 'lucide-react';
 import type { DealDocument } from '@/types/types';
+import { Button } from '@/components/Button';
 
 interface DocumentCategorizedListProps {
   documents: DealDocument[];
@@ -65,7 +65,7 @@ function getStatusBadge(status: string) {
     case 'OCR_PROCESSING':
       return (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">
-          <Loader2 className="w-3 h-3 animate-spin" /> Processando
+          <span className="loading loading-spinner loading-sm text-amber-500" /> Processando
         </span>
       );
     case 'ERROR':
@@ -166,43 +166,41 @@ export const DocumentCategorizedList: React.FC<DocumentCategorizedListProps> = (
                 <div className="flex items-center gap-1 justify-end pl-11 sm:pl-0">
                   {doc.fileUrl && (
                     <>
-                      <button
-                        type="button"
+                      <Button
+                        variant="link"
+                        size="sm"
+                        icon={<ExternalLink className="w-3.5 h-3.5" />}
+                        className="tooltip tooltip-left"
+                        data-tip="Visualizar"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.open(doc.fileUrl, '_blank');
                         }}
-                        className="cursor-pointer p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                        title="Visualizar"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
-                      <a
-                        href={doc.fileUrl}
-                        download={doc.originalFilename}
-                        onClick={(e) => e.stopPropagation()}
-                        className="p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                        title="Baixar"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </a>
+                      />
+                      <Button
+                        variant="link"
+                        size="sm"
+                        icon={<Download className="w-3.5 h-3.5" />}
+                        className="tooltip tooltip-left"
+                        data-tip="Baixar"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(doc.fileUrl, '_blank');
+                        }}
+                      />
                     </>
                   )}
                   {(doc.status === 'EXTRACTED' || doc.status === 'OCR_DONE') &&
                     doc.variables &&
                     Object.keys(doc.variables).length > 0 && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
+                      <>
+                        <Button variant="link" size="sm" icon={<Database className="w-3.5 h-3.5" />} className="tooltip tooltip-left" data-tip="Ver dados extraidos" onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                           e.stopPropagation();
                           onSelectDocument(doc);
-                        }}
-                        className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-primary hover:bg-blue-50 transition-colors"
-                        title="Ver dados extraidos"
-                      >
-                        <Database className="w-3.5 h-3.5" />
-                        <span className="hidden md:inline">Dados</span>
-                      </button>
+                        }}>
+                          <span className="hidden md:inline">Dados</span>
+                        </Button>
+                      </>
                     )}
                 </div>
               </div>

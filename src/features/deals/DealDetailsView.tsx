@@ -4,7 +4,7 @@ import { ArrowLeft, CheckCircle2, FileText, Home, Users, DollarSign, User, Edit,
 import { Button } from '../../components/Button';
 import { useDeal, useRemoveSignatoryFromDeal } from './hooks/useDeals';
 import type { DealStatus, DealDocument, Signatory } from '../../types/types';
-import { mergeDealData, formatCPF } from './utils/extractDealData';
+import { mergeDealData } from './utils/extractDealData';
 import { SignerCard } from './components/SignerCard';
 import { DealContextBanner } from './components/DealContextBanner';
 import { DocumentCategorizedList } from './components/DocumentCategorizedList';
@@ -49,11 +49,6 @@ export const DealDetailsView: React.FC = () => {
 		}
 	}
 
-	const handleNavigateToSpecificStep = (step: number) => {
-		if (deal.status !== 'DRAFT') return;
-		navigate(`/deals/${dealId}/edit?step=${step}`);
-	}
-
 	const getStatusBadge = (status: DealStatus) => {
 		switch (status) {
 			case 'SIGNED': return <span className="bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase w-fit">Assinado</span>;
@@ -84,8 +79,8 @@ export const DealDetailsView: React.FC = () => {
 				<AlertCircle className="w-12 h-12 text-red-500 mb-4" />
 				<p className="text-red-700 font-semibold text-sm">Erro ao carregar contrato</p>
 				<p className="text-red-600 text-xs">{error instanceof Error ? error.message : 'Contrato não encontrado'}</p>
-				<Button onClick={() => navigate('/dashboard')} className="mt-4" variant="secondary">
-					<ArrowLeft className="w-4 h-4 mr-2" /> Voltar
+				<Button onClick={() => navigate('/dashboard')} icon={<ArrowLeft className="w-4 h-4" />} className="mt-4" variant="secondary">
+					Voltar
 				</Button>
 			</div>
 		);
@@ -208,14 +203,29 @@ export const DealDetailsView: React.FC = () => {
 		return MARITAL_LABELS[p.maritalState] || p.maritalState;
 	};
 
+	const handleToggleDetailsModal = (section: string | null, isOpen: boolean = false) => {
+		const modal = document.getElementById('details_modal') as HTMLDialogElement;
+
+		if (isOpen) {
+			modal.close();
+
+			setTimeout(() => {
+				setContractModalSection(null);
+			}, 150);
+			return;
+		}
+		
+		setContractModalSection(section);
+		modal.showModal();
+	}
+
 	return (
 		<div className="p-4 md:p-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
 			{/* Header */}
 			<div className="mb-5">
-				<button onClick={() => navigate('/dashboard')} className="cursor-pointer flex items-center text-slate-500 hover:text-slate-700 text-xs mb-3 transition-colors">
-					<ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+				<Button variant="link" size="sm" icon={<ArrowLeft className="w-3.5 h-3.5" />} onClick={() => navigate('/dashboard')} className="flex items-center text-slate-500 hover:text-slate-700 text-xs mb-3 transition-colors">
 					<span className="font-medium">Voltar para listagem</span>
-				</button>
+				</Button>
 
 				<div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
 					<div>
@@ -234,10 +244,11 @@ export const DealDetailsView: React.FC = () => {
 						<div className="flex flex-wrap gap-2">
 							<Button
 								variant="secondary"
-								className="h-9 px-3 text-xs whitespace-nowrap"
+								size="sm"
+								icon={<Edit className="w-3.5 h-3.5" />}
 								onClick={() => navigate(`/deals/${dealId}/edit?step=${getContextualStep()}`)}
 							>
-								<Edit className="w-3.5 h-3.5 mr-1.5" /> {"Continuar a preparação do documento"}
+								Continuar a preparação do documento
 							</Button>
 						</div>
 					)}
@@ -290,12 +301,9 @@ export const DealDetailsView: React.FC = () => {
 									<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{"Imovel"}</span>
 								</div>
 								{contractSections?.['Imóvel'] && (
-									<button
-										onClick={() => setContractModalSection('Imóvel')}
-										className="cursor-pointer text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
-									>
-										<Eye className="w-3.5 h-3.5" /> Detalhes
-									</button>
+									<Button variant="link" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => handleToggleDetailsModal('Imóvel')} className="text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors">
+										Detalhes
+									</Button>
 								)}
 							</div>
 							<div className="p-4">
@@ -322,12 +330,9 @@ export const DealDetailsView: React.FC = () => {
 									</span>
 								</div>
 								{contractSections?.['Compradores'] && (
-									<button
-										onClick={() => setContractModalSection('Compradores')}
-										className="cursor-pointer text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
-									>
-										<Eye className="w-3.5 h-3.5" /> Detalhes
-									</button>
+									<Button variant="link" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => handleToggleDetailsModal('Compradores')} className="text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors">
+										Detalhes
+									</Button>
 								)}
 							</div>
 							<div className="p-4">
@@ -368,12 +373,9 @@ export const DealDetailsView: React.FC = () => {
 									</span>
 								</div>
 								{contractSections?.['Vendedores'] && (
-									<button
-										onClick={() => setContractModalSection('Vendedores')}
-										className="cursor-pointer text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
-									>
-										<Eye className="w-3.5 h-3.5" /> Detalhes
-									</button>
+									<Button variant="link" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => handleToggleDetailsModal('Vendedores')} className="text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors">
+										Detalhes
+									</Button>
 								)}
 							</div>
 							<div className="p-4">
@@ -412,12 +414,9 @@ export const DealDetailsView: React.FC = () => {
 									<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{"Condicoes Comerciais"}</span>
 								</div>
 								{contractSections?.['Condições Comerciais'] && (
-									<button
-										onClick={() => setContractModalSection('Condições Comerciais')}
-										className="cursor-pointer text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors"
-									>
-										<Eye className="w-3.5 h-3.5" /> Detalhes
-									</button>
+									<Button variant="link" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => handleToggleDetailsModal('Condições Comerciais')} className="text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors">
+										Detalhes
+									</Button>
 								)}
 							</div>
 							<div className="p-4">
@@ -535,11 +534,11 @@ export const DealDetailsView: React.FC = () => {
 						<div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
 							<div className="flex items-start gap-2.5">
 								<AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-									<div className="flex-1">
-										<h4 className="font-semibold text-sm text-amber-900 mb-1.5">{"Alertas e Observações"}</h4>
-										<ul className="space-y-0.5">
-											{deal.alerts.map((alert: string, idx: number) => (
-												<li key={idx} className="text-xs text-amber-800 flex items-start gap-1.5">
+								<div className="flex-1">
+									<h4 className="font-semibold text-sm text-amber-900 mb-1.5">{"Alertas e Observações"}</h4>
+									<ul className="space-y-0.5">
+										{deal.alerts?.map((alert: string, idx: number) => (
+											<li key={idx} className="text-xs text-amber-800 flex items-start gap-1.5">
 												<span className="mt-0.5">{"•"}</span>
 												<span>{alert}</span>
 											</li>
@@ -568,14 +567,9 @@ export const DealDetailsView: React.FC = () => {
 			/>
 
 			{/* Modal de detalhes do contrato por seção */}
-			{contractModalSection && contractSections?.[contractModalSection] && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-					<div
-						className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-						onClick={() => setContractModalSection(null)}
-					/>
-
-					<div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+			<dialog id="details_modal" className="modal ">
+				<div className="modal-box bg-white max-w-2xl max-h-[80vh] overflow-y-auto">
+					<div className="modal-header">
 						{/* Header */}
 						<div className="flex items-center justify-between p-5 border-b border-slate-200">
 							<div>
@@ -588,39 +582,33 @@ export const DealDetailsView: React.FC = () => {
 								</h2>
 								<p className="text-xs text-slate-500 mt-0.5">{"Variáveis extraídas do contrato"}</p>
 							</div>
-							<button
-								onClick={() => setContractModalSection(null)}
-								className="cursor-pointer p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
-							>
-								<X className="w-4 h-4" />
-							</button>
-						</div>
-
-						{/* Body */}
-						<div className="flex-1 overflow-y-auto p-5">
-							<div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200">
-								{(contractSections[contractModalSection] as { key: string; value: string }[]).map(({ key, value }, idx) => (
-									<div key={idx} className="flex items-start gap-3 p-3 px-4">
-										<span className="text-xs text-slate-400 font-mono min-w-[150px] pt-0.5 break-all">{formatFieldLabel(key)}</span>
-										<span className="text-sm text-slate-800 flex-1 break-words">{value || '-'}</span>
-									</div>
-								))}
-							</div>
-						</div>
-
-						{/* Footer */}
-						<div className="p-4 border-t border-slate-200 flex justify-end">
-							<Button
-								variant="secondary"
-								className="text-xs h-8"
-								onClick={() => setContractModalSection(null)}
-							>
-								Fechar
-							</Button>
+							<Button variant="link" size="sm" icon={<X className="w-3.5 h-3.5" />} onClick={() => handleToggleDetailsModal(null, true)} className="tooltip tooltip-left text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors" data-tip="Fechar" />
 						</div>
 					</div>
+					{/* Body */}
+					<div className="flex-1 overflow-y-auto p-5">
+						<div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200">
+							{(contractSections?.[contractModalSection as string] as { key: string; value: string }[])?.map(({ key, value }, idx) => (
+								<div key={idx} className="flex items-start gap-3 p-3 px-4">
+									<span className="text-xs text-slate-400 font-mono min-w-[150px] pt-0.5 break-all">{formatFieldLabel(key)}</span>
+									<span className="text-sm text-slate-800 flex-1 break-words">{value || '-'}</span>
+								</div>
+							))}
+						</div>
+					</div>
+
+					{/* Footer */}
+					<div className="modal-action p-4 border-t border-slate-200 flex justify-end">
+						<Button
+							variant="secondary"
+							className="text-xs h-8"
+							onClick={() => handleToggleDetailsModal(null, true)}
+						>
+							Fechar
+						</Button>
+					</div>
 				</div>
-			)}
+			</dialog>
 		</div>
 	);
 };
