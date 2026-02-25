@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Inputs';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 const logoSrc = "/images/docsales-logo.png";
 
-export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNavigateToRegister }) => {
+export const LoginView: React.FC = () => {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,18 +59,17 @@ export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNa
 
           {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
-          <Button type="submit" className="btn-md w-full text-lg" isLoading={loading}>Entrar</Button>
+          <Button type="submit" className="btn-md w-full text-lg" isLoading={loading}>
+            {loading ? 'Entrando...' : 'Entrar'}
+          </Button>
         </form>
 
-        <div className="mt-6 text-center text-sm">
+        {/* TODO: Validar novo sistema de cadastro de conta e usuário */}
+        <div className="mt-6 text-center text-sm flex justify-center items-center gap-2">
           <span className="text-slate-500">Não tem uma conta? </span>
-          <button onClick={onNavigateToRegister} className="cursor-pointer text-primary font-semibold hover:underline">
+          <Button variant="link" onClick={() => navigate('/register')} className="m-0 p-0 text-primary font-semibold hover:underline">
             Cadastre-se
-          </button>
-        </div>
-
-        <div className="mt-8 text-center text-xs text-slate-400">
-          Versão Prototype 0.1.6
+          </Button>
         </div>
       </div>
     </div>

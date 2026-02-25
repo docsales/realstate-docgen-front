@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, Outlet, useNavigate, Link } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, Link } from 'react-router-dom';
 import { LogOut, Settings, ChevronDown } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { ProtectedRoute } from './ProtectedRoute';
@@ -8,10 +8,12 @@ import { ConfigNotificationProvider } from '../contexts/ConfigNotificationContex
 // Views
 import { LoginView } from '../features/auth/LoginView';
 import { RegisterView } from '../features/auth/RegisterView';
+import { RegisterSuccessView } from '@/features/auth/RegisterSuccessView';
 import { DashboardView } from '../features/dashboard/DashboardView';
 import { NewDealWizard } from '../features/deals/NewDealWizard';
 import { DealDetailsView } from '../features/deals/DealDetailsView';
 import { SettingsView } from '../features/settings/SettingsView';
+import { DealEditGuard } from './DealEditGuard';
 
 const logoSrc = "/images/docsales-logo.png";
 
@@ -35,14 +37,16 @@ const AuthenticatedLayout = () => {
             <div className="flex items-center gap-4">
               <div className="hidden md:flex flex-col text-right">
                 <span className="text-sm font-semibold text-slate-700">{user?.name}</span>
-                <span className="text-xs text-slate-500">Imobiliária Premium</span>
+                <span className="text-xs text-slate-500">{user?.email}</span>
               </div>
-              
+
               {/* User Menu Dropdown com daisyUI */}
               <div className="cursor-pointer dropdown dropdown-end">
                 <div tabIndex={0} role="button" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white border-2 border-white bg-gradient-to-br from-[#ef0474] to-[#085995] shadow-md">
-                    {user?.name?.charAt(0) || 'U'}
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white border-2 border-white bg-gradient-to-br from-[#085995] to-[#ef0474] shadow-md">
+                    <span className="text-white">
+                      {user?.name?.charAt(0) || 'U'}
+                    </span>
                   </div>
                   <ChevronDown className="w-4 h-4 text-slate-400" />
                 </div>
@@ -82,15 +86,9 @@ const AuthenticatedLayout = () => {
 };
 
 // Componentes wrapper para usar useNavigate
-const LoginViewWrapper = () => {
-  const navigate = useNavigate();
-  return <LoginView onNavigateToRegister={() => navigate('/register')} />;
-};
+const LoginViewWrapper = () => <LoginView />;
 
-const RegisterViewWrapper = () => {
-  const navigate = useNavigate();
-  return <RegisterView onNavigateToLogin={() => navigate('/login')} />;
-};
+const RegisterViewWrapper = () => <RegisterView />;
 
 
 export const AppRouter = () => {
@@ -108,9 +106,19 @@ export const AppRouter = () => {
       <Route
         path="/register"
         element={
-          <PublicRoute>
+          <PublicRoute allowAuthenticated={true}>
             <RegisterViewWrapper />
           </PublicRoute>
+        }
+      />
+
+      {/* Sucesso do cadastro (protegido, sem navbar/layout autenticado) */}
+      <Route
+        path="/register/success"
+        element={
+          <ProtectedRoute>
+            <RegisterSuccessView />
+          </ProtectedRoute>
         }
       />
 
@@ -126,7 +134,14 @@ export const AppRouter = () => {
         <Route path="/dashboard" element={<DashboardView />} />
         <Route path="/deals/new" element={<NewDealWizard />} />
         <Route path="/deals/:id" element={<DealDetailsView />} />
-        <Route path="/deals/:id/edit" element={<NewDealWizard />} />
+        <Route
+          path="/deals/:id/edit"
+          element={
+            <DealEditGuard>
+              <NewDealWizard />
+            </DealEditGuard>
+          }
+        />
         <Route path="/settings" element={<SettingsView />} />
       </Route>
 

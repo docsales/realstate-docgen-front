@@ -11,16 +11,98 @@ export function FolderIdSection({ initialValue, onSave }: FolderIdSectionProps) 
   const [value, setValue] = useState(initialValue || '');
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleExtractFolderId = (folderUrl: string) => {
+    const input = folderUrl.trim();
+
+    const FOLDER_ID_PATTERN = /^[a-zA-Z0-9_-]{25,50}$/;
+
+    if (!input.includes('/folders/')) {
+      if (input.includes('drive.google.com') || input.includes('http')) {
+        setError('URL da pasta inválida. Por favor, insira a URL completa da pasta no Google Drive.');
+        setValue('');
+        return;
+      }
+
+      if (input.length > 0) {
+        if (FOLDER_ID_PATTERN.test(input)) {
+          setValue(input);
+          setError(null);
+        } else {
+          setError('ID de pasta inválido. Deve conter apenas letras, números, hífens e underscores (25-50 caracteres).');
+          setValue('');
+        }
+      } else {
+        setError(null);
+        setValue('');
+      }
+      return;
+    }
+
+    try {
+      const urlParts = input.split('/folders/')[1];
+      const folderId = urlParts.split('?')[0].split('#')[0].split('/')[0];
+
+      if (FOLDER_ID_PATTERN.test(folderId)) {
+        setValue(folderId);
+        setError(null);
+      } else {
+        setError('ID extraído da URL é inválido.');
+        setValue('');
+      }
+    } catch (error) {
+      setError('Erro ao processar a URL. Verifique o formato.');
+      setValue('');
+    }
+  }
+
+  const extractErrorMessage = (error: any): string => {
+    if (error?.response?.data) {
+      const data = error.response.data;
+
+      if (data.erro) {
+        return data.erro;
+      }
+      if (data.mensagem) {
+        return data.mensagem;
+      }
+      if (data.message) {
+        return data.message;
+      }
+      if (data.error) {
+        return typeof data.error === 'string' ? data.error : data.error.message || 'Erro desconhecido';
+      }
+      if (data.detalhes && Array.isArray(data.detalhes) && data.detalhes.length > 0) {
+        return data.detalhes.join(', ');
+      }
+
+      const status = error.response.status;
+      return `Erro ao salvar Folder ID (${status}): ${JSON.stringify(data)}`;
+    }
+
+    if (error?.message) {
+      if (error.message.includes('timeout') || error.message.includes('Network Error')) {
+        return 'Erro de conexão. Verifique sua internet e tente novamente.';
+      }
+      return error.message;
+    }
+
+    return 'Erro ao salvar Folder ID. Por favor, tente novamente.';
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
     setSuccessMessage('');
+    setError(null);
     try {
       await onSave(value);
       setSuccessMessage('Folder ID salvo com sucesso!');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Erro ao salvar Folder ID:', error);
+      const errorMessage = extractErrorMessage(error);
+      setError(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -35,27 +117,31 @@ export function FolderIdSection({ initialValue, onSave }: FolderIdSectionProps) 
         </h2>
       </div>
       <p className="text-sm text-slate-600 mb-4">
-        ID da pasta no Google Drive onde os documentos serão armazenados. 
+        ID da pasta no Google Drive onde os documentos serão armazenados.
         Você pode encontrar este ID na URL da pasta do Google Drive.
       </p>
-      
+
       <div className="space-y-4">
         <input
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onBlur={() => handleExtractFolderId(value)}
           placeholder="Ex.: 1a2B3c4D5e6F7g8H9i0J"
           className="w-full px-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#085995]"
         />
+        {error && (
+          <p className="text-xs text-red-500 mt-1">{error}</p>
+        )}
 
         <div className="flex items-center gap-3">
           <Button
+            variant="primary"
             onClick={handleSave}
             disabled={isSaving || value.length === 0}
-            variant="primary"
             isLoading={isSaving}
+            icon={<Save className="w-4 h-4" />}
           >
-            <Save className="w-4 h-4" />
             {isSaving ? 'Salvando...' : 'Salvar'}
           </Button>
 

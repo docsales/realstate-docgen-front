@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings as SettingsIcon } from 'lucide-react';
 import { settingsService } from '../../services/settings.service';
-import { useAuth } from '../../hooks/useAuth';
 import { useConfigNotification } from '../../hooks/useConfigNotification';
 import type {
-  UserSettings,
+  AccountSettings,
   DocumentTemplate,
   CreateDocumentTemplateDto,
   UpdateDocumentTemplateDto,
@@ -17,13 +17,13 @@ import { DocsalesEmailSection } from './components/DocsalesEmailSection';
 import { TemplatesSection } from './components/TemplatesSection';
 import { TemplateForm } from './components/TemplateForm';
 import { WebhooksSection } from './components/WebhooksSection';
+import { Button } from '@/components/Button';
 
 export function SettingsView() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { recheck } = useConfigNotification();
   const [isLoading, setIsLoading] = useState(true);
-  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+  const [accountSettings, setAccountSettings] = useState<AccountSettings | null>(null);
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | undefined>(undefined);
@@ -38,14 +38,14 @@ export function SettingsView() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const settings = await settingsService.getUserSettings()
-      setUserSettings(settings);
+      const account = await settingsService.getAccount();
+      setAccountSettings(account);
 
       const templatesData = await settingsService.getDocumentTemplates()
       setTemplates(templatesData);
 
-      setApiKey(user?.docsalesApiKey || '');
-      setFolderId(user?.folderId || '');
+      setApiKey(account?.docsalesApiKey || '');
+      setFolderId(account?.folderId || '');
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
     } finally {
@@ -53,24 +53,35 @@ export function SettingsView() {
     }
   };
 
+  const loadTemplates = async () => {
+    try {
+      const templatesData = await settingsService.getDocumentTemplates();
+      setTemplates(templatesData);
+    } catch (error) {
+      console.error('Erro ao carregar templates:', error);
+    }
+  };
+
   const handleSaveApiKey = async (value: string) => {
-    await settingsService.updateUser({ docsalesApiKey: value });
+    const updated = await settingsService.updateAccount({ docsalesApiKey: value });
+    setAccountSettings(updated);
     setApiKey(value);
-    recheck(); // Revalidar configurações
+    recheck();
   };
 
   const handleSaveFolderId = async (value: string) => {
-    await settingsService.updateUser({ folderId: value });
+    const updated = await settingsService.updateAccount({ folderId: value });
+    setAccountSettings(updated);
     setFolderId(value);
-    recheck(); // Revalidar configurações
+    recheck();
   };
 
   const handleSaveDocsalesEmail = async (value: string) => {
-    const updated = await settingsService.updateUserSettings({
-      docsalesUserEmail: value,
+    const updated = await settingsService.updateAccount({
+      defaultDocsalesUserEmail: value,
     });
-    setUserSettings(updated);
-    recheck(); // Revalidar configurações
+    setAccountSettings(updated);
+    recheck();
   };
 
   const handleAddTemplate = () => {
@@ -91,22 +102,24 @@ export function SettingsView() {
     } else {
       await settingsService.createDocumentTemplate(data as CreateDocumentTemplateDto);
     }
-    await loadData();
+
+    await loadTemplates();
     setShowTemplateForm(false);
-    recheck(); // Revalidar configurações
+    recheck();
   };
 
   const handleDeleteTemplate = async (id: string) => {
     await settingsService.deleteDocumentTemplate(id);
-    await loadData();
-    recheck(); // Revalidar configurações
+
+    await loadTemplates();
+    recheck();
   };
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ef0474] mx-auto mb-4"></div>
+          <span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
           <p className="text-slate-600">Carregando configurações...</p>
         </div>
       </div>
@@ -118,13 +131,15 @@ export function SettingsView() {
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <button
+          <Button
+            variant="link"
+            size="sm"
             onClick={() => navigate('/dashboard')}
-            className="cursor-pointer flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-4 transition-colors"
+            icon={<ArrowLeft className="w-5 h-5" />}
+            className="flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-4 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
             Voltar
-          </button>
+          </Button>
           <div className="flex items-center gap-3">
             <SettingsIcon className="w-8 h-8 text-[#ef0474]" />
             <div>
@@ -141,7 +156,7 @@ export function SettingsView() {
           <FolderIdSection initialValue={folderId} onSave={handleSaveFolderId} />
 
           <DocsalesEmailSection
-            initialValue={userSettings?.docsalesUserEmail || null}
+            initialValue={accountSettings?.defaultDocsalesUserEmail || null}
             onSave={handleSaveDocsalesEmail}
           />
 
@@ -156,14 +171,16 @@ export function SettingsView() {
         </div>
       </div>
 
-      {/* Template Form Modal */}
-      {showTemplateForm && (
-        <TemplateForm
-          template={editingTemplate}
-          onSave={handleSaveTemplate}
-          onClose={() => setShowTemplateForm(false)}
-        />
-      )}
+      {/* Template Form Modal (portal no body para garantir visibilidade) */}
+      {showTemplateForm &&
+        createPortal(
+          <TemplateForm
+            template={editingTemplate}
+            onSave={handleSaveTemplate}
+            onClose={() => setShowTemplateForm(false)}
+          />,
+          document.body
+        )}
     </div>
   );
 }

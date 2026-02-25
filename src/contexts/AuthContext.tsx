@@ -1,24 +1,22 @@
-import React, { createContext, useState, useEffect, type ReactNode } from 'react';
+import React, { createContext, useState, useEffect, type ReactNode, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
-import type { UserSettings } from '@/types/settings.types';
 import { server } from '@/services/api.service';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  docsalesApiKey?: string;
-  folderId?: string;
-  docsalesAccountId?: string;
-  settings?: UserSettings;
 }
 
 export interface AuthContextType {
   user: User | null;
   session: Session | null;
+  accountId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isBootstrapping: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -26,112 +24,285 @@ export interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+type RegisterFieldErrors = Partial<Record<'name' | 'email' | 'password', string>>;
+
+type RegisterApiValidationErrorPayload = {
+  message?: unknown;
+  error?: unknown;
+  errors?: Array<{
+    field?: unknown;
+    constraints?: Record<string, unknown> | null;
+    children?: Array<{
+      field?: unknown;
+      constraints?: Record<string, unknown> | null;
+    }> | null;
+  }> | null;
+};
+
+const normalizeRegisterApiError = (err: any): { message: string; fieldErrors?: RegisterFieldErrors } => {
+  const data = err?.response?.data as RegisterApiValidationErrorPayload | undefined;
+
+  // Payload de validação do Nest ValidationPipe (message + errors[])
+  if (data && Array.isArray(data.errors) && data.errors.length > 0) {
+    const fieldErrors: RegisterFieldErrors = {};
+
+    for (const e of data.errors) {
+      const field = typeof e?.field === 'string' ? e.field : undefined;
+      const constraints = e?.constraints && typeof e.constraints === 'object' ? e.constraints : null;
+
+      const firstConstraintMessage =
+        constraints ? Object.values(constraints).find((v) => typeof v === 'string') as string | undefined : undefined;
+
+      if (field && firstConstraintMessage) {
+        if (field === 'name' || field === 'email' || field === 'password') {
+          fieldErrors[field] = firstConstraintMessage;
+        }
+      }
+    }
+
+    const msg =
+      typeof data.message === 'string'
+        ? data.message
+        : 'Erro de validação';
+
+    return {
+      message: msg,
+      fieldErrors: Object.keys(fieldErrors).length ? fieldErrors : undefined,
+    };
+  }
+
+  const apiMessage =
+    data?.message ??
+    data?.error ??
+    err?.message;
+
+  const normalized =
+    typeof apiMessage === 'string'
+      ? apiMessage
+      : apiMessage
+        ? JSON.stringify(apiMessage)
+        : 'Erro ao criar conta. Tente novamente.';
+
+  return { message: normalized };
+};
+
 const mapSupabaseUserToUser = (
   supabaseUser: SupabaseUser & {
-    docsalesApiKey?: string,
-    folderId?: string,
-    docsalesAccountId?: string,
+    name?: string,
   }): User => {
   return {
     id: supabaseUser.id,
     name: supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'Usuário',
     email: supabaseUser.email || '',
-    docsalesApiKey: supabaseUser.docsalesApiKey || '',
-    folderId: supabaseUser.folderId || '',
-    docsalesAccountId: supabaseUser.docsalesAccountId || '',
   };
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const sessionRef = React.useRef<Session | null>(null);
-
-  const fetchUser = React.useCallback(async (currentSession: Session | null) => {
-    if (!currentSession) return;
+  const [accountId, setAccountId] = useState<string | null>(() => {
     try {
-      const { data: User }: { data: User } = await server.api.get('/users/me', { withCredentials: true })
-      const payload = { ...currentSession.user, ...User }
-      setUser(mapSupabaseUserToUser(payload));
-    } catch (error) {
-      console.error('Erro ao buscar dados do usuário:', error);
-      // Mesmo com erro, mantém a sessão se ela existir
-      if (currentSession?.user) {
-        setUser(mapSupabaseUserToUser(currentSession.user));
-      }
+      return localStorage.getItem('docsales.accountId');
+    } catch {
+      return null;
     }
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isBootstrapping, setIsBootstrapping] = useState(false);
+  const sessionRef = useRef<Session | null>(null);
+  const accountIdRef = useRef<string | null>(accountId);
+  const bootstrapPromiseRef = useRef<Promise<string> | null>(null);
+  const queryClient = useQueryClient();
+
+  // Registra provider de sessão para o api.service usar (evita chamadas ao Supabase)
+  useEffect(() => {
+    server.setSessionProvider(() => {
+      const currentSession = sessionRef.current;
+      if (!currentSession?.access_token) return null;
+
+      return {
+        token: currentSession.access_token,
+        expiresAt: currentSession.expires_at ? currentSession.expires_at * 1000 : Date.now() + 60 * 60 * 1000,
+      };
+    });
+  }, []);
+
+  // Registra provider de accountId para o api.service usar (injeta X-Account-Id)
+  useEffect(() => {
+    server.setAccountIdProvider(() => accountIdRef.current);
+  }, []);
+
+  // Registra função para aguardar bootstrap (para o api.service não rejeitar prematuramente)
+  useEffect(() => {
+    server.setBootstrapWaiter(async () => {
+      if (accountIdRef.current) return;
+
+      if (bootstrapPromiseRef.current) {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout aguardando bootstrap')), 10000)
+        );
+
+        try {
+          await Promise.race([bootstrapPromiseRef.current, timeoutPromise]);
+        } catch (error) {
+          console.error('[Bootstrap Waiter] ✗ Timeout ou erro:', error);
+        }
+      } else {
+        console.log('[Bootstrap Waiter] ⚠️ Nenhum bootstrap em andamento e accountId ausente');
+      }
+    });
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    const initializedRef = { current: false };
+    accountIdRef.current = accountId;
+  }, [accountId]);
 
-    const initializeAuth = async () => {
+  const bootstrapAccountId = useCallback(async (retries = 3, delay = 1000): Promise<string> => {
+    const cached = accountIdRef.current;
+    if (cached) return cached;
+
+    if (bootstrapPromiseRef.current) return bootstrapPromiseRef.current;
+
+    const bootstrapPromise = (async () => {
+      setIsBootstrapping(true);
+      let lastError: Error | null = null;
+
       try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        for (let attempt = 1; attempt <= retries; attempt++) {
+          try {
+            console.log(`[Bootstrap] Tentativa ${attempt}/${retries} de buscar accountId...`);
 
-        if (isMounted) {
-          if (currentSession?.user) {
-            setSession(currentSession);
-            sessionRef.current = currentSession;
-            await fetchUser(currentSession);
-          } else {
-            setSession(null);
-            sessionRef.current = null;
+            const { data } = await server.api.get<{ accountId: string }>('/auth/bootstrap', {
+              withCredentials: true,
+            });
+
+            const resolved = data?.accountId;
+            if (!resolved) {
+              throw new Error('Conta não provisionada (accountId ausente no bootstrap)');
+            }
+
+            accountIdRef.current = resolved;
+
+            setAccountId(resolved);
+            try {
+              localStorage.setItem('docsales.accountId', resolved);
+            } catch { }
+
+            return resolved;
+          } catch (error: any) {
+            lastError = error;
+            console.warn(`[Bootstrap] ✗ Tentativa ${attempt}/${retries} falhou:`, error?.response?.status, error?.message);
+
+            if (attempt < retries) {
+              await new Promise(resolve => setTimeout(resolve, delay * attempt));
+            }
           }
-          initializedRef.current = true;
-          setIsLoading(false);
+        }
+
+        throw new Error(`Falha ao buscar accountId após ${retries} tentativas: ${lastError?.message || 'Erro desconhecido'}`);
+      } finally {
+        setIsBootstrapping(false);
+        bootstrapPromiseRef.current = null;
+      }
+    })();
+
+    bootstrapPromiseRef.current = bootstrapPromise;
+    return bootstrapPromise;
+  }, []);
+
+  const fetchUser = useCallback(async (currentSession: Session | null): Promise<boolean> => {
+    if (!currentSession) return false;
+
+    try {
+      await bootstrapAccountId();
+
+      const { data: User }: { data: User } = await server.api.get('/users/me', { withCredentials: true })
+      const payload = { ...currentSession.user, ...User }
+      setUser(mapSupabaseUserToUser(payload));
+
+      return true;
+    } catch (error) {
+      console.error('[Auth] Erro ao buscar dados do usuário:', error);
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isBootstrapError = errorMessage.includes('accountId') || errorMessage.includes('bootstrap');
+
+      if (isBootstrapError) {
+        await supabase.auth.signOut();
+        return false;
+      }
+
+      if (currentSession?.user) {
+        setUser(mapSupabaseUserToUser(currentSession.user));
+        return true;
+      }
+
+      return false;
+    }
+  }, [bootstrapAccountId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initialize = async () => {
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+
+        if (!isMounted) return;
+
+        if (initialSession) {
+          setSession(initialSession);
+          sessionRef.current = initialSession;
+
+          const success = await fetchUser(initialSession);
+
+          if (!success && isMounted) {
+            console.warn('[Auth] Inicialização falhou, usuário será deslogado');
+          }
         }
       } catch (error) {
-        console.error('Erro ao inicializar autenticação:', error);
+        console.error('[Auth] Erro na inicialização:', error);
+      } finally {
         if (isMounted) {
-          initializedRef.current = true;
           setIsLoading(false);
         }
       }
     };
 
-    initializeAuth();
+    initialize();
 
-    // Escutar mudanças de estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
-        // Ignora eventos durante a inicialização
-        if (!initializedRef.current) return;
+        if (!isMounted) return;
 
-        // Ignora eventos que não são mudanças significativas
-        if (event === 'INITIAL_SESSION') return;
-
-        // Evita processar se a sessão não mudou realmente
         const currentSession = sessionRef.current;
-        const sessionChanged = 
-          (currentSession?.access_token !== newSession?.access_token) ||
-          (currentSession === null && newSession !== null) ||
-          (currentSession !== null && newSession === null);
 
-        // Só processa se realmente mudou ou é um evento importante
-        if (!sessionChanged && 
-            event !== 'SIGNED_OUT' && 
-            event !== 'SIGNED_IN' && 
-            event !== 'TOKEN_REFRESHED') {
+        const userChanged = currentSession?.user?.id !== newSession?.user?.id;
+        const sessionStatusChanged = (!!currentSession !== !!newSession);
+
+        if (!userChanged && !sessionStatusChanged && event !== 'SIGNED_IN') {
+          if (newSession) {
+            sessionRef.current = newSession;
+            setSession(newSession);
+          }
           return;
         }
 
-        if (isMounted) {
+        if (newSession) {
+          setSession(newSession);
+          sessionRef.current = newSession;
+          await fetchUser(newSession);
+        } else {
+          setSession(null);
+          sessionRef.current = null;
+          setUser(null);
+          setAccountId(null);
+          accountIdRef.current = null;
           try {
-            if (newSession?.user) {
-              setSession(newSession);
-              sessionRef.current = newSession;
-              await fetchUser(newSession);
-            } else {
-              setSession(null);
-              sessionRef.current = null;
-              setUser(null);
-            }
-          } catch (error) {
-            console.error('Erro ao atualizar autenticação:', error);
-          }
+            localStorage.removeItem('docsales.accountId');
+          } catch { }
+          server.clearTokenCache();
+          queryClient.clear();
         }
       }
     );
@@ -140,41 +311,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchUser]);
+  }, [fetchUser, queryClient]);
 
   const login = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) throw new Error(error.message);
+  };
+
+  const register = async (name: string, email: string, password: string) => {
+    try {
+      // Novo fluxo: cria conta/usuário no backend (que cria usuário no Supabase também)
+      await server.api.post(
+        '/auth/register',
+        { name, email, password },
+        { withCredentials: true },
+      );
+    } catch (err: any) {
+      const normalized = normalizeRegisterApiError(err);
+      const error = Object.assign(new Error(normalized.message), {
+        fieldErrors: normalized.fieldErrors,
+      });
+      throw error;
+    }
+
+    // Auto-login: já temos as credenciais do novo usuário
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    if (error) throw new Error(error.message);
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (data.user && data.session) {
-      setSession(data.session);
-      sessionRef.current = data.session;
-      await fetchUser(data.session);
-    }
-  };
-
-  const register = async (name: string, email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-        },
-      },
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (data.user && data.session) {
+    // Evita race condition de navegação antes do onAuthStateChange atualizar estado
+    if (data.session) {
       setSession(data.session);
       sessionRef.current = data.session;
       await fetchUser(data.session);
@@ -184,18 +356,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
 
-    if (error) {
-      console.error('Erro ao fazer logout:', error);
-    }
-
-    setSession(null);
-    sessionRef.current = null;
-    setUser(null);
+    if (error) console.error('Erro ao fazer logout:', error);
   };
 
-  // isAuthenticated deve considerar a sessão como suficiente
-  // O user pode ainda estar carregando, mas se tem sessão válida, está autenticado
-  // Isso evita redirecionamentos desnecessários durante o carregamento do user
   const isAuthenticated = !!session;
 
   return (
@@ -203,8 +366,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       value={{
         user,
         session,
+        accountId,
         isAuthenticated,
         isLoading,
+        isBootstrapping,
         login,
         register,
         logout,

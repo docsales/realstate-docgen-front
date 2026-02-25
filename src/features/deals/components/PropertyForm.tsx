@@ -1,6 +1,7 @@
 import React from 'react';
 import { Home, TreePine, Minus, Plus, ScrollText } from 'lucide-react';
 import type { PropertyState, PropertyType } from '@/types/types';
+import { Button } from '@/components/Button';
 
 interface PropertyFormProps {
   propertyState: PropertyState;
@@ -44,6 +45,7 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
   onDeedCountChange,
 }) => {
   const alertMessage = STATES_WITH_ALERTS[propertyState];
+  const deedCountClamped = Math.min(Math.max(deedCount || 1, 1), 5);
 
   return (
     <div className="space-y-6">
@@ -58,8 +60,8 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
                 type="button"
                 onClick={() => onPropertyTypeChange(opt.value)}
                 className={`flex-1 gap-2 px-4 py-3 rounded-lg font-medium transition-all flex items-center justify-center ${propertyType === opt.value
-                    ? 'bg-primary text-white border-2 border-primary'
-                    : 'bg-white text-slate-600 border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  ? 'bg-primary text-white border-2 border-primary'
+                  : 'bg-white text-slate-600 border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                   }`}
               >
                 {opt.icon}
@@ -115,31 +117,33 @@ export const PropertyForm: React.FC<PropertyFormProps> = ({
               <h4 className="font-semibold text-slate-800">Número de Matrículas</h4>
             </div>
             <div className="flex items-center gap-0 border border-slate-200 rounded-lg overflow-hidden">
-              <button
-                type="button"
-                className="cursor-pointer w-10 h-10 bg-white border-r border-slate-200 flex items-center justify-center hover:bg-slate-50 text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                onClick={() => onDeedCountChange(Math.max(1, deedCount - 1))}
-                disabled={deedCount <= 1}
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-              <div className="w-12 h-10 bg-white flex items-center justify-center font-bold text-lg text-slate-800 border-r border-slate-200">
-                {deedCount}
+              <Button
+                variant="link"
+                size="sm"
+                icon={<Minus className="w-4 h-4" />}
+                className="w-10 h-10 bg-white border-r border-slate-200 flex items-center justify-center hover:bg-slate-50 text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                onClick={() => onDeedCountChange(Math.max(1, deedCountClamped - 1))}
+                disabled={deedCountClamped <= 1}
+              />
+              <div className="w-12 h-10 bg-white flex items-center justify-center font-bold text-lg text-slate-800 border-l border-r border-slate-200">
+                {deedCountClamped}
               </div>
-              <button
-                type="button"
-                className="cursor-pointer w-10 h-10 bg-white flex items-center justify-center hover:bg-slate-50 text-slate-600 transition-colors"
-                onClick={() => onDeedCountChange(deedCount + 1)}
-              >
-                <Plus className="w-4 h-4" />
-              </button>
+              <Button
+                variant="link"
+                size="sm"
+                icon={<Plus className="w-4 h-4" />}
+                className="w-10 h-10 bg-white flex items-center justify-center hover:bg-slate-50 text-slate-600 transition-colors"
+                onClick={() => onDeedCountChange(Math.min(5, deedCountClamped + 1))}
+                disabled={deedCountClamped >= 5}
+              />
             </div>
           </div>
-          {deedCount > 1 && (
+          {deedCountClamped > 1 && (
             <p className="text-sm text-slate-500 mt-2">
-              Serão necessárias {deedCount} certidões de matrícula atualizadas.
+              Serão necessárias {deedCountClamped} certidões de matrícula atualizadas.
             </p>
           )}
+          <p className="text-xs text-slate-400 mt-1">Máximo: 5 matrículas.</p>
         </div>
       </div>
     </div>

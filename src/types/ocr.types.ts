@@ -21,7 +21,7 @@ export type OcrStatus = typeof OcrStatus[keyof typeof OcrStatus];
 export interface OcrMetadata {
   type: string;
   customId?: string;
-  category?: 'buyers' | 'sellers' | 'property';
+  category?: 'buyers' | 'sellers' | 'property' | 'proposal';
   personId?: string;
   dealId?: string;
 }

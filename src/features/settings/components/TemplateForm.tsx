@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import type React from 'react';
 import { X, Save, FileText } from 'lucide-react';
 import type { DocumentTemplate, CreateDocumentTemplateDto, UpdateDocumentTemplateDto } from '../../../types/settings.types';
 import { Button } from '@/components/Button';
@@ -10,53 +11,191 @@ interface TemplateFormProps {
   onClose: () => void;
 }
 
+const TEMPLATE_FORM_DIALOG_ID = 'template_form_modal';
+
 export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [label, setLabel] = useState(template?.label || '');
   const [templateId, setTemplateId] = useState(template?.templateId || '');
   const [description, setDescription] = useState(template?.description || '');
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
   const [order, setOrder] = useState(template?.order ?? 0);
   const [isSaving, setIsSaving] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleExtractTemplateId = (templateUrl: string) => {
+    const input = templateUrl.trim();
+
+    const TEMPLATE_ID_PATTERN = /^[a-zA-Z0-9_-]{25,50}$/;
+
+    const DOC_PATTERN = '/document/d/';
+    const PRESENTATION_PATTERN = '/presentation/d/';
+
+    const isDocUrl = input.includes(DOC_PATTERN);
+    const isPresentationUrl = input.includes(PRESENTATION_PATTERN);
+
+    if (!isDocUrl && !isPresentationUrl) {
+      if (input.includes('docs.google.com') || input.includes('drive.google.com') || input.includes('http')) {
+        setValidationError('URL do template inválida. Por favor, insira a URL completa do Google Docs ou Google Slides.');
+        setTemplateId('');
+        return;
+      }
+
+      if (input.length > 0) {
+        if (TEMPLATE_ID_PATTERN.test(input)) {
+          setTemplateId(input);
+          setValidationError(null);
+        } else {
+          setValidationError('ID de template inválido. Deve conter apenas letras, números, hífens e underscores (25-50 caracteres).');
+          setTemplateId('');
+        }
+      } else {
+        setValidationError(null);
+        setTemplateId('');
+      }
+      return;
+    }
+
+    try {
+      let extractedId = '';
+
+      if (isDocUrl) {
+        extractedId = input.split(DOC_PATTERN)[1];
+      } else if (isPresentationUrl) {
+        extractedId = input.split(PRESENTATION_PATTERN)[1];
+      }
+
+      extractedId = extractedId
+        .split('/edit')[0]
+        .split('/copy')[0]
+        .split('/preview')[0]
+        .split('?')[0]
+        .split('#')[0]
+        .split('/')[0];
+
+      if (TEMPLATE_ID_PATTERN.test(extractedId)) {
+        setTemplateId(extractedId);
+        setValidationError(null);
+      } else {
+        setValidationError('ID extraído da URL é inválido.');
+        setTemplateId('');
+      }
+    } catch (error) {
+      setValidationError('Erro ao processar a URL. Verifique o formato.');
+      setTemplateId('');
+    }
+  }
+
+  const extractErrorMessage = (error: any): string => {
+    if (error?.response?.data) {
+      const data = error.response.data;
+
+      if (data.erro) {
+        return data.erro;
+      }
+      if (data.mensagem) {
+        return data.mensagem;
+      }
+      if (data.message) {
+        return data.message;
+      }
+      if (data.error) {
+        return typeof data.error === 'string' ? data.error : data.error.message || 'Erro desconhecido';
+      }
+      if (data.detalhes && Array.isArray(data.detalhes) && data.detalhes.length > 0) {
+        return data.detalhes.join(', ');
+      }
+
+      const status = error.response.status;
+      return `Erro ao salvar template (${status}): ${JSON.stringify(data)}`;
+    }
+
+    if (error?.message) {
+      if (error.message.includes('timeout') || error.message.includes('Network Error')) {
+        return 'Erro de conexão. Verifique sua internet e tente novamente.';
+      }
+      return error.message;
+    }
+
+    return 'Erro ao salvar template. Por favor, tente novamente.';
+  };
+
+  // Mantemos o `<dialog>` aberto via atributo `open` + classe `modal-open`
+  // para evitar dependência de `showModal()` (que pode falhar dependendo do timing).
+
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    const handleClose = () => onClose();
+    el.addEventListener('close', handleClose);
+    return () => el.removeEventListener('close', handleClose);
+  }, [onClose]);
+
+  const handleClose = () => dialogRef.current?.close();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+
     setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
 
     try {
       const data = {
         label,
-        templateId,
+        templateId: templateId,
         description: description || undefined,
         isActive,
         order,
       };
 
       await onSave(data);
-      onClose();
+      setSaveSuccess(true);
+
+      // Aguarda um momento para mostrar a mensagem de sucesso antes de fechar
+      setTimeout(() => {
+        handleClose();
+      }, 1000);
     } catch (error) {
       console.error('Erro ao salvar template:', error);
+      const errorMessage = extractErrorMessage(error);
+      setSaveError(errorMessage);
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+    <dialog
+      id={TEMPLATE_FORM_DIALOG_ID}
+      ref={dialogRef}
+      className="modal modal-open"
+      open
+    >
+      <div className="modal-box bg-white w-full md:max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 relative">
           <h2 className="text-2xl font-semibold text-slate-800 flex items-center gap-2">
             <FileText className="w-6 h-6 text-[#ef0474]" />
             {template ? 'Editar Template' : 'Novo Template'}
           </h2>
-          <button
-            onClick={onClose}
-            className="cursor-pointer text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          <form method="dialog">
+            <Button
+              variant="link"
+              type="submit"
+              onClick={onClose}
+              className="absolute right-2 top-2"
+            >
+              <span className="text-slate-400 hover:text-slate-600 transition-colors">
+                <X className="w-6 h-6" />
+              </span>
+            </Button>
+          </form>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="w-full p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Descrição do Template *
@@ -67,7 +206,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
               onChange={(e) => setLabel(e.target.value)}
               placeholder="Ex.: Contrato de Financiamento"
               required
-              className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]"
+              className={`w-full ${templateId ? 'text-slate-600' : 'text-slate-400'} px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]`}
             />
           </div>
 
@@ -79,10 +218,14 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
               type="text"
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
+              onBlur={() => handleExtractTemplateId(templateId)}
               placeholder="Ex.: 1a2B3c4D5e6F7g8H9i0J"
               required
-              className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]"
+              className={`w-full ${templateId ? 'text-slate-600' : 'text-slate-400'} px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]`}
             />
+            {validationError && (
+              <p className="text-xs text-red-500 mt-1">{validationError}</p>
+            )}
             <p className="text-xs text-slate-500 mt-1">
               Encontre o ID na URL do documento no Google Docs
             </p>
@@ -97,7 +240,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Informações adicionais sobre este template..."
               rows={3}
-              className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474] resize-none"
+              className={`w-full ${description ? 'text-slate-600' : 'text-slate-400'} px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474] resize-none`}
             />
           </div>
 
@@ -110,7 +253,7 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
                 type="number"
                 value={order}
                 onChange={(e) => setOrder(parseInt(e.target.value) || 0)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]"
+                className={`w-full ${order ? 'text-slate-600' : 'text-slate-400'} px-4 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#ef0474]`}
               />
             </div>
 
@@ -124,32 +267,59 @@ export function TemplateForm({ template, onSave, onClose }: TemplateFormProps) {
             </div>
           </div>
 
+          {saveSuccess && (
+            <div className="bg-green-50 border border-green-200 rounded-md p-4">
+              <p className="text-sm font-medium text-green-800 mb-1">Template salvo com sucesso!</p>
+              <p className="text-sm text-green-600">Fechando o modal...</p>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <p className="text-sm font-medium text-red-800 mb-1">Erro ao salvar template</p>
+              <p className="text-sm text-red-600">{saveError}</p>
+            </div>
+          )}
+
           <div className="divider"></div>
 
           <div className="flex justify-end items-center gap-3 pt-4">
             <Button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               variant="secondary"
+              icon={<X className="w-4 h-4" />}
               className="text-slate-700 rounded-sm hover:bg-slate-50 transition-colors"
             >
-              <X className="w-4 h-4" />
               Cancelar
             </Button>
             <Button
               type="submit"
-              disabled={isSaving}
               variant="primary"
+              disabled={isSaving || saveSuccess}
               isLoading={isSaving}
+              icon={<Save className="w-4 h-4" />}
               className="bg-[#ef0474] text-white border-none rounded-sm hover:bg-[#d00366] transition-colors"
             >
-              <Save className="w-4 h-4" />
-              {isSaving ? 'Salvando...' : 'Salvar Template'}
+              {isSaving ? 'Salvando...' : saveSuccess ? 'Salvo!' : 'Salvar Template'}
             </Button>
           </div>
         </form>
       </div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <Button
+          variant="link"
+          size="sm"
+          type="submit"
+          onClick={onClose}
+          className="sr-only"
+        >
+          <span className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X className="w-6 h-6" />
+          </span>
+        </Button>
+      </form>
+    </dialog>
   );
 }
 

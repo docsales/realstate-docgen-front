@@ -1,18 +1,62 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, CheckCircle2, Send, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Send, Save } from 'lucide-react';
 import { Button } from '@/components/Button';
 import type { DealConfig, Signatory, UploadedFile, MappingValue, OcrDataByPerson } from '@/types/types';
 import { createDefaultPerson } from '@/types/types';
 import { ConfigStep } from './steps/ConfigStep';
 import { DocumentsStep } from './steps/DocumentsStep';
-import { MappingStep } from './steps/MappingStep';
+import { MappingStep, type MappingStepCache } from './steps/MappingStep';
 import { PreviewStep } from './steps/PreviewStep';
 import { SignatoriesStep } from './steps/SignatoriesStep';
 import { useCreateDeal, useDeal, useUpdateDeal, useSendContract } from './hooks/useDeals';
 import { ContractSendingLoader } from './components/ContractSendingLoader';
+
+/**
+ * Interface para erros de validação de signatários
+ */
+interface SignatoryValidationError {
+  signatory: Signatory;
+  missingFields: string[];
+}
+
+/**
+ * Valida formato de email
+ */
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+/**
+ * Valida signatários antes do envio
+ * Retorna lista de erros encontrados
+ */
+const validateSignatories = (signatories: Signatory[]): SignatoryValidationError[] => {
+  const errors: SignatoryValidationError[] = [];
+
+  signatories.forEach(sig => {
+    const missingFields: string[] = [];
+
+    if (!sig.name || sig.name.trim() === '' || sig.name === 'Sem nome') {
+      missingFields.push('Nome');
+    }
+
+    if (!sig.email || sig.email.trim() === '') {
+      missingFields.push('Email');
+    } else if (!isValidEmail(sig.email)) {
+      missingFields.push('Email válido');
+    }
+
+    if (missingFields.length > 0) {
+      errors.push({ signatory: sig, missingFields });
+    }
+  });
+
+  return errors;
+};
 
 /**
  * Gera ocrData a partir dos arquivos (UploadedFile[])
@@ -26,11 +70,70 @@ const generateOcrDataFromFiles = (files: UploadedFile[]): OcrDataByPerson[] => {
 
   const ocrDataMap = new Map<string, any>();
 
+  const formatDateToBr = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const s = value.trim();
+    if (!s) return null;
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+    const dt = new Date(s);
+    if (Number.isNaN(dt.getTime())) return null;
+    const dd = String(dt.getDate()).padStart(2, '0');
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const yyyy = String(dt.getFullYear());
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const formatTimelineBullets = (timeline: unknown): string | null => {
+    if (!Array.isArray(timeline) || timeline.length === 0) return null;
+
+    const lines = timeline.map((e: any) => {
+      const dateBr = formatDateToBr(e?.data);
+      const registro = typeof e?.registro === 'string' ? e.registro.trim() : '';
+      const descricao = typeof e?.descricao === 'string' ? e.descricao.trim() : '';
+      const tipo = typeof e?.tipo === 'string' ? e.tipo.trim() : '';
+
+      const parts: string[] = [];
+      if (dateBr) parts.push(dateBr);
+      if (registro) parts.push(`(${registro})`);
+      if (descricao) parts.push(descricao);
+      else if (tipo) parts.push(tipo);
+
+      const text = parts.join(' ').trim();
+      return `- ${text || '(sem descrição)'}`;
+    });
+
+    return lines.join('\n');
+  };
+
+  const getTimelineCandidate = (docData: any): unknown => {
+    if (!docData || typeof docData !== 'object') return null;
+    return (
+      docData.timeline ??
+      docData.timeline_cronologica ??
+      docData.dados_matricula?.timeline ??
+      docData.dados_matricula?.timeline_cronologica ??
+      null
+    );
+  };
+
   files
     .filter((file) => file && file.ocrExtractedData && file.ocrStatus === 'completed')
     .forEach((file) => {
       const personId = file.personId || 'property';
-      const docData = file.ocrExtractedData;
+      const docData: any = file.ocrExtractedData;
+
+      // Enriquecer matrícula/imóvel com uma timeline em string (para mapear sem lidar com arrays)
+      if (personId === 'property' && docData && typeof docData === 'object') {
+        const candidate = getTimelineCandidate(docData);
+        const timelineDescricao = formatTimelineBullets(candidate);
+        if (timelineDescricao) {
+          docData.timeline_descricao = docData.timeline_descricao || timelineDescricao;
+          // Compatibilidade com templates que usam timeline_registros
+          docData.timeline_registros = docData.timeline_registros || timelineDescricao;
+        }
+      }
 
       if (docData) {
         if (ocrDataMap.has(personId)) {
@@ -50,8 +153,12 @@ const generateOcrDataFromFiles = (files: UploadedFile[]): OcrDataByPerson[] => {
 export const NewDealWizard: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const editDealId = id; // Se id existe na URL, está em modo de edição
-  const [step, setStep] = useState(1);
+
+  // Inicializar step dos query params se existir
+  const initialStep = parseInt(searchParams.get('step') || '1', 10);
+  const [step, setStep] = useState(initialStep > 0 && initialStep <= 5 ? initialStep : 1);
   const [direction, setDirection] = useState(1);
   const [submissionStatus, setSubmissionStatus] = useState<'editing' | 'sending' | 'success'>('editing');
   const [dealId, setDealId] = useState<string | null>(editDealId || null);
@@ -59,6 +166,9 @@ export const NewDealWizard: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isCreatingDeal, setIsCreatingDeal] = useState(false);
+  const [isSavingMappings, setIsSavingMappings] = useState(false);
+  const [signatoriesValidationErrors, setSignatoriesValidationErrors] = useState<SignatoryValidationError[]>([]);
 
   const createDealMutation = useCreateDeal();
   const updateDealMutation = useUpdateDeal();
@@ -73,12 +183,11 @@ export const NewDealWizard: React.FC = () => {
     name: '',
     docTemplateId: '',
     expiration_date: undefined,
-    contract_end: undefined,
     useFgts: false,
     bankFinancing: false,
     consortiumLetter: false,
-    sellers: [createDefaultPerson('default-seller-1')],
-    buyers: [createDefaultPerson('default-buyer-1')],
+    sellers: [createDefaultPerson()],
+    buyers: [createDefaultPerson()],
     propertyState: 'quitado',
     propertyType: 'urbano',
     deedCount: 1,
@@ -87,6 +196,16 @@ export const NewDealWizard: React.FC = () => {
   const [mappings, setMappings] = useState<Record<string, MappingValue>>({});
   const [signatories, setSignatories] = useState<Signatory[]>([]);
   const [ocrData, setOcrData] = useState<OcrDataByPerson[]>([]);
+  const [mappingStepCache, setMappingStepCache] = useState<MappingStepCache | null>(null);
+  const [documentsGate, setDocumentsGate] = useState<{ canContinue: boolean; message: string }>({
+    canContinue: false,
+    message: 'Carregando checklist de documentos...',
+  });
+
+  // Se o usuário alterar documentos/ocrData, invalidar cache do Step 3
+  useEffect(() => {
+    setMappingStepCache(null);
+  }, [dealId, documents, ocrData]);
 
   useEffect(() => {
     if (existingDeal && editDealId) {
@@ -96,7 +215,6 @@ export const NewDealWizard: React.FC = () => {
           name: existingDeal.name || '',
           docTemplateId: existingDeal.docTemplateId || prev.docTemplateId,
           expiration_date: existingDeal.expirationDate ?? undefined,
-          contract_end: existingDeal.contractEnd ?? undefined,
           ...(existingDeal.metadata || {}),
         }));
       }
@@ -168,7 +286,7 @@ export const NewDealWizard: React.FC = () => {
         });
 
         setDocuments(loadedFiles);
-        
+
         // Gerar ocrData a partir dos documentos carregados
         const ocrDataFromDocs = generateOcrDataFromFiles(loadedFiles);
         if (ocrDataFromDocs.length > 0) {
@@ -192,18 +310,18 @@ export const NewDealWizard: React.FC = () => {
     setSaveSuccess(false);
     setSaveError(null);
 
-    try {      
+    try {
       const updatedDeal = await updateDealMutation.mutateAsync({
         dealId,
         payload: {
           name: configData.name,
           docTemplateId: configData.docTemplateId,
           expirationDate: configData.expiration_date,
-          contractEnd: configData.contract_end,
           metadata: {
             useFgts: configData.useFgts,
             bankFinancing: configData.bankFinancing,
             consortiumLetter: configData.consortiumLetter,
+            contractValue: configData.contractValue,
             sellers: configData.sellers,
             buyers: configData.buyers,
             propertyState: configData.propertyState,
@@ -216,7 +334,6 @@ export const NewDealWizard: React.FC = () => {
       setConfigData(prev => ({
         ...prev,
         expiration_date: updatedDeal.expirationDate ?? prev.expiration_date,
-        contract_end: updatedDeal.contractEnd ?? prev.contract_end,
       }));
 
       setSaveSuccess(true);
@@ -242,7 +359,6 @@ export const NewDealWizard: React.FC = () => {
     setSaveError(null);
 
     try {
-      // Converter mappings para o formato JSON simples (apenas valores)
       const contractFieldsJson: Record<string, string> = {};
       Object.entries(mappings).forEach(([fieldId, mapping]) => {
         contractFieldsJson[fieldId] = mapping.value;
@@ -309,17 +425,28 @@ export const NewDealWizard: React.FC = () => {
   const isStepValid = (stepIndex: number): boolean => {
     switch (stepIndex) {
       case 1:
-        return configData.name.trim().length > 0 &&
+        return (
+          !!configData.name &&
+          configData.name.trim().length > 0 &&
+          !!configData.docTemplateId &&
+          configData.docTemplateId.trim().length > 0 &&
+          !!configData.expiration_date
+        ) &&
           configData.sellers.length > 0 &&
           configData.buyers.length > 0;
       case 2:
-        return documents.length > 0;
+        return documentsGate.canContinue;
       case 3:
         return Object.keys(mappings).length > 0;
       case 4:
         return true;
       case 5:
-        return signatories.length > 0;
+        if (signatories.length === 0) return false;
+        // Validar que todos os signatários têm dados mínimos necessários
+        return signatories.every(sig =>
+          sig.name && sig.name.trim() !== '' && sig.name !== 'Sem nome' &&
+          sig.email && sig.email.trim() !== '' && isValidEmail(sig.email)
+        );
       default:
         return false;
     }
@@ -327,21 +454,29 @@ export const NewDealWizard: React.FC = () => {
 
   const titles = ["Configurações", "Documentos", "Mapear Dados", "Preview", "Signatários"];
 
+  const getEffectiveDealId = (overrideDealId?: string | null): string | null => {
+    return overrideDealId ?? dealId ?? editDealId ?? null;
+  };
+
   const nextStep = async () => {
     if (!isStepValid(step)) return;
 
+    // Limpar erros de validação ao mudar de step
+    setSignatoriesValidationErrors([]);
+
     if (step === 1 && !dealId && !editDealId) {
+      setIsCreatingDeal(true);
       try {
         const newDeal = await createDealMutation.mutateAsync({
           name: configData.name,
           docTemplateId: configData.docTemplateId,
           signers: [],
           expirationDate: configData.expiration_date,
-          contractEnd: configData.contract_end,
           metadata: {
             useFgts: configData.useFgts,
             bankFinancing: configData.bankFinancing,
             consortiumLetter: configData.consortiumLetter,
+            contractValue: configData.contractValue,
             sellers: configData.sellers,
             buyers: configData.buyers,
             propertyState: configData.propertyState,
@@ -350,17 +485,70 @@ export const NewDealWizard: React.FC = () => {
           },
         });
 
-        setDealId(newDeal.id);
+        const createdId =
+          typeof (newDeal as any)?.id === 'string' && (newDeal as any).id.trim().length > 0
+            ? ((newDeal as any).id as string)
+            : null;
+
+        if (!createdId) {
+          throw new Error('Deal criado sem id');
+        }
+
+        // Importante: navegar usando o ID recém-criado (não depende de state async)
+        setDealId(createdId);
+        setDirection(1);
+        setStepAndNavigate(2, createdId);
+        return;
       } catch (error) {
         console.error('❌ Erro ao criar deal:', error);
+        setSaveError('Erro ao criar proposta. Tente novamente.');
+        setTimeout(() => setSaveError(null), 5000);
+        setIsCreatingDeal(false);
         return;
+      } finally {
+        setIsCreatingDeal(false);
       }
     } else if (editDealId && !dealId) {
       setDealId(editDealId);
     }
 
+    // Salvar configurações ao avançar da etapa 1 quando o deal já existe
+    if (step === 1 && dealId) {
+      setIsCreatingDeal(true);
+      try {
+        await updateDealMutation.mutateAsync({
+          dealId,
+          payload: {
+            name: configData.name,
+            docTemplateId: configData.docTemplateId,
+            expirationDate: configData.expiration_date,
+            metadata: {
+              useFgts: configData.useFgts,
+              bankFinancing: configData.bankFinancing,
+              consortiumLetter: configData.consortiumLetter,
+              contractValue: configData.contractValue,
+              sellers: configData.sellers,
+              buyers: configData.buyers,
+              propertyState: configData.propertyState,
+              propertyType: configData.propertyType,
+              deedCount: configData.deedCount,
+            },
+          },
+        });
+      } catch (error: any) {
+        console.error('❌ Erro ao salvar configurações:', error);
+        setSaveError(error?.response?.data?.message || 'Erro ao salvar configurações. Tente novamente.');
+        setTimeout(() => setSaveError(null), 5000);
+        setIsCreatingDeal(false);
+        return;
+      } finally {
+        setIsCreatingDeal(false);
+      }
+    }
+
     // Salvar campos mapeados ao avançar da etapa 3
     if (step === 3 && dealId) {
+      setIsSavingMappings(true);
       try {
         const contractFieldsJson: Record<string, string> = {};
         Object.entries(mappings).forEach(([fieldId, mapping]) => {
@@ -373,25 +561,126 @@ export const NewDealWizard: React.FC = () => {
             contractFields: contractFieldsJson,
           },
         });
-        console.log('✅ Campos mapeados salvos automaticamente');
       } catch (error: any) {
         console.error('❌ Erro ao salvar campos do contrato:', error);
-        // Não bloquear a navegação, apenas logar o erro
+        setSaveError('Erro ao salvar variáveis mapeadas. Tente novamente.');
+        setTimeout(() => setSaveError(null), 5000);
+        setIsSavingMappings(false);
+        return;
+      } finally {
+        setIsSavingMappings(false);
       }
     }
 
     setDirection(1);
-    setStep(s => Math.min(s + 1, 5));
+    setStep(step => Math.min(step + 1, 5));
+    setStepAndNavigate(step + 1);
   }
 
-  const prevStep = () => {
+  const prevStep = async () => {
+    // Se estamos saindo do Step 3 (Mapeamento), salvar mappings antes de voltar
+    if (step === 3 && dealId) {
+      setIsSavingMappings(true);
+      try {
+        const contractFieldsJson: Record<string, string> = {};
+        Object.entries(mappings).forEach(([fieldId, mapping]) => {
+          contractFieldsJson[fieldId] = mapping.value;
+        });
+
+        await updateDealMutation.mutateAsync({
+          dealId,
+          payload: {
+            contractFields: contractFieldsJson,
+          },
+        });
+      } catch (error: any) {
+        console.error('❌ Erro ao salvar campos ao voltar:', error);
+        // Não bloqueia navegação, mas mostra erro
+      } finally {
+        setIsSavingMappings(false);
+      }
+    }
+
+    // Limpar erros de validação ao mudar de step
+    setSignatoriesValidationErrors([]);
     setDirection(-1);
-    setStep(s => Math.max(s - 1, 1));
+    setStep(step => Math.max(step - 1, 1));
+    setStepAndNavigate(step - 1);
   }
+
+  /**
+   * Extrai e formata a mensagem de erro da API
+   */
+  const extractErrorMessage = (error: any): string => {
+    // Verificar se há resposta da API
+    if (error?.response?.data) {
+      const data = error.response.data;
+      const status = error.response.status;
+
+      // Erro 422 - Validação/Dados incompletos
+      if (status === 422) {
+        if (data.message) {
+          if (Array.isArray(data.message)) {
+            return `Dados incompletos: ${data.message.join(', ')}`;
+          }
+          return `Dados incompletos: ${data.message}`;
+        }
+        if (data.erro) {
+          return `Dados incompletos: ${data.erro}`;
+        }
+        return 'Dados incompletos ou inválidos. Verifique se o preview foi gerado e se todos os dados estão corretos.';
+      }
+
+      // Erro 400 - Bad Request
+      if (status === 400) {
+        return data.message || data.erro || 'Requisição inválida. Verifique os dados fornecidos.';
+      }
+
+      // Erro 404 - Não encontrado
+      if (status === 404) {
+        return 'Contrato não encontrado. Verifique se ele ainda existe.';
+      }
+
+      // Erro 500 - Erro do servidor
+      if (status >= 500) {
+        return 'Erro no servidor. Tente novamente em alguns instantes.';
+      }
+
+      // Outros erros
+      if (data.message) {
+        return data.message;
+      }
+      if (data.erro) {
+        return data.erro;
+      }
+    }
+
+    // Erro de rede ou timeout
+    if (error?.message) {
+      if (error.message.includes('timeout') || error.message.includes('Network Error')) {
+        return 'Erro de conexão. Verifique sua internet e tente novamente.';
+      }
+      return error.message;
+    }
+
+    return 'Erro ao enviar contrato. Tente novamente.';
+  };
 
   const handleFinish = async () => {
     if (!isStepValid(step) || !dealId) return;
 
+    // VALIDAÇÃO CLIENT-SIDE - Antes de enviar ao servidor
+    const validationErrors = validateSignatories(signatories);
+
+    if (validationErrors.length > 0) {
+      setSignatoriesValidationErrors(validationErrors);
+      setSaveError('Alguns signatários estão com informações incompletas. Por favor, revise os dados antes de enviar.');
+      setTimeout(() => setSaveError(null), 8000);
+      return; // NÃO prosseguir com envio
+    }
+
+    // Limpar erros de validação antes de continuar
+    setSignatoriesValidationErrors([]);
     setSubmissionStatus('sending');
 
     try {
@@ -420,8 +709,12 @@ export const NewDealWizard: React.FC = () => {
       setSaveSuccess(true);
     } catch (error: any) {
       console.error('❌ Erro ao enviar contrato:', error);
-      setSaveError(error.response?.data?.message || 'Erro ao enviar contrato');
-      setTimeout(() => setSaveError(null), 3000);
+
+      // Extrair mensagem de erro detalhada
+      const errorMessage = extractErrorMessage(error);
+      setSaveError(errorMessage);
+
+      setTimeout(() => setSaveError(null), 5000); // Aumentado para 5 segundos para dar tempo de ler
       setSubmissionStatus('editing');
       return;
     }
@@ -432,10 +725,33 @@ export const NewDealWizard: React.FC = () => {
     }, 2500);
   }
 
-  const handleStepperClick = (targetStep: number) => {
+  const handleStepperClick = async (targetStep: number) => {
+    // Se estamos saindo do Step 3 (Mapeamento), salvar mappings antes de navegar
+    if (step === 3 && dealId && targetStep !== 3) {
+      setIsSavingMappings(true);
+      try {
+        const contractFieldsJson: Record<string, string> = {};
+        Object.entries(mappings).forEach(([fieldId, mapping]) => {
+          contractFieldsJson[fieldId] = mapping.value;
+        });
+
+        await updateDealMutation.mutateAsync({
+          dealId,
+          payload: {
+            contractFields: contractFieldsJson,
+          },
+        });
+      } catch (error: any) {
+        console.error('❌ Erro ao salvar campos ao navegar:', error);
+        // Não bloqueia navegação, mas mostra erro
+      } finally {
+        setIsSavingMappings(false);
+      }
+    }
+
     if (targetStep < step) {
       setDirection(-1);
-      setStep(targetStep);
+      setStepAndNavigate(targetStep);
     } else {
       let canProceed = true;
       for (let i = 1; i < targetStep; i++) {
@@ -447,15 +763,41 @@ export const NewDealWizard: React.FC = () => {
 
       if (canProceed) {
         setDirection(1);
-        setStep(targetStep);
+        setStepAndNavigate(targetStep);
       }
     }
+  }
+
+  const handleGoBack = () => {
+    if (editDealId) {
+      navigate(`/deals/${editDealId}`);
+    } else {
+      navigate('/dashboard');
+    }
+  }
+
+  const setStepAndNavigate = (step: number, overrideDealId?: string | null) => {
+    setStep(step);
+    const effectiveId = getEffectiveDealId(overrideDealId);
+    if (!effectiveId) {
+      console.error('❌ Tentativa de navegar sem dealId (effectiveId=null)', {
+        dealId,
+        editDealId,
+        overrideDealId,
+        step,
+      });
+      setSaveError('Não foi possível avançar: ID da proposta não encontrado. Tente novamente.');
+      setTimeout(() => setSaveError(null), 5000);
+      return;
+    }
+    navigate(`/deals/${effectiveId}/edit?step=${step}`, { replace: true });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   if (isDealLoading || isLoadingDeal) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white">
-        <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+        <span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
         <p className="text-slate-600">Carregando dados do contrato...</p>
       </div>
     );
@@ -498,6 +840,14 @@ export const NewDealWizard: React.FC = () => {
     );
   }
 
+  const stepTitles = [
+    'Configurações do contrato',
+    'Documentos do contrato',
+    'Variáveis do contrato',
+    'Preview do contrato',
+    'Signatários do contrato',
+  ];
+
   const currentStepValid = isStepValid(step);
 
   return (
@@ -506,9 +856,7 @@ export const NewDealWizard: React.FC = () => {
       <div className="bg-white border-b border-slate-200 sticky top-16 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/dashboard')} className="cursor-pointer p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
+            <Button variant="link" onClick={handleGoBack} icon={<ArrowLeft className="w-6 h-6" />} className="hover:bg-slate-100 rounded-full text-slate-500 transition-colors" />
             <div>
               <h2 className="font-bold text-slate-800 leading-tight">
                 {editDealId ? 'Editar Contrato' : 'Novo Contrato'}
@@ -528,7 +876,8 @@ export const NewDealWizard: React.FC = () => {
                   <button
                     onClick={() => handleStepperClick(s)}
                     disabled={!isValidUpToHere && s > step}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all 
+                    data-tip={stepTitles[s - 1]}
+                    className={`tooltip tooltip-bottom w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all 
                                ${step === s ? 'bg-primary text-white shadow-lg scale-110 ring-2 ring-blue-100 cursor-default' :
                         step > s ? 'bg-green-500 text-white cursor-pointer hover:bg-green-600' :
                           (!isValidUpToHere ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-slate-100 text-slate-400 cursor-pointer hover:bg-slate-200')
@@ -570,28 +919,20 @@ export const NewDealWizard: React.FC = () => {
                   config={configData}
                   files={documents}
                   onFilesChange={(newFilesOrUpdater) => {
-                    // Lidar com função updater ou array direto
                     if (typeof newFilesOrUpdater === 'function') {
                       setDocuments((prevFiles) => {
                         const updatedFiles = newFilesOrUpdater(prevFiles);
-                        // Atualizar ocrData sempre que os arquivos mudarem
                         const updatedOcrData = generateOcrDataFromFiles(updatedFiles);
                         setOcrData(updatedOcrData);
                         return updatedFiles;
                       });
                     } else {
                       setDocuments(newFilesOrUpdater);
-                      // Atualizar ocrData sempre que os arquivos mudarem
                       const updatedOcrData = generateOcrDataFromFiles(newFilesOrUpdater);
                       setOcrData(updatedOcrData);
                     }
                   }}
-                  onNext={() => {
-                    // Garantir que ocrData está atualizado antes de navegar
-                    const updatedOcrData = generateOcrDataFromFiles(documents);
-                    setOcrData(updatedOcrData);
-                    nextStep();
-                  }}
+                  onValidationGateChange={setDocumentsGate}
                   onAnalysisComplete={(data) => setOcrData(data)}
                   dealId={dealId}
                 />
@@ -599,8 +940,9 @@ export const NewDealWizard: React.FC = () => {
               {step === 3 && (
                 <MappingStep
                   mappings={mappings}
+                  dealId={dealId!}
                   onMap={(fieldId, value, source) => {
-                    if (value === '') {
+                    if (value === null) {
                       setMappings(prev => {
                         const newMappings = { ...prev };
                         delete newMappings[fieldId];
@@ -615,6 +957,9 @@ export const NewDealWizard: React.FC = () => {
                   }}
                   dealConfig={configData}
                   ocrData={ocrData}
+                  files={documents}
+                  mappingStepCache={mappingStepCache}
+                  onMappingStepCacheChange={setMappingStepCache}
                 />
               )}
               {step === 4 && (
@@ -623,13 +968,26 @@ export const NewDealWizard: React.FC = () => {
                   dealName={configData.name}
                   mappedCount={Object.keys(mappings).length}
                   onGenerate={nextStep}
+                  onBack={prevStep}
                 />
               )}
               {step === 5 && (
                 <SignatoriesStep
                   signatories={signatories}
-                  onChange={setSignatories}
+                  onChange={(updatedSignatories) => {
+                    setSignatories(updatedSignatories);
+                    // Limpar erros de validação quando signatários forem editados
+                    if (signatoriesValidationErrors.length > 0) {
+                      setSignatoriesValidationErrors([]);
+                    }
+                  }}
                   dealId={dealId}
+                  validationErrors={signatoriesValidationErrors}
+                  onGoToStep={(targetStep) => {
+                    setSignatoriesValidationErrors([]);
+                    setDirection(-1);
+                    setStepAndNavigate(targetStep);
+                  }}
                 />
               )}
             </motion.div>
@@ -662,22 +1020,20 @@ export const NewDealWizard: React.FC = () => {
                     if (step === 3) handleSaveStep3();
                     if (step === 5) handleSaveStep5();
                   }}
+                  icon={!isSaving ? <Save className="w-4 h-4" /> : saveSuccess ? <CheckCircle2 className="w-4 h-4" /> : undefined}
                   disabled={isSaving || !currentStepValid}
                   className={`${isSaving ? 'opacity-50' : ''} ${saveSuccess ? '!bg-green-50 !border-green-500 !text-green-700' : ''}`}
                 >
                   {isSaving ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
                       Salvando...
                     </>
                   ) : saveSuccess ? (
                     <>
-                      <CheckCircle2 className="w-4 h-4" />
                       Salvo!
                     </>
                   ) : (
                     <>
-                      <Save className="w-4 h-4" />
                       Salvar
                     </>
                   )}
@@ -685,15 +1041,48 @@ export const NewDealWizard: React.FC = () => {
               )}
 
               {/* Botão Continuar/Finalizar */}
-              {step !== 2 && step !== 4 && (
+              {step === 2 ? (
+                <div className="flex items-center gap-3">
+                  <p
+                    className={`hidden md:block text-sm ${documentsGate.canContinue ? 'text-green-700' : 'text-slate-600'} max-w-[520px] truncate`}
+                    title={documentsGate.message}
+                  >
+                    {documentsGate.message}
+                  </p>
+                  <Button
+                    onClick={nextStep}
+                    disabled={!documentsGate.canContinue}
+                    className={!documentsGate.canContinue ? 'opacity-50 grayscale' : ''}
+                    variant="primary"
+                    icon={<ArrowRight className="w-4 h-4" />}
+                    iconPosition="right"
+                  >
+                    Continuar
+                  </Button>
+                </div>
+              ) : step !== 4 && (
                 <Button
                   onClick={step === 5 ? handleFinish : nextStep}
-                  disabled={!currentStepValid}
+                  disabled={!currentStepValid || isCreatingDeal || isSavingMappings}
+                  isLoading={isCreatingDeal || isSavingMappings}
+                  variant="primary"
+                  icon={step === 5 ? <Send className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                  iconPosition="right"
                   className={!currentStepValid ? 'opacity-50 grayscale' : ''}
                 >
-                  {step === 5 ? 'Finalizar e Enviar' : 'Continuar'}
-                  {step !== 5 && <ArrowRight className="w-4 h-4" />}
-                  {step === 5 && <Send className="w-4 h-4" />}
+                  {isCreatingDeal ? (
+                    <>
+                      Criando proposta...
+                    </>
+                  ) : isSavingMappings ? (
+                    <>
+                      Salvando variáveis...
+                    </>
+                  ) : (
+                    <>
+                      {step === 5 ? 'Finalizar e Enviar' : 'Continuar'}
+                    </>
+                  )}
                 </Button>
               )}
             </div>

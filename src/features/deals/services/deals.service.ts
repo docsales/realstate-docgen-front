@@ -6,7 +6,6 @@ export interface CreateDealPayload {
   name?: string;
   docTemplateId?: string;
   expirationDate?: string; // YYYY-MM-DD format
-  contractEnd?: string; // YYYY-MM-DD format
   signers?: Array<{
     name: string;
     email: string;
@@ -113,12 +112,53 @@ export class DealsService {
   }
 
   /**
+   * Obtém variáveis do template do Google Docs para mapear
+   * Timeout aumentado para 120s devido ao processamento LLM de pré-mapeamento
+   */
+  async getDocVariables(dealId: string): Promise<any> {
+    const { data }: { data: any } = await server.api.get<any>(
+      `/deal/${dealId}/doc-variables`,
+      { 
+        withCredentials: true,
+        timeout: 120000, // 120 segundos (2 minutos) para permitir processamento LLM
+      }
+    );
+
+    return data;
+  }
+
+  /**
+   * Limpa cache de pré-mapeamentos (força re-processamento com LLM)
+   */
+  async clearPreMappingsCache(dealId: string): Promise<void> {
+    await server.api.delete(`/deal/${dealId}/pre-mappings`);
+  }
+
+  /**
+   * Re-extrai (re-run parser) propostas comerciais do deal usando o OCR já salvo.
+   * Usado para refletir mudanças em prompts/schemas de PROPOSTA_COMERCIAL.
+   */
+  async reExtractProposals(dealId: string): Promise<{ processed: number }> {
+    const { data }: { data: { processed: number } } = await server.api.post(
+      `/deal/${dealId}/proposals/re-extract`,
+    );
+    return data;
+  }
+
+  /**
    * Gera preview do contrato
    */
   async generatePreview(dealId: string): Promise<GeneratePreviewResponse> {
-    const { data }: { data: GeneratePreviewResponse } = await server.api.post<GeneratePreviewResponse>(
-      `/deal/${dealId}/preview`
-    );
+    const { data }: { data: GeneratePreviewResponse } =
+      await server.api.post<GeneratePreviewResponse>(
+        `/deal/${dealId}/preview`,
+        undefined,
+        {
+          // Preview pode envolver Apps Script + LLM e levar >30s em produção.
+          timeout: 300000, // 5 min
+          withCredentials: true,
+        },
+      );
     return data;
   }
 

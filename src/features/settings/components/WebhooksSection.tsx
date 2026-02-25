@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Webhook, Plus, Copy, CheckCircle2, Loader2 } from 'lucide-react';
+import { Webhook, Plus, Copy, CheckCircle2, X, Eye } from 'lucide-react';
 import { Button } from '@/components/Button';
 import { webhooksService } from '@/services/webhooks.service';
 import { useWebhookEventsInfinite } from '../hooks/useWebhooks';
@@ -15,6 +15,7 @@ export function WebhooksSection() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [showEvents, setShowEvents] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
 
   // Refs para infinite scroll
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -96,6 +97,27 @@ export function WebhooksSection() {
     });
   };
 
+  const formatJsonForDisplay = (data: any): string => {
+    if (typeof data === 'string') {
+      try {
+        const parsed = JSON.parse(data);
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        return data;
+      }
+    }
+
+    return JSON.stringify(data, null, 2);
+  };
+
+  const truncateJson = (json: any, maxLength: number = 200): string => {
+    const jsonString = formatJsonForDisplay(json);
+    if (jsonString.length <= maxLength) {
+      return jsonString;
+    }
+    return jsonString.substring(0, maxLength) + '...';
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
       <div className="flex items-center gap-2 mb-4">
@@ -112,7 +134,7 @@ export function WebhooksSection() {
       <div className="space-y-4">
         {isLoadingTokens ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-[#ef0474]" />
+            <span className="loading loading-spinner loading-md text-[#ef0474]" />
           </div>
         ) : tokens.length === 0 ? (
           <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-200">
@@ -140,23 +162,24 @@ export function WebhooksSection() {
                         {token.isActive ? 'Ativo' : 'Inativo'}
                       </span>
                     </div>
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => handleCopyToken(token.token, token.id)}
-                      className="cursor-pointer flex items-center gap-2 px-3 py-2 text-sm bg-white hover:bg-slate-100 border border-slate-200 rounded-md transition-colors"
-                      title="Copiar URL"
+                      icon={copiedToken === token.id ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                      className="tooltip tooltip-auto p-2"
+                      data-tip="Copiar URL"
                     >
                       {copiedToken === token.id ? (
                         <>
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
                           <span className="text-green-600">Copiado!</span>
                         </>
                       ) : (
                         <>
-                          <Copy className="w-4 h-4" />
                           <span>Copiar</span>
                         </>
                       )}
-                    </button>
+                    </Button>
                   </div>
                   <div className="bg-white border border-slate-200 rounded px-3 py-2 font-mono text-sm text-slate-700 break-all">
                     {`${API_URL}/webhooks/docsales/${token.token}`}
@@ -175,13 +198,13 @@ export function WebhooksSection() {
         )}
 
         <Button
+          variant="secondary"
           onClick={handleGenerateToken}
           disabled={isGenerating}
-          variant="secondary"
           isLoading={isGenerating}
+          icon={<Plus className="w-4 h-4" />}
           className="w-full"
         >
-          <Plus className="w-4 h-4" />
           {isGenerating ? 'Gerando...' : 'Gerar Novo Webhook'}
         </Button>
       </div>
@@ -205,7 +228,7 @@ export function WebhooksSection() {
             <div className="mt-4 space-y-3">
               {isLoadingEvents ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#ef0474]" />
+                  <span className="loading loading-spinner loading-md text-[#ef0474]" />
                 </div>
               ) : allEvents.length === 0 ? (
                 <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-200">
@@ -214,29 +237,48 @@ export function WebhooksSection() {
               ) : (
                 <>
                   <div className="max-h-96 overflow-y-auto space-y-3">
-                    {allEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="border border-slate-200 rounded-lg p-4 bg-white"
-                      >
-                        <div className="flex items-start justify-between gap-4 mb-2">
-                          <span className="text-xs font-semibold text-slate-500">
-                            {event.processedAt && formatDate(event.processedAt)}
-                          </span>
+                    {allEvents.map((event) => {
+                      const jsonString = JSON.stringify(event.payload, null, 2);
+                      const isTruncated = jsonString.length > 200;
+
+                      return (
+                        <div
+                          key={event.id}
+                          className="border border-slate-200 rounded-lg p-4 bg-white"
+                        >
+                          <div className="flex items-start justify-between gap-4 mb-2">
+                            <span className="text-xs font-semibold text-slate-500">
+                              {event.processedAt && formatDate(event.processedAt)}
+                            </span>
+                            {isTruncated && (
+                              <Button
+                                variant="link"
+                                size="sm"
+                                onClick={() => setSelectedEvent(event)}
+                                className="tooltip tooltip-auto p-2"
+                                data-tip="Ver evento completo"
+                              >
+                                <span className="text-slate-600 hover:text-[#ef0474] hover:bg-slate-50 rounded-lg transition-colors">
+                                  <Eye className="w-3 h-3" />
+                                  Ver completo
+                                </span>
+                              </Button>
+                            )}
+                          </div>
+                          <div className="bg-slate-50 rounded p-3 font-mono text-xs overflow-x-auto">
+                            <pre className="text-slate-700 whitespace-pre-wrap break-words">
+                              {truncateJson(event.payload)}
+                            </pre>
+                          </div>
                         </div>
-                        <div className="bg-slate-50 rounded p-3 font-mono text-xs overflow-x-auto">
-                          <pre className="text-slate-700">
-                            {JSON.stringify(event.payload, null, 2)}
-                          </pre>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
 
                     {/* Loading indicator para infinite scroll */}
                     <div ref={loadMoreRef} className="py-4">
                       {isFetchingNextPage && (
                         <div className="flex items-center justify-center">
-                          <Loader2 className="w-5 h-5 animate-spin text-[#ef0474]" />
+                          <span className="loading loading-spinner loading-lg w-5 h-5 text-[#ef0474] mx-auto mb-4"></span>
                           <span className="ml-2 text-sm text-slate-600">Carregando mais eventos...</span>
                         </div>
                       )}
@@ -252,6 +294,61 @@ export function WebhooksSection() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Modal para visualizar evento completo */}
+      {selectedEvent && (
+        <dialog
+          className="modal modal-open"
+          open
+          onClose={() => setSelectedEvent(null)}
+        >
+          <div className="modal-box bg-white max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col rounded-lg p-0">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200 relative">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-800">Evento Completo</h3>
+                {selectedEvent.processedAt && (
+                  <p className="text-sm text-slate-500 mt-1">
+                    {formatDate(selectedEvent.processedAt)}
+                  </p>
+                )}
+              </div>
+
+              <form method="dialog">
+                <button
+                  type="submit"
+                  className="btn btn-sm btn-circle btn-ghost text-slate-600 hover:text-slate-800 transition-colors absolute right-2 top-2"
+                  aria-label="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-auto p-6">
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <pre className="font-mono text-xs text-slate-700 whitespace-pre-wrap break-words overflow-x-auto">
+                  {formatJsonForDisplay(selectedEvent.payload)}
+                </pre>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="modal-action flex justify-end p-6 border-t border-slate-200 m-0">
+              <form method="dialog">
+                <Button type="submit" variant="secondary">
+                  Fechar
+                </Button>
+              </form>
+            </div>
+          </div>
+
+          <form method="dialog" className="modal-backdrop">
+            <button type="submit" className="sr-only">fechar</button>
+          </form>
+        </dialog>
       )}
     </div>
   );

@@ -13,6 +13,8 @@ import {
 	AlertCircle,
 	Settings,
 	Calendar,
+	ArrowLeft,
+	ArrowRight,
 } from 'lucide-react';
 import { PersonList } from '../components/PersonList';
 import { PropertyForm } from '../components/PropertyForm';
@@ -57,6 +59,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 	const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [currencyDisplay, setCurrencyDisplay] = useState<string>('');
 
 	useEffect(() => {
 		loadData();
@@ -68,14 +71,14 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 		try {
 			const [templatesData, settingsData] = await Promise.all([
 				settingsService.getDocumentTemplates(),
-				settingsService.getUserSettings(),
+				settingsService.getAccount(),
 			]);
 
 			setTemplates(templatesData);
 
 			if (templatesData.length === 0) {
 				setError('TEMPLATES_MISSING');
-			} else if (!settingsData.docsalesUserEmail) {
+			} else if (!settingsData.defaultDocsalesUserEmail) {
 				setError('EMAIL_MISSING');
 			} else {
 				setError(null);
@@ -102,15 +105,12 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 
 	const formatDateForInput = (dateString?: string | null): Date | undefined => {
 		if (!dateString || dateString.trim() === '') return undefined;
-		// Verificar se está no formato YYYY-MM-DD
 		if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
 			const [year, month, day] = dateString.split('-').map(Number);
 			const date = new Date(year, month - 1, day);
-			// Validar se a data é válida
 			if (isNaN(date.getTime())) return undefined;
 			return date;
 		}
-		// Tentar converter de outros formatos
 		const date = new Date(dateString);
 		if (isNaN(date.getTime())) return undefined;
 		return date;
@@ -129,7 +129,35 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 		return date.toLocaleDateString('pt-BR');
 	};
 
-	// Componente DatePicker com React Day Picker
+	const formatCurrency = (value: string): string => {
+		const numbers = value.replace(/\D/g, '');
+
+		if (!numbers) return '';
+
+		const amount = parseInt(numbers, 10) / 100;
+
+		return new Intl.NumberFormat('pt-BR', {
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2,
+		}).format(amount);
+	};
+
+	const parseCurrency = (value: string): string => {
+		return value.replace(/\D/g, '');
+	};
+
+	useEffect(() => {
+		const currentRaw = parseCurrency(currencyDisplay);
+		if (data.contractValue !== currentRaw) {
+			if (data.contractValue) {
+				setCurrencyDisplay(formatCurrency(data.contractValue));
+			} else {
+				setCurrencyDisplay('');
+			}
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [data.contractValue]);
+
 	const DatePickerField: React.FC<{
 		label: string;
 		value: Date | undefined;
@@ -184,7 +212,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 							onSelect={(date) => {
 								onChange(date);
 								setIsOpen(false);
-							}}							
+							}}
 						/>
 					</div>
 				)}
@@ -199,7 +227,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 		return (
 			<div className="flex items-center justify-center min-h-[400px]">
 				<div className="text-center">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ef0474] mx-auto mb-4"></div>
+					<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
 					<p className="text-slate-600">Carregando configurações...</p>
 				</div>
 			</div>
@@ -283,7 +311,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 				<div className="p-6 space-y-6">
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div className="md:col-span-2">
-							<label className="text-slate-700 font-medium">Nome do Contrato (Identificação)</label>
+							<label className="text-slate-700 font-medium">Descrição do Contrato (Identificação)</label>
 							<input
 								type="text"
 								className="input input-bordered w-full"
@@ -295,7 +323,9 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 								}}
 							/>
 						</div>
-						<div>
+					</div>
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<div className="md:col-span-1">
 							<label className="text-slate-700 font-medium">Modelo de Minuta</label>
 							<select
 								className="select select-bordered w-full"
@@ -327,26 +357,18 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 								</p>
 							)}
 						</div>
-					</div>
-					
-					{/* Date Fields */}
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-						<DatePickerField
-							label="Data de Expiração"
-							value={formatDateForInput(data.expiration_date)}
-							onChange={(date) => {
-								onChange({ expiration_date: formatDateForBackend(date) } as any);
-							}}
-							description="Data limite para assinatura do contrato"
-						/>
-						<DatePickerField
-							label="Data de Término do Contrato"
-							value={formatDateForInput(data.contract_end)}
-							onChange={(date) => {
-								onChange({ contract_end: formatDateForBackend(date) } as any);
-							}}
-							description="Data de término da vigência do contrato"
-						/>
+
+						{/* Date Fields */}
+						<div>
+							<DatePickerField
+								label="Data de Expiração"
+								value={formatDateForInput(data.expiration_date)}
+								onChange={(date) => {
+									onChange({ expiration_date: formatDateForBackend(date) } as any);
+								}}
+								description="Data limite para assinatura do contrato"
+							/>
+						</div>
 					</div>
 				</div>
 			</section>
@@ -357,31 +379,76 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 					<Wallet className="w-5 h-5 text-primary" />
 					<h3 className="font-bold text-slate-800">Condições de Pagamento</h3>
 				</div>
-				<div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-					<ToggleCard
-						icon={<PiggyBank className="w-6 h-6" />}
-						title="Utilizar FGTS"
-						checked={data.useFgts}
-						onChange={(c) => {
-							onChange({ useFgts: c } as any);
-						}}
-					/>
-					<ToggleCard
-						icon={<Landmark className="w-6 h-6" />}
-						title="Financiamento Bancário"
-						checked={data.bankFinancing}
-						onChange={(c) => {
-							onChange({ bankFinancing: c } as any);
-						}}
-					/>
-					<ToggleCard
-						icon={<Banknote className="w-6 h-6" />}
-						title="Carta de Consórcio"
-						checked={data.consortiumLetter}
-						onChange={(c) => {
-							onChange({ consortiumLetter: c } as any);
-						}}
-					/>
+				<div className="p-6 space-y-6">
+					{/* Valor do Contrato */}
+					<div>
+						<label className="text-slate-700 font-medium">Valor do Contrato</label>
+						<div className="relative">
+							<div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-slate-500 z-10">
+								<span className="font-semibold text-slate-700">R$</span>
+							</div>
+							<input
+								type="text"
+								className="input input-bordered w-full pl-9"
+								placeholder="0,00"
+								value={currencyDisplay}
+								onChange={(e) => {
+									const inputValue = e.target.value;
+									const rawValue = parseCurrency(inputValue);
+
+									// Atualiza o estado local com formatação
+									if (rawValue) {
+										const formatted = formatCurrency(rawValue);
+										setCurrencyDisplay(formatted);
+										onChange({ contractValue: rawValue } as any);
+									} else {
+										setCurrencyDisplay('');
+										onChange({ contractValue: '' } as any);
+									}
+								}}
+								onBlur={(e) => {
+									// Garante formatação ao sair do campo
+									const rawValue = parseCurrency(e.target.value);
+									if (rawValue) {
+										const formatted = formatCurrency(rawValue);
+										setCurrencyDisplay(formatted);
+										onChange({ contractValue: rawValue } as any);
+									} else {
+										setCurrencyDisplay('');
+									}
+								}}
+							/>
+						</div>
+						<p className="text-xs text-slate-500 mt-1">Informe o valor total do contrato</p>
+					</div>
+
+					{/* Toggle Cards */}
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<ToggleCard
+							icon={<PiggyBank className="w-6 h-6" />}
+							title="Utilizar FGTS"
+							checked={data.useFgts}
+							onChange={(c) => {
+								onChange({ useFgts: c } as any);
+							}}
+						/>
+						<ToggleCard
+							icon={<Landmark className="w-6 h-6" />}
+							title="Financiamento Bancário"
+							checked={data.bankFinancing}
+							onChange={(c) => {
+								onChange({ bankFinancing: c } as any);
+							}}
+						/>
+						<ToggleCard
+							icon={<Banknote className="w-6 h-6" />}
+							title="Carta de Consórcio"
+							checked={data.consortiumLetter}
+							onChange={(c) => {
+								onChange({ consortiumLetter: c } as any);
+							}}
+						/>
+					</div>
 				</div>
 			</section>
 
@@ -398,7 +465,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 						<button
 							type="button"
 							onClick={() => onChange({ activePartyTab: 'sellers' } as any)}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${(!data.activePartyTab || data.activePartyTab === 'sellers')
+							className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${(!data.activePartyTab || data.activePartyTab === 'sellers')
 								? 'text-primary border-b-2 border-primary bg-white'
 								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
 								}`}
@@ -408,7 +475,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 						<button
 							type="button"
 							onClick={() => onChange({ activePartyTab: 'buyers' } as any)}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${data.activePartyTab === 'buyers'
+							className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${data.activePartyTab === 'buyers'
 								? 'text-primary border-b-2 border-primary bg-white'
 								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
 								}`}
@@ -418,7 +485,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 						<button
 							type="button"
 							onClick={() => onChange({ activePartyTab: 'property' } as any)}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${data.activePartyTab === 'property'
+							className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${data.activePartyTab === 'property'
 								? 'text-primary border-b-2 border-primary bg-white'
 								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
 								}`}
@@ -436,6 +503,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 							<PersonList
 								title="Vendedores"
 								people={data.sellers || []}
+								role="sellers"
 								onChange={(s) => {
 									handleSellersChange(s);
 								}}
@@ -449,6 +517,7 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 							<PersonList
 								title="Compradores"
 								people={data.buyers || []}
+								role="buyers"
 								onChange={(b) => {
 									handleBuyersChange(b);
 								}}
@@ -475,6 +544,26 @@ export const ConfigStep: React.FC<ConfigStepProps> = ({ data, onChange }) => {
 							/>
 						</div>
 					)}
+
+					{/* Buttons Navigation */}
+					<div className="flex justify-between items-center mt-6">
+						{data.activePartyTab && data.activePartyTab !== 'sellers' ? (
+							<Button variant="secondary" onClick={() => onChange({ activePartyTab: data.activePartyTab === 'buyers' ? 'sellers' : 'buyers' } as any)}>
+								<div className="flex items-center gap-2">
+									<ArrowLeft className="w-4 h-4" />
+									{data.activePartyTab === 'buyers' ? 'Vendedores' : 'Compradores'}
+								</div>
+							</Button>
+						) : <div className="w-full" />}
+						{data.activePartyTab !== 'property' && (
+							<Button variant="secondary" onClick={() => onChange({ activePartyTab: data.activePartyTab === 'buyers' ? 'property' : 'buyers' } as any)}>
+								<div className="flex items-center gap-2">
+									{data.activePartyTab === 'buyers' ? 'Imóvel' : 'Compradores'}
+									<ArrowRight className="w-4 h-4" />
+								</div>
+							</Button>
+						)}
+					</div>
 				</div>
 			</section>
 

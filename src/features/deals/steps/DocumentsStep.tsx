@@ -1,38 +1,61 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/Button';
-import { AlertTriangle, RefreshCcw, RotateCw } from 'lucide-react';
-import type { UploadedFile, DealConfig } from '@/types/types';
+import { AlertTriangle, ArrowLeft, ArrowRight, RefreshCcw } from 'lucide-react';
+import type { UploadedFile, DealConfig, Person } from '@/types/types';
 import { BuyerDocumentsTab } from '../components/documents/BuyerDocumentsTab';
 import { SellerDocumentsTab } from '../components/documents/SellerDocumentsTab';
 import { PropertyDocumentsTab } from '../components/documents/PropertyDocumentsTab';
+import { ProposalDocumentsTab } from '../components/documents/ProposalDocumentsTab';
 import { documentChecklistService } from '../services/document-checklist.service';
 import type { ConsolidatedChecklist, ChecklistRequestDTO } from '@/types/checklist.types';
 import { ChecklistSummary } from '../components/documents/ChecklistSummary';
+import { DocumentStatusPanel } from '../components/documents/DocumentStatusPanel';
 import { useOcr } from '@/hooks/useOcr';
 import { useRemoveDocumentFromDeal } from '../hooks/useDeals';
+import { useCoupleValidation } from '../hooks/useCoupleValidation';
+import { useCoupleValidationSocket } from '../hooks/useCoupleValidationSocket';
+import { getCoupleValidationCache } from '../services/couple-validation-cache.service';
 
 interface DocumentsStepProps {
 	files: UploadedFile[];
 	onFilesChange: (files: UploadedFile[] | ((prevFiles: UploadedFile[]) => UploadedFile[])) => void;
-	onNext?: () => void;
 	onAnalysisComplete?: (data: any) => void;
 	config: DealConfig;
 	dealId?: string | null;
+	onValidationGateChange?: (gate: { canContinue: boolean; message: string }) => void;
 }
+
+type DocumentTab = 'buyers' | 'sellers' | 'property' | 'proposal';
 
 export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	files,
 	onFilesChange,
 	config,
-	dealId
+	dealId,
+	onValidationGateChange
 }) => {
 	const removeDocumentFromDealMutation = useRemoveDocumentFromDeal();
 
-	const [activeTab, setActiveTab] = useState<'buyers' | 'sellers' | 'property'>('buyers');
+	const [activeTab, setActiveTab] = useState<DocumentTab>('sellers');
 	const [checklist, setChecklist] = useState<ConsolidatedChecklist | null>(null);
 	const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
 	const [checklistError, setChecklistError] = useState<string | null>(null);
 	const hasCheckedOnMountRef = useRef(false);
+	const mountTimestampRef = useRef<number>(Date.now());
+
+	const documentsTabRef = useRef<HTMLDivElement>(null);
+
+	// Armazenar o config anterior para comparação
+	const previousConfigRef = useRef<string | null>(null);
+	const isInitialLoadRef = useRef(true);
+
+	// Estado de validação de casais
+	const [coupleValidations, setCoupleValidations] = useState<Map<string, any>>(new Map());
+	const [validatingCouples, setValidatingCouples] = useState<Set<string>>(new Set());
+	const [coupleValidationAttempts, setCoupleValidationAttempts] = useState<Map<string, number>>(new Map());
+	const { validateCouple } = useCoupleValidation();
+
+	const MAX_VALIDATION_ATTEMPTS = 3;
 
 	// Integração com OCR
 	const {
@@ -44,15 +67,49 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		autoProcess: true,
 		dealId: dealId || undefined,
 		onComplete: (_documentId, extractedData, localFileId) => {
-			onFilesChange(prevFiles => prevFiles.map(f => {
-				if (f.id === localFileId) {
+			onFilesChange(prevFiles => prevFiles.map(prevFile => {
+				if (prevFile.id === localFileId) {
+					// Validar se o tipo de documento identificado corresponde ao tipo esperado
+					const expectedType = prevFile.type;
+					const extractedType = extractedData?.tipo_documento;
+
+					// Verificar se há incompatibilidade de tipo
+					let validated = true;
+					let validationError: string | undefined;
+
+					if (extractedType && extractedType !== expectedType) {
+						// Tipos específicos de certidão de casamento
+						const marriageCertTypes = ['CERTIDAO_CASAMENTO', 'CERTIDAO_CASAMENTO_AVERBACAO_OBITO', 'CERTIDAO_CASAMENTO_AVERBACAO_DIVORCIO'];
+						const birthCertTypes = ['CERTIDAO_NASCIMENTO'];
+
+						// Se esperamos certidão de casamento mas recebemos certidão de nascimento
+						if (marriageCertTypes.includes(expectedType) && birthCertTypes.includes(extractedType)) {
+							validated = false;
+							validationError = `DOCUMENT_TYPE_MISMATCH:expected=${expectedType},extracted=${extractedType}`;
+							console.error(`❌ Tipo de documento incompatível: esperado=${expectedType}, extraído=${extractedType}`);
+						}
+						// Se esperamos certidão de nascimento mas recebemos certidão de casamento
+						else if (birthCertTypes.includes(expectedType) && marriageCertTypes.includes(extractedType)) {
+							validated = false;
+							validationError = `DOCUMENT_TYPE_MISMATCH:expected=${expectedType},extracted=${extractedType}`;
+							console.error(`❌ Tipo de documento incompatível: esperado=${expectedType}, extraído=${extractedType}`);
+						}
+						// Outros casos de incompatibilidade
+						else if (extractedType !== expectedType) {
+							validated = false;
+							validationError = `DOCUMENT_TYPE_MISMATCH:expected=${expectedType},extracted=${extractedType}`;
+							console.error(`❌ Tipo de documento incompatível: esperado=${expectedType}, extraído=${extractedType}`);
+						}
+					}
+
 					return {
-						...f,
-						validated: true,
-						ocrExtractedData: extractedData, // Garantir que extractedData está salvo no arquivo
+						...prevFile,
+						validated,
+						validationError,
+						ocrExtractedData: extractedData,
 					};
 				}
-				return f;
+				return prevFile;
 			}));
 		},
 		onError: (fileId, error) => {
@@ -64,88 +121,120 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 		manualRefresh(files);
 	}, [manualRefresh, files]);
 
+	// Resetar flag ao montar o componente
 	useEffect(() => {
-		return () => {
-			hasCheckedOnMountRef.current = false;
-		};
+		hasCheckedOnMountRef.current = false;
+		mountTimestampRef.current = Date.now();
+
+		return () => { };
 	}, []);
 
+	// Verificar status de arquivos em processamento ao montar ou quando arquivos mudarem
 	useEffect(() => {
 		const processingFiles = files.filter(f =>
-			f.ocrStatus === 'processing' ||
-			f.ocrStatus === 'uploading'
+			(f.ocrStatus === 'processing' || f.ocrStatus === 'uploading') &&
+			f.ocrError === undefined
 		);
 
-		if (processingFiles.length > 0 && !isCheckingStatus && !hasCheckedOnMountRef.current) {
-			console.log(`🔄 DocumentsStep montado: ${processingFiles.length} arquivo(s) em processamento - verificando status`);
-			hasCheckedOnMountRef.current = true;
+		if (processingFiles.length > 0 && !isCheckingStatus) {
+			const timeSinceMount = Date.now() - mountTimestampRef.current;
 
-			const timeoutId = setTimeout(() => {
-				handleManualRefresh();
-			}, 1500);
+			if (!hasCheckedOnMountRef.current || timeSinceMount < 2000) {
+				hasCheckedOnMountRef.current = true;
 
-			return () => clearTimeout(timeoutId);
+				const timeoutId = setTimeout(() => {
+					handleManualRefresh();
+				}, 1000);
+
+				return () => clearTimeout(timeoutId);
+			}
 		}
-	}, [files, isCheckingStatus, handleManualRefresh]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [files.length, isCheckingStatus]);
 
-	useEffect(() => {
-		const loadChecklist = async () => {
-			setIsLoadingChecklist(true);
-			setChecklistError(null);
+	// Função para carregar o checklist
+	const loadChecklist = useCallback(async () => {
+		setIsLoadingChecklist(true);
+		setChecklistError(null);
 
-			try {
-				const checklists = [];
+		try {
+			const checklists = [];
 
-				for (const seller of config.sellers) {
-					for (const buyer of config.buyers) {
-						const requestData: ChecklistRequestDTO = {
-							vendedor: {
-								tipo: seller.personType,
-								estadoCivil: seller.maritalState,
-								regimeBens: seller.propertyRegime
-							},
-							comprador: {
-								tipo: buyer.personType,
-								estadoCivil: buyer.maritalState,
-								regimeBens: buyer.propertyRegime,
-								vaiFinanciar: config.bankFinancing
-							},
-							imovel: {
-								situacao: config.propertyState,
-								tipoImovel: config.propertyType
-							}
-						};
-
-						const response = await documentChecklistService.generateChecklist(requestData);
-
-						if (response && response.sucesso) {
-							checklists.push(response.dados);
+			for (const seller of config.sellers) {
+				for (const buyer of config.buyers) {
+					const requestData: ChecklistRequestDTO = {
+						vendedor: {
+							tipo: seller.personType,
+							estadoCivil: seller.maritalState,
+							regimeBens: seller.propertyRegime
+						},
+						comprador: {
+							tipo: buyer.personType,
+							estadoCivil: buyer.maritalState,
+							regimeBens: buyer.propertyRegime,
+							vaiFinanciar: config.bankFinancing
+						},
+						imovel: {
+							situacao: config.propertyState,
+							tipoImovel: config.propertyType
 						}
+					};
+
+					const response = await documentChecklistService.generateChecklist(requestData);
+
+					if (response && response.sucesso) {
+						checklists.push(response.dados);
 					}
 				}
-
-				if (checklists.length > 0) {
-					const consolidated = documentChecklistService.consolidateMultipleChecklists(checklists);
-					setChecklist(consolidated);
-				} else {
-					setChecklistError('Não foi possível gerar o checklist de documentos. Por favor, tente novamente.');
-				}
-			} catch (error) {
-				console.error('Erro ao carregar checklist:', error);
-				setChecklistError('Erro ao carregar checklist de documentos');
-			} finally {
-				setIsLoadingChecklist(false);
 			}
-		};
 
-		loadChecklist();
+			if (checklists.length > 0) {
+				const consolidated = documentChecklistService.consolidateMultipleChecklists(checklists);
+				setChecklist(consolidated);
+			} else {
+				setChecklistError('Não foi possível gerar o checklist de documentos. Por favor, tente novamente.');
+			}
+		} catch (error) {
+			console.error('Erro ao carregar checklist:', error);
+			setChecklistError('Erro ao carregar checklist de documentos');
+		} finally {
+			setIsLoadingChecklist(false);
+		}
 	}, [config]);
+
+	useEffect(() => {
+		const configKey = JSON.stringify({
+			buyers: config.buyers.map(buyer => ({
+				personType: buyer.personType,
+				maritalState: buyer.maritalState,
+				propertyRegime: buyer.propertyRegime
+			})),
+			sellers: config.sellers.map(seller => ({
+				personType: seller.personType,
+				maritalState: seller.maritalState,
+				propertyRegime: seller.propertyRegime
+			})),
+			bankFinancing: config.bankFinancing,
+			propertyState: config.propertyState,
+			propertyType: config.propertyType
+		});
+
+		// Se é a primeira carga OU se o config mudou, carregar o checklist
+		if (isInitialLoadRef.current || previousConfigRef.current !== configKey) {
+			previousConfigRef.current = configKey;
+			isInitialLoadRef.current = false;
+			loadChecklist();
+		}
+	}, [config, loadChecklist]);
 
 	const handleRemoveFile = (fileId: string) => {
 		if (!dealId) return;
 
+		const toRemove = files.find(f => f.id === fileId);
+		const backendDocumentId = toRemove?.documentId || fileId;
+
 		onFilesChange(files.filter(f => f.id !== fileId));
-		removeDocumentFromDealMutation.mutate({ dealId, documentId: fileId }, {
+		removeDocumentFromDealMutation.mutate({ dealId, documentId: backendDocumentId }, {
 			onSuccess: () => {
 				console.log('✅ Documento removido do deal');
 			},
@@ -154,6 +243,468 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 			}
 		});
 	}
+
+	const fileSatisfiesType = (file: UploadedFile, documentType: string): boolean => {
+		if (file.type === documentType) return true;
+		if (file.types && file.types.includes(documentType)) return true;
+		return false;
+	};
+
+	// Função helper para verificar se todos documentos do casal estão completos
+	const checkCoupleDocumentsComplete = useCallback((
+		members: Person[],
+		category: 'buyers' | 'sellers'
+	): boolean => {
+		if (!checklist || members.length !== 2) return false;
+
+		const requiredDocs = category === 'buyers'
+			? checklist.compradores.documentos.filter(d => d.obrigatorio)
+			: checklist.vendedores.documentos.filter(d => d.obrigatorio);
+
+		// Verificar se ambos os membros têm todos os documentos
+		return members.every(member => {
+			const isSpouse = member.isSpouse || false;
+			const expectedDe = isSpouse ? 'conjuge' : 'titular';
+			const docsForThisPerson = requiredDocs.filter(doc =>
+				!doc.de || doc.de === expectedDe
+			);
+
+			// Se não há documentos obrigatórios para esta pessoa, algo está errado
+			if (docsForThisPerson.length === 0) return false;
+
+			const memberFiles = files.filter(f =>
+				f.category === category &&
+				f.personId === member.id
+			);
+
+			// Cada documento obrigatório deve ter pelo menos 1 arquivo validado
+			const hasAllDocs = docsForThisPerson.every(doc => {
+				const matchingFiles = memberFiles.filter(f => fileSatisfiesType(f, doc.id));
+				return matchingFiles.length > 0 && matchingFiles.every(f => f.validated === true);
+			});
+
+			return hasAllDocs;
+		});
+	}, [checklist, files]);
+
+	// Função para validar casal se necessário (com limite de tentativas)
+	const validateCoupleIfNeeded = useCallback(async (coupleId: string, members: Person[]) => {
+		if (!dealId) return;
+
+		// Verificar se já está validando
+		if (validatingCouples.has(coupleId)) return;
+
+		// Verificar se já foi validado com sucesso
+		if (coupleValidations.has(coupleId)) return;
+
+		// Verificar número de tentativas
+		const attempts = coupleValidationAttempts.get(coupleId) || 0;
+		if (attempts >= MAX_VALIDATION_ATTEMPTS) {
+			console.warn(`⚠️ Casal ${coupleId} atingiu o limite de ${MAX_VALIDATION_ATTEMPTS} tentativas de validação`);
+			return;
+		}
+
+		const titular = members.find(m => !m.isSpouse);
+		const conjuge = members.find(m => m.isSpouse);
+
+		if (!titular || !conjuge) {
+			console.warn('❌ Casal incompleto:', { coupleId, members });
+			return;
+		}
+
+		// Incrementar contador de tentativas
+		setCoupleValidationAttempts(prev => {
+			const newMap = new Map(prev);
+			newMap.set(coupleId, attempts + 1);
+			return newMap;
+		});
+
+		setValidatingCouples(prev => new Set(prev).add(coupleId));
+
+		try {
+			await validateCouple.mutateAsync({
+				dealId,
+				coupleId,
+				titularPersonId: titular.id,
+				conjugePersonId: conjuge.id,
+			});
+		} catch (error) {
+			console.error(`❌ Erro na tentativa ${attempts + 1} de validação do casal ${coupleId}:`, error);
+
+			// Se atingiu o limite de tentativas, remover da lista de validações para permitir revalidação manual
+			if (attempts + 1 >= MAX_VALIDATION_ATTEMPTS) {
+				console.warn(`🚫 Casal ${coupleId} atingiu o limite de tentativas. Validação automática desabilitada.`);
+			}
+		} finally {
+			// Não remover aqui: o lock é liberado via eventos WS (completed/error)
+		}
+	}, [dealId, validateCouple, validatingCouples, coupleValidations, coupleValidationAttempts, MAX_VALIDATION_ATTEMPTS]);
+
+	// Eventos via WebSocket para completar a validação do casal sem timeout.
+	useCoupleValidationSocket({
+		onStarted: (evt) => {
+			if (evt.dealId !== (dealId || '')) return;
+			setValidatingCouples(prev => new Set(prev).add(evt.coupleId));
+		},
+		onCompleted: (evt) => {
+			if (evt.dealId !== (dealId || '')) return;
+			setCoupleValidations(prev => {
+				const newMap = new Map(prev);
+				newMap.set(evt.coupleId, evt.result);
+				return newMap;
+			});
+			setValidatingCouples(prev => {
+				const newSet = new Set(prev);
+				newSet.delete(evt.coupleId);
+				return newSet;
+			});
+		},
+		onError: (evt) => {
+			if (evt.dealId !== (dealId || '')) return;
+			console.error(`❌ Erro na validação do casal ${evt.coupleId}:`, evt.error);
+			setValidatingCouples(prev => {
+				const newSet = new Set(prev);
+				newSet.delete(evt.coupleId);
+				return newSet;
+			});
+		},
+	});
+
+	// Validação automática de casais quando documentos estão completos
+	// Debounce para evitar múltiplas validações simultâneas
+	useEffect(() => {
+		if (!checklist || !dealId) return;
+
+		// Usar timeout para debounce de 1 segundo
+		const timeoutId = setTimeout(() => {
+			// Agrupar vendedores por casal
+			const sellersByCouple = new Map<string, Person[]>();
+			config.sellers.forEach(seller => {
+				if (seller.coupleId) {
+					if (!sellersByCouple.has(seller.coupleId)) {
+						sellersByCouple.set(seller.coupleId, []);
+					}
+					sellersByCouple.get(seller.coupleId)!.push(seller);
+				}
+			});
+
+			// Agrupar compradores por casal
+			const buyersByCouple = new Map<string, Person[]>();
+			config.buyers.forEach(buyer => {
+				if (buyer.coupleId) {
+					if (!buyersByCouple.has(buyer.coupleId)) {
+						buyersByCouple.set(buyer.coupleId, []);
+					}
+					buyersByCouple.get(buyer.coupleId)!.push(buyer);
+				}
+			});
+
+			// Verificar cada casal de vendedores
+			sellersByCouple.forEach((members, coupleId) => {
+				if (members.length === 2) {
+					const isCoupleComplete = checkCoupleDocumentsComplete(members, 'sellers');
+					if (isCoupleComplete) {
+						validateCoupleIfNeeded(coupleId, members);
+					}
+				}
+			});
+
+			// Verificar cada casal de compradores
+			buyersByCouple.forEach((members, coupleId) => {
+				if (members.length === 2) {
+					const isCoupleComplete = checkCoupleDocumentsComplete(members, 'buyers');
+					if (isCoupleComplete) {
+						validateCoupleIfNeeded(coupleId, members);
+					}
+				}
+			});
+		}, 1000); // Debounce de 1 segundo
+
+		return () => clearTimeout(timeoutId);
+	}, [files, config.sellers, config.buyers, checklist, dealId, checkCoupleDocumentsComplete, validateCoupleIfNeeded]);
+
+	// Hidratar cache persistido do backend ao montar (evita revalidação em remount)
+	useEffect(() => {
+		if (!dealId) return;
+		let cancelled = false;
+
+		// Ao trocar de deal, limpar cache local para evitar mistura
+		setCoupleValidations(new Map());
+		setValidatingCouples(new Set());
+
+		(async () => {
+			try {
+				const resp = await getCoupleValidationCache(dealId);
+				if (cancelled) return;
+
+				const couples = resp?.couples || {};
+
+				setCoupleValidations(() => {
+					const map = new Map<string, any>();
+					Object.entries(couples).forEach(([coupleId, entry]) => {
+						if (entry.status === 'COMPLETED' && entry.result) {
+							map.set(coupleId, entry.result);
+						}
+					});
+					return map;
+				});
+
+				setValidatingCouples(() => {
+					const set = new Set<string>();
+					Object.entries(couples).forEach(([coupleId, entry]) => {
+						if (entry.status === 'PROCESSING') {
+							set.add(coupleId);
+						}
+					});
+					return set;
+				});
+			} catch (err) {
+				console.warn('⚠️ Falha ao hidratar cache de validação de casais:', err);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [dealId]);
+
+	const validationGate = useCallback(() => {
+		return { canContinue: true, message: '' };
+	}, [])
+
+	// Código original
+	// TODO: reverter para o código original após testes
+	// const validationGate = useCallback(() => {
+	// 	if (!checklist) {
+	// 		return { canContinue: false, message: 'Carregando checklist de documentos...' };
+	// 	}
+
+	// 	// Proposta comercial é opcional: não deve bloquear avanço do Step 2
+	// 	// (mas, se o usuário enviou, ela ainda será processada e ficará disponível no Step 3).
+	// 	const blockingFiles = files.filter(f => f.category !== 'proposal');
+
+	// 	const errorCount = blockingFiles.filter(f => f.validated === false).length;
+	// 	if (errorCount > 0) {
+	// 		return { canContinue: false, message: `Há ${errorCount} documento(s) com erro. Remova e reenvie para continuar.` };
+	// 	}
+
+	// 	const pendingCount = blockingFiles.filter(f => f.validated === undefined || f.ocrStatus === 'processing' || f.ocrStatus === 'uploading').length;
+	// 	if (pendingCount > 0) {
+	// 		return { canContinue: false, message: `Aguardando validação de ${pendingCount} documento(s)...` };
+	// 	}
+
+	// 	const allUploadedValidated = blockingFiles.every(f => f.validated === true);
+	// 	if (!allUploadedValidated) {
+	// 		return { canContinue: false, message: 'Aguardando validação dos documentos...' };
+	// 	}
+
+	// 	let missingRequired = 0;
+
+	// 	// Agrupar vendedores por casal
+	// 	const sellersByCouple = new Map<string, Person[]>();
+	// 	config.sellers.forEach(seller => {
+	// 		const coupleId = seller.coupleId || `single_${seller.id}`;
+	// 		if (!sellersByCouple.has(coupleId)) {
+	// 			sellersByCouple.set(coupleId, []);
+	// 		}
+	// 		sellersByCouple.get(coupleId)!.push(seller);
+	// 	});
+
+	// 	// Vendedores - validar considerando casais
+	// 	const sellerRequiredDocs = checklist.vendedores.documentos.filter(d => d.obrigatorio);
+	// 	sellersByCouple.forEach((coupleMembers) => {
+	// 		coupleMembers.forEach((seller) => {
+	// 			const isSpouse = seller.isSpouse || false;
+	// 			const expectedDe = isSpouse ? 'conjuge' : 'titular';
+	// 			const docsForThisSeller = sellerRequiredDocs.filter(doc => !doc.de || doc.de === expectedDe);
+	// 			const sellerFiles = blockingFiles.filter(f => f.category === 'sellers' && f.personId === seller.id);
+
+	// 			docsForThisSeller.forEach(doc => {
+	// 				const hasValidated = sellerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
+	// 				if (!hasValidated) missingRequired += 1;
+	// 			});
+	// 		});
+	// 	});
+
+	// 	// Agrupar compradores por casal
+	// 	const buyersByCouple = new Map<string, Person[]>();
+	// 	config.buyers.forEach(buyer => {
+	// 		const coupleId = buyer.coupleId || `single_${buyer.id}`;
+	// 		if (!buyersByCouple.has(coupleId)) {
+	// 			buyersByCouple.set(coupleId, []);
+	// 		}
+	// 		buyersByCouple.get(coupleId)!.push(buyer);
+	// 	});
+
+	// 	// Compradores - validar considerando casais
+	// 	const buyerRequiredDocs = checklist.compradores.documentos.filter(d => d.obrigatorio);
+	// 	buyersByCouple.forEach((coupleMembers) => {
+	// 		coupleMembers.forEach((buyer) => {
+	// 			const isSpouse = buyer.isSpouse || false;
+	// 			const expectedDe = isSpouse ? 'conjuge' : 'titular';
+	// 			const docsForThisBuyer = buyerRequiredDocs.filter(doc => !doc.de || doc.de === expectedDe);
+	// 			const buyerFiles = blockingFiles.filter(f => f.category === 'buyers' && f.personId === buyer.id);
+
+	// 			docsForThisBuyer.forEach(doc => {
+	// 				const hasValidated = buyerFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
+	// 				if (!hasValidated) missingRequired += 1;
+	// 			});
+	// 		});
+	// 	});
+
+	// 	// Imóvel
+	// 	const propertyRequiredDocs = checklist.imovel.documentos.filter(d => d.obrigatorio);
+	// 	const propertyFiles = blockingFiles.filter(f => f.category === 'property');
+
+	// 	propertyRequiredDocs.forEach(doc => {
+	// 		if (doc.id === 'MATRICULA') {
+	// 			const validatedCount = propertyFiles.filter(f => fileSatisfiesType(f, doc.id) && f.validated === true).length;
+	// 			if (validatedCount < deedCountClamped) {
+	// 				missingRequired += (deedCountClamped - validatedCount);
+	// 			}
+	// 			return;
+	// 		}
+
+	// 		const hasValidated = propertyFiles.some(f => fileSatisfiesType(f, doc.id) && f.validated === true);
+	// 		if (!hasValidated) missingRequired += 1;
+	// 	});
+
+	// 	if (missingRequired > 0) {
+	// 		return { canContinue: false, message: `Faltam anexar ${missingRequired} documento(s) obrigatório(s) para continuar.` };
+	// 	}
+
+	// 	return { canContinue: true, message: 'Tudo certo! Você já pode continuar.' };
+	// }, [checklist, config.buyers, config.sellers, deedCountClamped, files]);
+
+	const { canContinue, message: continueMessage } = validationGate();
+
+	const setupDocumentsTabsButtons = (tab: DocumentTab) => {
+		const map = {
+			'sellers': { previous: null, next: 'buyers' },
+			'buyers': { previous: 'sellers', next: 'property' },
+			'property': { previous: 'buyers', next: 'proposal' },
+			'proposal': { previous: 'property', next: null },
+		};
+
+		return map[tab];
+	}
+
+	const navigateDocumentsTab = (nextTab: DocumentTab) => {
+		setActiveTab(nextTab);
+		documentsTabRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
+	const translateTab = (tab: DocumentTab) => {
+		switch (tab) {
+			case 'buyers':
+				return 'Compradores';
+			case 'sellers':
+				return 'Vendedores';
+			case 'property':
+				return 'Imóvel';
+			case 'proposal':
+				return 'Proposta';
+			default:
+				return tab;
+		}
+	}
+
+	const renderHeaderDocumentTabsButtons = (tab: DocumentTab) => {
+		return (
+			<button
+				type="button"
+				onClick={() => navigateDocumentsTab(tab)}
+				className={`cursor-pointer flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === tab
+					? 'text-primary border-b-2 border-primary bg-white'
+					: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+					}`}
+			>
+				<span className="capitalize">
+					{translateTab(tab)}
+				</span>
+			</button>
+		);
+	}
+
+	const renderDocumentsTabContent = (tab: DocumentTab) => {
+		switch (tab) {
+			case 'buyers':
+				return <BuyerDocumentsTab
+					buyers={config.buyers || []}
+					uploadedFiles={files}
+					onFilesChange={onFilesChange}
+					onRemoveFile={handleRemoveFile}
+					checklist={checklist}
+					dealId={dealId}
+					coupleValidations={coupleValidations}
+					validatingCouples={validatingCouples}
+				/>
+			case 'sellers':
+				return <SellerDocumentsTab
+					sellers={config.sellers || []}
+					uploadedFiles={files}
+					onFilesChange={onFilesChange}
+					onRemoveFile={handleRemoveFile}
+					checklist={checklist}
+					dealId={dealId}
+					coupleValidations={coupleValidations}
+					validatingCouples={validatingCouples}
+				/>
+			case 'property':
+				return <PropertyDocumentsTab
+					propertyState={config.propertyState}
+					propertyType={config.propertyType}
+					deedCount={config.deedCount}
+					uploadedFiles={files}
+					onFilesChange={onFilesChange}
+					onRemoveFile={handleRemoveFile}
+					checklist={checklist}
+				/>
+			case 'proposal':
+				return <ProposalDocumentsTab
+					uploadedFiles={files}
+					onFilesChange={onFilesChange}
+					onRemoveFile={handleRemoveFile}
+					checklist={checklist}
+				/>
+			default:
+				return null;
+		}
+	};
+
+	const renderDocumentsTabsButtons = () => {
+		const { previous, next } = setupDocumentsTabsButtons(activeTab);
+		return (
+			<div className="flex justify-between items-center mt-6">
+				{previous ?
+					<Button variant="secondary" onClick={() => navigateDocumentsTab(previous as DocumentTab)}>
+						<div className="flex items-center gap-2">
+							<ArrowLeft className="w-4 h-4" />
+							<span className="capitalize">
+								{translateTab(previous as DocumentTab)}
+							</span>
+						</div>
+					</Button> : <div className="w-full" />}
+				{next && <Button variant="secondary" onClick={() => navigateDocumentsTab(next as DocumentTab)}>
+					<div className="flex items-center gap-2">
+						<span className="capitalize">
+							{translateTab(next as DocumentTab)}
+						</span>
+						<ArrowRight className="w-4 h-4" />
+					</div>
+				</Button>}
+			</div>
+		);
+	}
+
+	useEffect(() => {
+		setupDocumentsTabsButtons(activeTab);
+	}, [activeTab]);
+
+	// Informar ao wizard o estado de "pode continuar" do Step 2 (para renderizar no rodapé fixo)
+	useEffect(() => {
+		onValidationGateChange?.({ canContinue, message: continueMessage });
+	}, [canContinue, continueMessage, onValidationGateChange]);
 
 	if (isLoadingChecklist) {
 		return (
@@ -177,9 +728,16 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 					<h3 className="text-xl font-bold text-slate-800">Erro ao Carregar Checklist</h3>
 					<p className="text-slate-500">{checklistError}</p>
 					<div className="flex justify-center">
-						<Button onClick={() => window.location.reload()} className="btn-md">
-							<RefreshCcw className="w-5 h-5" />
-							Tentar Novamente
+						<Button
+							onClick={() => {
+								console.log('🔄 Tentando recarregar checklist...');
+								loadChecklist();
+							}}
+							className="btn-md"
+							disabled={isLoadingChecklist}
+						>
+							<RefreshCcw className={`w-5 h-5 ${isLoadingChecklist ? 'animate-spin' : ''}`} />
+							{isLoadingChecklist ? 'Carregando...' : 'Tentar Novamente'}
 						</Button>
 					</div>
 				</div>
@@ -189,148 +747,39 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 
 	return (
 		<div className="space-y-6 animate-in fade-in duration-500">
-			{/* Checklist Summary */}
+			{/* Block 1 - Checklist Summary (static info: mandatory count, complexity, deadline) */}
 			{checklist && (
 				<ChecklistSummary
 					checklist={checklist}
-					uploadedFiles={files}
-					numSellers={config.sellers.length}
-					numBuyers={config.buyers.length}
+					config={config}
 				/>
 			)}
 
-			{/* OCR Status Panel */}
-			{files.length > 0 && (ocrStats.processing > 0 || ocrStats.uploading > 0 || ocrStats.completed > 0) && (
-				<div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4 shadow-sm">
-					<div className="flex items-center justify-between mb-3">
-						<div className="flex items-center gap-2">
-							<div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
-							<h3 className="font-bold text-purple-900">Status do Processamento OCR</h3>
-						</div>
+			{/* Block 2 - Document Status (dynamic: uploaded, processing, completed, errors + progress bar) */}
+			<DocumentStatusPanel
+				files={files}
+				ocrStats={ocrStats}
+				isCheckingStatus={isCheckingStatus}
+				onManualRefresh={handleManualRefresh}
+			/>
 
-						{/* Botão de refresh manual */}
-						{ocrStats.processing > 0 && (
-							<button
-								onClick={handleManualRefresh}
-								disabled={isCheckingStatus}
-								className="cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-purple-50 rounded-lg border border-purple-300 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-								title="Verificar status manualmente"
-							>
-								<RotateCw className={`w-4 h-4 text-purple-600 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-								<span className="text-xs font-semibold text-purple-800">
-									{isCheckingStatus ? 'Verificando...' : 'Verificar Status'}
-								</span>
-							</button>
-						)}
-					</div>
-
-					<div className="grid grid-cols-5 gap-3">
-						<div className="bg-white rounded-lg p-3 text-center border border-slate-200">
-							<div className="text-2xl font-bold text-slate-800">{ocrStats.total}</div>
-							<div className="text-xs text-slate-600">Total</div>
-						</div>
-						<div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
-							<div className="text-2xl font-bold text-blue-700">{ocrStats.uploading}</div>
-							<div className="text-xs text-blue-600">Enviando</div>
-						</div>
-						<div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
-							<div className="text-2xl font-bold text-purple-700 flex items-center justify-center gap-1">
-								{ocrStats.processing}
-								{ocrStats.processing > 0 && (
-									<div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-								)}
-							</div>
-							<div className="text-xs text-purple-600">Processando</div>
-						</div>
-						<div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
-							<div className="text-2xl font-bold text-green-700">{ocrStats.completed}</div>
-							<div className="text-xs text-green-600">Concluído</div>
-						</div>
-						<div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
-							<div className="text-2xl font-bold text-red-700">{ocrStats.error}</div>
-							<div className="text-xs text-red-600">Erro</div>
-						</div>
-					</div>
-
-					{isOcrProcessing && (
-						<div className="mt-3 flex items-center gap-2 text-sm text-purple-700">
-							<div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-							<span className="font-medium">Processando documentos via LLMWhisperer...</span>
-						</div>
-					)}
-				</div>
-			)}
-
-			{/* Tabs Navigation */}
+				{/* Tabs Navigation */}
 			<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-				<div className="border-b border-slate-200 bg-slate-50/30">
+				<div ref={documentsTabRef} className="border-b border-slate-200 bg-slate-50/30">
 					<div className="flex">
-						<button
-							type="button"
-							onClick={() => setActiveTab('buyers')}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === 'buyers'
-								? 'text-primary border-b-2 border-primary bg-white'
-								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-								}`}
-						>
-							Compradores
-						</button>
-						<button
-							type="button"
-							onClick={() => setActiveTab('sellers')}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === 'sellers'
-								? 'text-primary border-b-2 border-primary bg-white'
-								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-								}`}
-						>
-							Vendedores
-						</button>
-						<button
-							type="button"
-							onClick={() => setActiveTab('property')}
-							className={`flex-1 px-6 py-3 font-medium text-sm transition-all ${activeTab === 'property'
-								? 'text-primary border-b-2 border-primary bg-white'
-								: 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-								}`}
-						>
-							Imóvel
-						</button>
+						{renderHeaderDocumentTabsButtons('sellers')}
+						{renderHeaderDocumentTabsButtons('buyers')}
+						{renderHeaderDocumentTabsButtons('property')}
+						{renderHeaderDocumentTabsButtons('proposal')}
 					</div>
 				</div>
 
 				{/* Tab Content */}
 				<div className="p-6">
-					{activeTab === 'buyers' && (
-						<BuyerDocumentsTab
-							buyers={config.buyers || []}
-							uploadedFiles={files}
-							onFilesChange={onFilesChange}
-							onRemoveFile={handleRemoveFile}
-							checklist={checklist}
-						/>
-					)}
+					{renderDocumentsTabContent(activeTab)}
 
-					{activeTab === 'sellers' && (
-						<SellerDocumentsTab
-							sellers={config.sellers || []}
-							uploadedFiles={files}
-							onFilesChange={onFilesChange}
-							onRemoveFile={handleRemoveFile}
-							checklist={checklist}
-						/>
-					)}
-
-					{activeTab === 'property' && (
-						<PropertyDocumentsTab
-							propertyState={config.propertyState}
-							propertyType={config.propertyType}
-							deedCount={config.deedCount}
-							uploadedFiles={files}
-							onFilesChange={onFilesChange}
-							onRemoveFile={handleRemoveFile}
-							checklist={checklist}
-						/>
-					)}
+					{/* Buttons Navigation */}
+					{renderDocumentsTabsButtons()}
 				</div>
 			</div>
 		</div>

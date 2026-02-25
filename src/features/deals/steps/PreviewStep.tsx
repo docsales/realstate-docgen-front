@@ -1,113 +1,215 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Button } from '../../../components/Button';
-import { ArrowRight, CheckCircle2, ExternalLink, FilePenLine, FileText, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, FilePenLine, FileText, RefreshCw } from 'lucide-react';
 import type { GeneratePreviewResponse } from '@/types/types';
-import { useDeal, useGeneratePreview } from '../hooks/useDeals';
+import { useDeal, useStartPreviewJob } from '../hooks/useDeals';
 import { DocumentWritingLoader } from '../components/DocumentWritingLoader';
+import { SuccessModal } from '../components/SuccessModal';
+import { fireConfetti, fireQuickConfetti } from '@/utils/confetti';
+import { previewService, type PreviewProgressStep, type PreviewJobState } from '@/services/preview.service';
+import type { Socket } from 'socket.io-client';
 
 interface PreviewStepProps {
 	dealId: string;
 	dealName: string;
 	mappedCount: number;
 	onGenerate: () => void;
+	onBack?: () => void;
 }
 
-export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mappedCount, onGenerate }) => {
+export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mappedCount, onGenerate, onBack }) => {
 	const { data: deal, isLoading, refetch: refetchDeal } = useDeal(dealId);
-	const generatePreviewMutation = useGeneratePreview();
+	const startPreviewJobMutation = useStartPreviewJob();
 	const [status, setStatus] = useState<'idle' | 'generating' | 'done'>('idle');
 	const [preview, setPreview] = useState<GeneratePreviewResponse | null>(null);
 	const previousMappedCountRef = useRef<number>(mappedCount);
 	const previousContractFieldsRef = useRef<string | null>(null);
+	const [showSuccessModal, setShowSuccessModal] = useState(false);
+	const [isRegeneration, setIsRegeneration] = useState(false);
+	const [jobId, setJobId] = useState<string | null>(null);
+	const [jobStep, setJobStep] = useState<PreviewProgressStep>('getting_template_variables');
+	const socketRef = useRef<Socket | null>(null);
+	const pollTimerRef = useRef<number | null>(null);
 
-	const handleGenerate = async () => {
+	const stepToUi = (step: PreviewProgressStep) => {
+		switch (step) {
+			case 'getting_template_variables':
+				return { title: 'Preparando o modelo...', description: 'Buscando variáveis do template no Google Docs.' };
+			case 'building_payload':
+				return { title: 'Montando o documento...', description: 'Organizando os dados mapeados para o preview.' };
+			case 'llm_sellers':
+				return { title: 'Analisando vendedores...', description: 'Consolidando dados com IA (pode levar alguns segundos).' };
+			case 'llm_buyers':
+				return { title: 'Analisando compradores...', description: 'Consolidando dados com IA (pode levar alguns segundos).' };
+			case 'apps_script_generate':
+				return { title: isRegeneration ? 'Regerando seu Documento...' : 'Gerando seu Documento...', description: 'Criando/atualizando o rascunho no Google Docs.' };
+			case 'updating_deal':
+				return { title: 'Finalizando...', description: 'Salvando metadados e preparando o link do preview.' };
+			case 'done':
+			default:
+				return { title: 'Finalizando...', description: 'Aguarde um instante...' };
+		}
+	};
+
+	const stopPolling = () => {
+		if (pollTimerRef.current) {
+			window.clearInterval(pollTimerRef.current);
+			pollTimerRef.current = null;
+		}
+	};
+
+	const startPolling = (dealIdToPoll: string, jobIdToPoll: string) => {
+		stopPolling();
+		pollTimerRef.current = window.setInterval(async () => {
+			try {
+				const state = await previewService.getJobStatus(dealIdToPoll, jobIdToPoll);
+				setJobStep(state.step);
+				if (state.status === 'COMPLETED' && state.result?.edit_url) {
+					onCompleted(state);
+				}
+				if (state.status === 'ERROR') {
+					console.error('❌ Preview job error:', state.error);
+					setStatus('done');
+					stopPolling();
+				}
+			} catch (e: any) {
+				// Best-effort: em multi-instância o job pode “sumir”
+				console.warn('⚠️ Não foi possível consultar status do job (provável troca de instância):', e?.message || e);
+				setStatus('done');
+				stopPolling();
+			}
+		}, 5000);
+	};
+
+	const onCompleted = async (stateOrResult: PreviewJobState | { result?: any; edit_url?: string; id?: string; status_code?: number }) => {
+		const editUrl = (stateOrResult as any)?.result?.edit_url ?? (stateOrResult as any)?.edit_url;
+		const id = (stateOrResult as any)?.result?.id ?? (stateOrResult as any)?.id;
+		const status_code = (stateOrResult as any)?.result?.status_code ?? (stateOrResult as any)?.status_code ?? 200;
+
+		await new Promise(resolve => setTimeout(resolve, 300));
+		await refetchDeal();
+
+		setPreview({
+			edit_url: editUrl,
+			id,
+			status_code,
+		});
+		setStatus('done');
+		stopPolling();
+
+		if (isRegeneration) fireQuickConfetti();
+		else fireConfetti();
+
+		setTimeout(() => {
+			setShowSuccessModal(true);
+		}, 500);
+	};
+
+	const handleGenerate = async (isRegen = false) => {
 		if (!dealId) {
-			console.error('Deal ID is required');
 			setStatus('idle');
 			return;
 		}
 
+		setIsRegeneration(isRegen);
 		setStatus('generating');
+		setJobStep('getting_template_variables');
 		try {
-			// Gerar novo preview - o servidor atualiza o deal com os novos valores
-			// O servidor substitui o documento antigo por um novo no Google Docs
-			// e atualiza o deal com o novo ID e URL
-			const generatedPreview = await generatePreviewMutation.mutateAsync({ dealId });
-			
-			// Aguardar um pouco para garantir que o deal foi atualizado no servidor
-			await new Promise(resolve => setTimeout(resolve, 300));
-			
-			// Forçar recarregamento do deal para garantir que temos os valores mais recentes
-			await refetchDeal();
-			
-			// Atualizar o preview com os dados retornados pela API
-			// Isso garante que temos o ID e URL mais recentes do novo documento gerado
-			const newPreview = {
-				edit_url: generatedPreview.edit_url,
-				id: generatedPreview.id,
-				status_code: generatedPreview.status_code,
-			};
-			
-			setPreview(newPreview);
-			setStatus('done');
-			
-			console.log('✅ Preview regenerado com sucesso:', {
-				id: newPreview.id,
-				url: newPreview.edit_url,
-				message: 'Novo documento criado no Google Docs e deal atualizado no servidor'
-			});
+			const { jobId } = await startPreviewJobMutation.mutateAsync({ dealId });
+			setJobId(jobId);
+			startPolling(dealId, jobId);
 		} catch (error) {
-			console.error('❌ Erro ao regenerar preview:', error);
-			setStatus('done'); // Manter status 'done' para não perder o preview anterior
+			console.error('❌ Erro ao iniciar geração do preview:', error);
+			setStatus('done');
+			stopPolling();
 		}
 	};
 
 	useEffect(() => {
+		// Conecta WS uma vez (best-effort)
+		let mounted = true;
+		(async () => {
+			if (socketRef.current) return;
+			const socket = await previewService.connectWebSocket();
+			if (!mounted) {
+				socket?.disconnect();
+				return;
+			}
+			socketRef.current = socket;
+			if (!socket) return;
+
+			socket.on('preview_progress', (evt: { jobId: string; dealId: string; step: PreviewProgressStep }) => {
+				if (!evt?.jobId || evt.jobId !== jobId) return;
+				if (!evt?.dealId || evt.dealId !== dealId) return;
+				setJobStep(evt.step);
+			});
+
+			socket.on('preview_completed', (evt: { jobId: string; dealId: string; edit_url: string; id: string }) => {
+				if (!evt?.jobId || evt.jobId !== jobId) return;
+				if (!evt?.dealId || evt.dealId !== dealId) return;
+				onCompleted({ edit_url: evt.edit_url, id: evt.id, status_code: 200 });
+			});
+
+			socket.on('preview_error', (evt: { jobId: string; dealId: string; error: string }) => {
+				if (!evt?.jobId || evt.jobId !== jobId) return;
+				if (!evt?.dealId || evt.dealId !== dealId) return;
+				console.error('❌ Erro no preview (WS):', evt.error);
+				setStatus('done');
+				stopPolling();
+			});
+		})();
+
+		return () => {
+			mounted = false;
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [dealId, jobId]);
+
+	useEffect(() => {
+		return () => {
+			stopPolling();
+			socketRef.current?.disconnect();
+			socketRef.current = null;
+		};
+	}, []);
+
+	useEffect(() => {
+		if (status === 'generating') return;
+
 		if (dealId && !isLoading) {
-			// Verificar se o mapeamento mudou (número de campos ou conteúdo dos contractFields)
-			const currentContractFields = deal?.contractFields 
-				? (typeof deal.contractFields === 'string' 
-					? deal.contractFields 
+			const currentContractFields = deal?.contractFields
+				? (typeof deal.contractFields === 'string'
+					? deal.contractFields
 					: JSON.stringify(deal.contractFields))
 				: null;
-			
-			const mappingChanged = 
+
+			const mappingChanged =
 				previousMappedCountRef.current !== mappedCount ||
 				previousContractFieldsRef.current !== currentContractFields;
 
 			if (deal?.consolidated && deal.consolidated.draftPreviewUrl) {
-				// Se o mapeamento mudou, resetar para permitir regeneração
 				if (mappingChanged && status === 'done') {
-					console.log('🔄 Mapeamento alterado - permitindo regeneração do preview');
 					setStatus('idle');
 					setPreview(null);
 				} else {
-					// Atualizar preview com os valores mais recentes do deal
-					// Isso garante que após regeneração, temos o ID e URL atualizados
 					const newPreview = {
 						edit_url: deal.consolidated.draftPreviewUrl,
 						id: deal.consolidated.generatedDocId,
 						status_code: 200,
 					};
-					
-					// Só atualizar se os valores mudaram (evitar loops)
-					if (!preview || 
-						preview.edit_url !== newPreview.edit_url || 
+
+					if (!preview ||
+						preview.edit_url !== newPreview.edit_url ||
 						preview.id !== newPreview.id) {
-						console.log('📝 Atualizando preview com valores do deal:', {
-							id: newPreview.id,
-							url: newPreview.edit_url
-						});
 						setPreview(newPreview);
 					}
-					
+
 					if (status !== 'done') {
 						setStatus('done');
 					}
 				}
 			}
 
-			// Atualizar refs
 			previousMappedCountRef.current = mappedCount;
 			previousContractFieldsRef.current = currentContractFields;
 		}
@@ -142,7 +244,7 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 							<span className="font-medium text-slate-800">{preview.edit_url}</span>
 						</div>
 					)}
-					<Button onClick={handleGenerate} className="w-full text-lg py-3">
+					<Button onClick={() => handleGenerate(false)} className="w-full text-lg py-3">
 						<FilePenLine className="w-4 h-4" />
 						Gerar Preview
 					</Button>
@@ -150,44 +252,92 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 			)}
 
 			{status === 'generating' && (
-				<DocumentWritingLoader 
-					title="Gerando seu Documento..."
-					description="O sistema está aplicando as variáveis no modelo e criando o link no Drive."
+				<DocumentWritingLoader
+					title={stepToUi(jobStep).title}
+					description={stepToUi(jobStep).description}
 				/>
 			)}
 
 			{status === 'done' && (
-				<div className="bg-white p-8 rounded-2xl shadow-lg border border-green-100 max-w-lg w-full text-center space-y-6">
-					<div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
-						<CheckCircle2 className="w-8 h-8 text-green-600" />
-					</div>
-					<div>
-						<h3 className="text-2xl font-bold text-slate-800">Preview Gerado!</h3>
-						<p className="text-slate-500 mt-2">Seu documento foi criado com sucesso. Você pode visualizá-lo e editá-lo antes de enviar.</p>
+				<div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-lg w-full space-y-6">
+					{/* Success header */}
+					<div className="text-center space-y-2">
+						<div className="bg-green-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
+							<CheckCircle2 className="w-6 h-6 text-green-600" />
+						</div>
+						<h3 className="text-xl font-bold text-slate-800">Preview gerado com sucesso</h3>
+						<p className="text-sm text-slate-500">Revise o documento e avance quando estiver pronto.</p>
 					</div>
 
-					<div className="flex gap-4 flex-col">
-						<Button variant="secondary" className="w-full flex items-center gap-2 justify-center" onClick={() => window.open(preview?.edit_url, '_blank')}>
-							<ExternalLink className="w-4 h-4" />
-							<span>Abrir no Google Docs</span>
+					{/* Primary action: Open document */}
+					<button
+						type="button"
+						onClick={() => window.open(preview?.edit_url, '_blank')}
+						className="cursor-pointer w-full flex items-center gap-4 p-4 rounded-xl border-2 border-primary/20 bg-blue-50/50 hover:bg-blue-50 hover:border-primary/40 transition-all group"
+					>
+						<div className="flex-shrink-0 w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+							<FileText className="w-6 h-6 text-primary" />
+						</div>
+						<div className="flex-1 text-left">
+							<p className="text-sm font-semibold text-slate-800">Abrir documento</p>
+							<p className="text-xs text-slate-500 mt-0.5">Visualizar e editar no Google Docs</p>
+						</div>
+						<ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-primary transition-colors flex-shrink-0" />
+					</button>
+
+					{/* Divider */}
+					<div className="border-t border-slate-100" />
+
+					{/* Navigation actions */}
+					<div className="flex flex-col gap-3">
+						{/* Main CTA: Advance to signatories */}
+						<Button onClick={onGenerate} icon={<ArrowRight className="w-5 h-5" />} iconPosition="right">
+							Avancar para Signatarios
 						</Button>
-						<Button 
-							variant="secondary" 
-							className="w-full flex items-center gap-2 justify-center" 
-							onClick={handleGenerate}
-							disabled={generatePreviewMutation.isPending}
-						>
-							<RefreshCw className={`w-4 h-4 ${generatePreviewMutation.isPending ? 'animate-spin' : ''}`} />
-							<span>Regerar Preview</span>
-						</Button>
-						<Button onClick={onGenerate} className="w-full justify-center flex items-center gap-2">
-							<span>Avançar para Signatários</span>
-							<ArrowRight className="w-4 h-4" />
-						</Button>
+
+						{/* Secondary actions row */}
+						<div className="flex items-center gap-2">
+							{onBack && (
+								<Button
+									variant="ghost"
+									size="md"
+									icon={<ArrowLeft className="w-3.5 h-3.5" />}
+									onClick={onBack}
+									className="flex-1"
+								>
+									Ajustar variaveis
+								</Button>
+							)}
+							<Button
+								variant="ghost"
+								size="md"
+								icon={<RefreshCw className="w-3.5 h-3.5" />}
+								className="flex-1"
+								onClick={() => handleGenerate(true)}
+								isLoading={startPreviewJobMutation.isPending}
+								disabled={startPreviewJobMutation.isPending}
+							>
+								Regerar documento
+							</Button>
+						</div>
 					</div>
-					<p className="text-xs text-slate-400">Nota: O documento abre em nova aba.</p>
 				</div>
 			)}
+
+			{/* Success Modal */}
+			<SuccessModal
+				isOpen={showSuccessModal}
+				onClose={() => setShowSuccessModal(false)}
+				title={isRegeneration ? "Preview Atualizado!" : "Documento Pronto!"}
+				description={isRegeneration
+					? "Seu documento foi atualizado com sucesso e está pronto para visualização."
+					: "Seu documento foi gerado com sucesso e está pronto para ser visualizado."}
+				onOpenPreview={() => {
+					if (preview?.edit_url) {
+						window.open(preview.edit_url, '_blank');
+					}
+				}}
+			/>
 		</div>
 	);
 };

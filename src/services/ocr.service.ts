@@ -42,15 +42,8 @@ export const ocrService = {
         formData.append('outputMode', params.outputMode);
       }
 
-      console.log('📤 Enviando documento para OCR:', {
-        fileName: params.file.name,
-        fileSize: params.file.size,
-        documentType: params.metadata.type,
-      });
-
       const response = await server.api.post('/document/ocr/upload', formData, { withCredentials: true });
       const result = response.data;
-      console.log('✅ Documento enviado com sucesso:', result);
 
       return {
         success: result.success,
@@ -72,17 +65,25 @@ export const ocrService = {
   /**
    * Consulta status de processamento de um documento
    */
-  async getStatus(fileId: string): Promise<OcrStatusResponse> {
+  async getStatus(
+    fileId: string,
+    opts?: { timeoutMs?: number; silentTimeout?: boolean }
+  ): Promise<OcrStatusResponse> {
     try {
-      const response = await server.api.get(`/document/ocr/status/${fileId}`, { withCredentials: true });
+      const response = await server.api.get(
+        `/document/ocr/status/${fileId}`,
+        { withCredentials: true, timeout: opts?.timeoutMs }
+      );
       
       const result = response.data;
       return result;
 
-    } catch (error) {
-      console.error('❌ Erro ao consultar status:', error);
+    } catch (error: any) {
+      if (!(opts?.silentTimeout && error?.code === 'ECONNABORTED')) {
+        console.error('❌ Erro ao consultar status:', error);
+      }
       return {
-        status: 'error',
+        status: opts?.silentTimeout && error?.code === 'ECONNABORTED' ? 'processing' : 'error',
         error: error instanceof Error ? error.message : 'Erro desconhecido',
       };
     }
@@ -116,11 +117,55 @@ export const ocrService = {
   },
 
   /**
+   * Dispara processamento em batch sem bloquear UI.
+   * Usa timeout curto e não trata ECONNABORTED como erro (o resultado chegará por WebSocket).
+   */
+  async processBatchFireAndForget(documentIds: string[]): Promise<void> {
+    try {
+      await server.api.post(
+        '/document/ocr/process-batch',
+        { documentIds },
+        { withCredentials: true, timeout: 1000 }
+      );
+    } catch (error: any) {
+      if (error?.code === 'ECONNABORTED') {
+        return;
+      }
+      console.warn('⚠️ Falha ao disparar process-batch (fire-and-forget):', error);
+    }
+  },
+
+  /**
+   * Vincula um documento existente a outro tipo (cria novo registro no banco)
+   */
+  async linkDocumentType(sourceDocumentId: string, newDocumentType: string): Promise<{ success: boolean; documentId?: string; error?: string }> {
+    try {
+      const response = await server.api.post('/document/link-type', 
+        { sourceDocumentId, newDocumentType }, 
+        { withCredentials: true }
+      );
+      
+      const result = response.data;
+      return {
+        success: result.success,
+        documentId: result.documentId,
+      };
+
+    } catch (error: any) {
+      console.error('❌ Erro ao vincular documento:', error);
+      return {
+        success: false,
+        error: error?.response?.data?.message || error.message || 'Erro desconhecido',
+      };
+    }
+  },
+
+  /**
    * Cria metadata para um documento
    */
   createMetadata(
     documentType: string,
-    category: 'buyers' | 'sellers' | 'property',
+    category: 'buyers' | 'sellers' | 'property' | 'proposal',
     personId?: string,
     customId?: string,
     dealId?: string

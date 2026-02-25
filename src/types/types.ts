@@ -19,12 +19,12 @@ export interface Deal {
   metadata?: any;
   contractModel?: string;
   contractFields?: any;
+  preMappings?: any;
   expirationDate?: string;
-  contractEnd?: string;
   createdAt: string;
   updatedAt: string;
   signers?: Signatory[];
-  documents?: any[];
+  documents?: DealDocument[];
 }
 
 export interface GeneratePreviewResponse {
@@ -37,7 +37,6 @@ export interface UpdateDealDataDto {
   name?: string;
   docTemplateId?: string;
   expirationDate?: string;
-  contractEnd?: string;
   metadata?: any;
   contractFields?: any;
   consolidated?: ConsolidatedDealData;
@@ -48,6 +47,22 @@ export interface ConsolidatedDealData {
   draftPreviewUrl: string;
   generatedDocId: string;
   docsalesPdfUrl: string;
+}
+
+export interface DealDocument {
+  id: string;
+  documentType: string;
+  originalFilename: string;
+  status: 'UPLOADED' | 'OCR_PROCESSING' | 'OCR_DONE' | 'EXTRACTED' | 'ERROR' | string;
+  category: 'buyers' | 'sellers' | 'property' | 'proposal';
+  personId?: string;
+  variables?: Record<string, any>;
+  fileSize?: number;
+  mimeType?: string;
+  fileUrl?: string;
+  whisperHash?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Signatory {
@@ -66,8 +81,9 @@ export interface Signatory {
 export interface UploadedFile {
   id: string;
   file: File;
-  type: string; // The document type ID (e.g., 'RG', 'CPF', 'MATRICULA')
-  category: 'buyers' | 'sellers' | 'property'; // Which category this document belongs to
+  type: string; // The PRIMARY document type ID (e.g., 'RG', 'CPF', 'MATRICULA') - backwards compatibility
+  types?: string[]; // Multiple document types this file satisfies (e.g., ['RG', 'CPF'])
+  category: 'buyers' | 'sellers' | 'property' | 'proposal'; // Which category this document belongs to
   personId?: string; // Links the document to a specific Person ID
   validated?: boolean; // Whether the document has been validated by the server
   validationError?: string; // Error message if validation failed
@@ -78,6 +94,7 @@ export interface UploadedFile {
   ocrExtractedData?: import('./ocr.types').OcrExtractedData; // Dados extraídos pelo OCR
   ocrError?: string; // Erro no processamento OCR
   ocrProcessingTime?: number; // Tempo de processamento em ms
+  documentId?: string; // ID do documento no backend (diferente do ID local)
 }
 
 // Types for person configuration
@@ -93,6 +110,7 @@ export interface Person {
   maritalState?: MaritalState;
   propertyRegime?: PropertyRegime;
   isSpouse?: boolean;
+  coupleId?: string; // ID compartilhado entre os membros do casal
 }
 
 // Mapping value with source tracking
@@ -124,10 +142,10 @@ export interface DealConfig {
   name: string;
   docTemplateId: string;
   expiration_date?: string;
-  contract_end?: string;
   useFgts: boolean;
   bankFinancing: boolean;
   consortiumLetter: boolean;
+  contractValue?: string;
   sellers: Person[];
   buyers: Person[];
   propertyState: PropertyState;
@@ -143,6 +161,28 @@ export const createDefaultPerson = (id?: string): Person => ({
   maritalState: 'solteiro',
   isSpouse: false,
 });
+
+// Gerar novo coupleId
+export const generateCoupleId = (): string => `couple_${crypto.randomUUID()}`;
+
+// Verificar se duas pessoas formam um casal
+export const areCouple = (person1: Person, person2: Person): boolean => {
+  return !!person1.coupleId && !!person2.coupleId && person1.coupleId === person2.coupleId;
+};
+
+// Obter o cônjuge de uma pessoa
+export const getSpouse = (person: Person, people: Person[]): Person | undefined => {
+  if (!person.coupleId) return undefined;
+  return people.find(p => 
+    p.id !== person.id && 
+    p.coupleId === person.coupleId
+  );
+};
+
+// Obter todos os membros de um casal
+export const getCoupleMembers = (coupleId: string, people: Person[]): Person[] => {
+  return people.filter(p => p.coupleId === coupleId);
+};
 
 export const CONTRACT_FIELDS = [
   { id: 'seller_name', label: 'Nome do Vendedor' },

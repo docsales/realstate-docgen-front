@@ -10,7 +10,7 @@ import { Socket } from 'socket.io-client';
 
 interface UseOcrOptions {
   autoProcess?: boolean;
-  dealId?: string; // ID do deal para vincular documento imediatamente
+  dealId?: string;
   onComplete?: (documentId: string, extractedData: any, localFileId: string) => void;
   onError?: (fileId: string, error: string) => void;
 }
@@ -20,18 +20,19 @@ export const useOcr = (
   onFilesChange: (files: UploadedFile[] | ((prevFiles: UploadedFile[]) => UploadedFile[])) => void,
   options: UseOcrOptions = {}
 ) => {
-  const { 
-    autoProcess = true, 
+  const {
+    autoProcess = true,
     dealId,
-    onComplete, 
-    onError 
+    onComplete,
+    onError
   } = options;
-  
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const processingRef = useRef<Set<string>>(new Set());
   const processedFilesRef = useRef<Set<string>>(new Set());
   const socketRef = useRef<Socket | null>(null);
+  const manualRefreshTimerRef = useRef<number | null>(null);
 
   /**
    * Atualiza status OCR de um arquivo
@@ -44,13 +45,17 @@ export const useOcr = (
     extractedData?: any
   ) => {
     onFilesChange((prevFiles: any[]) => prevFiles.map(f => {
-      if (f.id === fileId) {        
+      if (f.id === fileId) {
         return {
           ...f,
           ocrStatus: status,
           ocrWhisperHash: whisperHash || f.ocrWhisperHash,
           ocrError: error,
           ocrExtractedData: extractedData || f.ocrExtractedData,
+          // Se o status é ERROR, marcar como não validado
+          validated: status === OcrStatus.ERROR ? false : f.validated,
+          // Se há erro, armazenar como validationError também
+          validationError: error || f.validationError,
         };
       }
       return f;
@@ -58,52 +63,34 @@ export const useOcr = (
   }, [onFilesChange]);
 
   /**
-   * Mapeamento de IDs locais para IDs do backend (documentId)
-   */
-  const fileIdMapRef = useRef<Map<string, string>>(new Map());
-
-  /**
    * Verifica status de um arquivo específico (para checagem manual)
    */
   const checkFileStatus = useCallback(async (documentId: string): Promise<{ status: string; hasUpdate: boolean }> => {
-    // Verificar se já existe uma requisição em andamento para este arquivo
     const requestKey = `checkStatus_${documentId}`;
     if (processingRef.current.has(requestKey)) {
-      console.log('⏸️ Verificação de status já em andamento para:', documentId);
       return { status: 'processing', hasUpdate: false };
     }
 
     processingRef.current.add(requestKey);
 
     try {
+      // Após o upload, file.id já é o documentId (UUID)
       const result = await ocrService.getStatus(documentId);
-      
-      // Encontrar o ID local do arquivo (pode ser o mesmo que documentId ou diferente)
-      let localFileId = documentId;
-      for (const [localId, mappedDocId] of fileIdMapRef.current.entries()) {
-        if (mappedDocId === documentId) {
-          localFileId = localId;
-          break;
-        }
-      }
-      
+
       if (result.status === 'completed') {
-        updateFileOcrStatus(localFileId, OcrStatus.COMPLETED, undefined, undefined, result.extractedData);
-        onComplete?.(documentId, result.extractedData, localFileId);
-        console.log('✅ Arquivo concluído:', localFileId, '(documentId:', documentId, ')');
+        updateFileOcrStatus(documentId, OcrStatus.COMPLETED, undefined, undefined, result.extractedData);
+        onComplete?.(documentId, result.extractedData, documentId);
         return { status: 'completed', hasUpdate: true };
       } else if (result.status === 'error') {
-        updateFileOcrStatus(localFileId, OcrStatus.ERROR, undefined, result.error);
-        onError?.(localFileId, result.error || 'Erro no processamento');
-        console.log('❌ Erro no arquivo:', localFileId);
+        updateFileOcrStatus(documentId, OcrStatus.ERROR, undefined, result.error);
+        onError?.(documentId, result.error || 'Erro no processamento');
+        console.log('❌ Erro no arquivo:', documentId);
         return { status: 'error', hasUpdate: true };
       } else {
-        // Mesmo que esteja processando, atualizar informações disponíveis (whisperHash, etc)
-        const currentFile = files.find(f => f.id === localFileId);
+        const currentFile = files.find(f => f.id === documentId);
         if (result.whisperHash && result.whisperHash !== currentFile?.ocrWhisperHash) {
-          updateFileOcrStatus(localFileId, OcrStatus.PROCESSING, result.whisperHash);
+          updateFileOcrStatus(documentId, OcrStatus.PROCESSING, result.whisperHash);
         }
-        console.log('⏳ Arquivo ainda processando:', documentId, '- Status:', result.status);
         return { status: result.status, hasUpdate: false };
       }
     } catch (error) {
@@ -114,40 +101,47 @@ export const useOcr = (
     }
   }, [updateFileOcrStatus, onComplete, onError, files]);
 
+  const checkFileStatusFast = useCallback(async (documentId: string): Promise<void> => {
+    try {
+      // Timeout curto e silencioso: serve só como fallback quando WS não está conectado.
+      const result = await ocrService.getStatus(documentId, { timeoutMs: 5000, silentTimeout: true });
+      if (result.status === 'completed' || result.status === 'error') {
+        await checkFileStatus(documentId);
+      }
+    } catch {
+      // noop
+    }
+  }, [checkFileStatus]);
+
   /**
    * Processa um arquivo via OCR
    */
   const processFile = useCallback(async (file: UploadedFile) => {
-    // Evitar processar o mesmo arquivo múltiplas vezes
-    if (processingRef.current.has(file.id)) {
-      console.log('⚠️ Arquivo já está sendo processado, ignorando:', file.id);
-      return;
-    }
-    
-    // Verificar status real do arquivo antes de bloquear
-    // Permitir reprocessamento se arquivo estiver em erro ou se for uma nova ação
-    const fileStatus = files.find(f => f.id === file.id)?.ocrStatus;
-    const shouldBlock = processedFilesRef.current.has(file.id) && 
-                       fileStatus !== OcrStatus.ERROR && 
-                       fileStatus !== OcrStatus.IDLE;
-    
-    if (shouldBlock) {
-      console.log('⚠️ Arquivo já foi processado e não precisa reprocessar:', file.id, '- Status:', fileStatus);
-      return;
-    }
-    
-    processingRef.current.add(file.id);
-    processedFilesRef.current.add(file.id);
+    const originalId = file.id; // Guardar o ID original para limpeza
+    if (processingRef.current.has(originalId)) return;
+
+    const fileStatus = files.find(f => f.id === originalId)?.ocrStatus;
+    const shouldBlock = processedFilesRef.current.has(originalId) &&
+      fileStatus !== OcrStatus.ERROR &&
+      fileStatus !== OcrStatus.IDLE &&
+      fileStatus !== OcrStatus.UPLOADING;
+
+    if (shouldBlock) return;
+
+    processingRef.current.add(originalId);
+    processedFilesRef.current.add(originalId);
 
     try {
-      console.log('🚀 Iniciando OCR:', file.file.name, '- ID:', file.id);
-      updateFileOcrStatus(file.id, OcrStatus.UPLOADING);
+      // Só atualiza para UPLOADING se ainda não estiver nesse status
+      if (fileStatus !== OcrStatus.UPLOADING) {
+        updateFileOcrStatus(originalId, OcrStatus.UPLOADING);
+      }
 
       const metadata = ocrService.createMetadata(
         file.type,
         file.category,
         file.personId,
-        file.id,
+        originalId,
         dealId
       );
 
@@ -161,30 +155,35 @@ export const useOcr = (
       }
 
       const documentId = result.documentId || result.fileId;
-      
-      // Mapear ID local para documentId do backend (sem atualizar o array files)
-      if (documentId && documentId !== file.id) {
-        console.log(`📝 Mapeando ID: ${file.id} → ${documentId}`);
-        fileIdMapRef.current.set(file.id, documentId);
-        
-        // Adicionar documentId aos registros para evitar reprocessamento
-        processedFilesRef.current.add(documentId);
-      }
 
-      const finalId = documentId || file.id;
-      
-      console.log('✅ Upload OK, aguardando processamento via WebSocket... ID:', finalId);
-      updateFileOcrStatus(file.id, OcrStatus.PROCESSING, result.whisperHash);
+      if (documentId && documentId !== originalId) {
+        // Substituir o id do arquivo pelo documentId (UUID) do backend
+        onFilesChange((prevFiles: any[]) => prevFiles.map(f => {
+          if (f.id === originalId) {
+            return { ...f, id: documentId, documentId };
+          }
+          return f;
+        }));
+
+        // Atualizar referências internas
+        processedFilesRef.current.delete(originalId);
+        processedFilesRef.current.add(documentId);
+
+        // Atualizar status usando o novo id (UUID)
+        updateFileOcrStatus(documentId, OcrStatus.PROCESSING, result.whisperHash);
+      } else {
+        // Se documentId for igual ao originalId ou não existir, usa o id original
+        updateFileOcrStatus(originalId, OcrStatus.PROCESSING, result.whisperHash);
+      }
 
     } catch (error) {
       console.error('❌ Erro no OCR:', error);
       const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
-      updateFileOcrStatus(file.id, OcrStatus.ERROR, undefined, errorMsg);
-      // Remover do processedFilesRef em caso de erro para permitir retry
-      processedFilesRef.current.delete(file.id);
-      onError?.(file.id, errorMsg);
+      updateFileOcrStatus(originalId, OcrStatus.ERROR, undefined, errorMsg);
+      processedFilesRef.current.delete(originalId);
+      onError?.(originalId, errorMsg);
     } finally {
-      processingRef.current.delete(file.id);
+      processingRef.current.delete(originalId);
     }
   }, [updateFileOcrStatus, onError, files]);
 
@@ -193,9 +192,8 @@ export const useOcr = (
    */
   const processMultipleFiles = useCallback(async (filesToProcess: UploadedFile[]) => {
     setIsProcessing(true);
-    
+
     try {
-      // Processar arquivos em paralelo (máximo 3 por vez)
       const chunks = [];
       for (let i = 0; i < filesToProcess.length; i += 3) {
         chunks.push(filesToProcess.slice(i, i + 3));
@@ -215,7 +213,6 @@ export const useOcr = (
   const retryFile = useCallback(async (fileId: string, currentFiles: UploadedFile[]) => {
     const file = currentFiles.find(f => f.id === fileId);
     if (file) {
-      // Limpar do processedFilesRef para permitir reprocessamento
       processedFilesRef.current.delete(fileId);
       updateFileOcrStatus(fileId, OcrStatus.IDLE);
       await processFile(file);
@@ -228,28 +225,35 @@ export const useOcr = (
   useEffect(() => {
     if (!autoProcess) return;
 
-    // Filtra arquivos que realmente precisam de processamento
     const newFiles = files.filter(f => {
-      // Ignorar se já tiver status diferente de IDLE ou undefined
-      const hasStatus = f.ocrStatus && f.ocrStatus !== OcrStatus.IDLE;
-      // Ignorar se está sendo processado agora
       const currentlyProcessing = processingRef.current.has(f.id);
       
-      // Verificar status real antes de bloquear por processedFilesRef
-      // Permitir processar se arquivo está em erro ou idle
-      const shouldProcess = !hasStatus && !currentlyProcessing;
+      // Processar arquivos sem status, com status IDLE, ou com status UPLOADING que ainda não foram processados
+      const hasStatus = f.ocrStatus && f.ocrStatus !== OcrStatus.IDLE;
+      const isUploading = f.ocrStatus === OcrStatus.UPLOADING;
+      const wasProcessed = processedFilesRef.current.has(f.id);
       
-      if (!shouldProcess) {
+      // Se já está processando, não processar novamente
+      if (currentlyProcessing) {
         return false;
       }
-
-      // Se já foi processado, verificar se precisa reprocessar
-      if (processedFilesRef.current.has(f.id)) {
-        // Permitir reprocessar apenas se estiver em erro
-        return f.ocrStatus === OcrStatus.ERROR || f.ocrStatus === OcrStatus.IDLE;
+      
+      // Se tem status UPLOADING mas ainda não foi processado, processar
+      if (isUploading && !wasProcessed) {
+        return true;
       }
       
-      return true;
+      // Se não tem status ou tem status IDLE, processar
+      if (!hasStatus) {
+        return true;
+      }
+      
+      // Se já foi processado, só reprocessar se tiver erro ou estiver idle
+      if (wasProcessed) {
+        return f.ocrStatus === OcrStatus.ERROR || f.ocrStatus === OcrStatus.IDLE;
+      }
+
+      return false;
     });
 
     if (newFiles.length > 0) {
@@ -261,51 +265,46 @@ export const useOcr = (
   /**
    * Refresh manual - força processamento em batch de todos os arquivos em processamento
    */
-  const manualRefresh = useCallback(async (currentFiles: UploadedFile[]) => {
-    const processingFiles = currentFiles.filter(f => f.ocrStatus === OcrStatus.PROCESSING || f.ocrStatus === OcrStatus.UPLOADING);
-    
-    if (processingFiles.length === 0) {
-      console.log('ℹ️ Nenhum arquivo em processamento para verificar');
-      return;
+  const manualRefresh = useCallback((currentFiles: UploadedFile[]) => {
+    // Filtrar apenas documentos que estão realmente processando (não ERROR)
+    const processingFiles = currentFiles.filter(f => 
+      (f.ocrStatus === OcrStatus.PROCESSING || f.ocrStatus === OcrStatus.UPLOADING) &&
+      f.ocrStatus !== OcrStatus.ERROR
+    );
+
+    if (processingFiles.length === 0) return;
+
+    if (manualRefreshTimerRef.current) {
+      window.clearTimeout(manualRefreshTimerRef.current);
+      manualRefreshTimerRef.current = null;
     }
 
-    console.log(`🔄 Refresh manual iniciado para ${processingFiles.length} arquivo(s) - processando em batch`);
     setIsCheckingStatus(true);
-    
+
     try {
-      // Coletar todos os documentIds
-      const documentIds = processingFiles.map(f => {
-        // Tentar obter o documentId do backend, senão usar o ID local
-        return fileIdMapRef.current.get(f.id) || f.id;
-      });
+      // Após o upload, file.id já é o documentId (UUID)
+      const documentIds = processingFiles.map(f => f.documentId || f.id);
 
-      // Processar todos em batch no backend
-      const batchResult = await ocrService.processBatch(documentIds);
-      
-      console.log('✅ Refresh manual concluído (batch)', {
-        total: processingFiles.length,
-        processed: batchResult.processed,
-        errors: batchResult.errors,
-        stillProcessing: batchResult.stillProcessing
-      });
+      // Fire-and-forget: não aguarda resposta HTTP (evita timeout); WS atualizará status/resultados.
+      void ocrService.processBatchFireAndForget(documentIds);
 
-      // Após processamento em batch, verificar status atualizado de cada documento
-      // (os eventos WebSocket devem atualizar automaticamente, mas fazemos uma verificação final)
-      if (batchResult.processed > 0 || batchResult.errors > 0) {
-        // Aguardar um pouco para os eventos WebSocket chegarem
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Verificar status atualizado de cada documento
-        await Promise.all(
-          documentIds.map(documentId => checkFileStatus(documentId))
-        );
+      // Fallback leve: se WS estiver desconectado, agenda checagem rápida em background.
+      const wsConnected = !!socketRef.current?.connected;
+      if (!wsConnected) {
+        window.setTimeout(() => {
+          void Promise.allSettled(documentIds.map(id => checkFileStatusFast(id)));
+        }, 1000);
       }
     } catch (error) {
       console.error('❌ Erro no refresh manual:', error);
     } finally {
-      setIsCheckingStatus(false);
+      // Feedback rápido no botão, sem bloquear.
+      manualRefreshTimerRef.current = window.setTimeout(() => {
+        setIsCheckingStatus(false);
+        manualRefreshTimerRef.current = null;
+      }, 800);
     }
-  }, [checkFileStatus]);
+  }, [checkFileStatusFast]);
 
   /**
    * Conectar WebSocket e escutar eventos de OCR
@@ -315,82 +314,49 @@ export const useOcr = (
     let isMounted = true;
 
     const connectWebSocket = async () => {
-      // Conectar apenas se houver arquivos processando ou se houver arquivos em geral
-      if (files.length === 0) {
-        return;
-      }
+      if (files.length === 0) return;
 
-      // Desconectar socket anterior se existir
       if (socketRef.current) {
-        console.log('🔄 Desconectando WebSocket anterior antes de reconectar');
         socketRef.current.disconnect();
         socketRef.current = null;
       }
 
       socket = await ocrService.connectWebSocket();
-      
+
       if (!socket || !isMounted) {
-        if (socket) {
-          socket.disconnect();
-        }
-        console.warn('⚠️ Não foi possível conectar WebSocket ou componente foi desmontado');
+        if (socket) socket.disconnect();
         return;
       }
 
       socketRef.current = socket;
 
-      // Escutar evento de OCR completado
       socket.on('ocr_completed', (data: { documentId: string; extractedData: any; status: string }) => {
         if (!isMounted) return;
-        
-        console.log('📊 extractedData recebido:', data.extractedData ? 'SIM' : 'NÃO', data.extractedData);
-        
-        // Encontrar o ID local do arquivo
-        let localFileId = data.documentId;
-        for (const [localId, mappedDocId] of fileIdMapRef.current.entries()) {
-          if (mappedDocId === data.documentId) {
-            localFileId = localId;
-            break;
-          }
-        }
 
-        updateFileOcrStatus(localFileId, OcrStatus.COMPLETED, undefined, undefined, data.extractedData);
-        onComplete?.(data.documentId, data.extractedData, localFileId);
+        // Após o upload, file.id já é o documentId (UUID)
+        updateFileOcrStatus(data.documentId, OcrStatus.COMPLETED, undefined, undefined, data.extractedData);
+        onComplete?.(data.documentId, data.extractedData, data.documentId);
       });
 
-      // Escutar evento de erro no OCR
       socket.on('ocr_error', (data: { documentId: string; error: string }) => {
         if (!isMounted) return;
-        
-        console.log('📨 Evento ocr_error recebido:', data);
-        
-        // Encontrar o ID local do arquivo
-        let localFileId = data.documentId;
-        for (const [localId, mappedDocId] of fileIdMapRef.current.entries()) {
-          if (mappedDocId === data.documentId) {
-            localFileId = localId;
-            break;
-          }
-        }
 
-        updateFileOcrStatus(localFileId, OcrStatus.ERROR, undefined, data.error);
-        onError?.(localFileId, data.error);
+        // Após o upload, file.id já é o documentId (UUID)
+        updateFileOcrStatus(data.documentId, OcrStatus.ERROR, undefined, data.error);
+        onError?.(data.documentId, data.error);
       });
 
-      // Verificar status de arquivos em processamento ao reconectar
-      const processingFiles = files.filter(f => 
-        f.ocrStatus === OcrStatus.PROCESSING || 
+      const processingFiles = files.filter(f =>
+        f.ocrStatus === OcrStatus.PROCESSING ||
         f.ocrStatus === OcrStatus.UPLOADING
       );
-      
+
       if (processingFiles.length > 0) {
-        console.log(`🔄 Reconectado: verificando status de ${processingFiles.length} arquivo(s) em processamento`);
-        // Aguardar um pouco para garantir que o WebSocket está pronto
         setTimeout(() => {
           if (isMounted) {
             processingFiles.forEach(file => {
-              const documentId = fileIdMapRef.current.get(file.id) || file.id;
-              checkFileStatus(documentId).catch(err => {
+              // Após o upload, file.id já é o documentId (UUID)
+              checkFileStatus(file.id).catch(err => {
                 console.error('❌ Erro ao verificar status após reconexão:', err);
               });
             });
@@ -401,18 +367,19 @@ export const useOcr = (
 
     connectWebSocket();
 
-    // Cleanup: desconectar WebSocket quando componente desmontar
     return () => {
       isMounted = false;
+      if (manualRefreshTimerRef.current) {
+        window.clearTimeout(manualRefreshTimerRef.current);
+        manualRefreshTimerRef.current = null;
+      }
       if (socket) {
         console.log('🧹 Desconectando WebSocket');
         socket.disconnect();
         socketRef.current = null;
       }
-      // Não limpar processingRef aqui para não interromper requisições em andamento
-      // processingRef.current.clear();
     };
-  }, [files.length, updateFileOcrStatus, onComplete, onError, checkFileStatus]);
+  }, [files.length]);
 
   // Estatísticas
   const stats = {

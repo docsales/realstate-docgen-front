@@ -1,168 +1,101 @@
 /**
  * Componente de feedback visual para status de processamento OCR
+ * Design: inline compacto, monocromatico (slate + primary), sem bordas coloridas
  */
 
-import { Loader2, CheckCircle2, AlertCircle, Clock, Upload } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CheckCircle2, AlertCircle, Clock, Upload } from 'lucide-react';
 import type { OcrStatus } from '@/types/ocr.types';
 
 interface OcrStatusLoaderProps {
   status: OcrStatus;
   fileName: string;
   error?: string;
-  progress?: number;
   processingTime?: number;
 }
+
+const processingMessages = [
+  'Analisando documento...',
+  'Extraindo dados...',
+  'Processando...',
+];
 
 export const OcrStatusLoader: React.FC<OcrStatusLoaderProps> = ({
   status,
   fileName,
   error,
-  progress = 0,
   processingTime,
 }) => {
-  // Configuração de status
-  const statusConfig = {
-    idle: {
-      icon: Clock,
-      label: 'Aguardando',
-      color: 'text-slate-400',
-      bgColor: 'bg-slate-50',
-      borderColor: 'border-slate-200',
-    },
-    uploading: {
-      icon: Upload,
-      label: 'Enviando',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      borderColor: 'border-blue-200',
-    },
-    processing: {
-      icon: Loader2,
-      label: 'Processando OCR',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-200',
-    },
-    completed: {
-      icon: CheckCircle2,
-      label: 'Concluído',
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      borderColor: 'border-green-200',
-    },
-    error: {
-      icon: AlertCircle,
-      label: 'Erro',
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
-      borderColor: 'border-red-200',
-    },
-  };
+  const [msgIdx, setMsgIdx] = useState(0);
 
-  const config = statusConfig[status];
-  const Icon = config.icon;
-  const isAnimating = status === 'uploading' || status === 'processing';
+  useEffect(() => {
+    if (status === 'processing') {
+      const interval = setInterval(() => {
+        setMsgIdx((prev) => (prev + 1) % processingMessages.length);
+      }, 2500);
+      return () => clearInterval(interval);
+    }
+    setMsgIdx(0);
+  }, [status]);
+
+  const isError = status === 'error';
+
+  const label =
+    status === 'idle' ? 'Aguardando' :
+      status === 'uploading' ? 'Enviando...' :
+        status === 'processing' ? processingMessages[msgIdx] :
+          status === 'completed' ? 'Processado' :
+            'Erro ao processar';
 
   return (
-    <div 
+    <div
       className={`
-        relative overflow-hidden rounded-lg border-2 p-4 transition-all duration-300
-        ${config.borderColor} ${config.bgColor}
+        flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200
+        ${isError ? 'bg-red-50 border border-red-200' : 'bg-slate-50 border border-slate-200'}
       `}
     >
-      {/* Barra de progresso */}
-      {(status === 'uploading' || status === 'processing') && (
-        <div className="absolute top-0 left-0 right-0 h-1 bg-slate-200">
-          <div 
-            className={`h-full transition-all duration-300 ${
-              status === 'uploading' ? 'bg-blue-500' : 'bg-purple-500'
-            }`}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      )}
-
-      <div className="flex items-start gap-3">
-        {/* Ícone com animação */}
-        <div className={`flex-shrink-0 ${config.color}`}>
-          <Icon 
-            className={`w-5 h-5 ${isAnimating ? 'animate-spin' : ''}`}
-          />
-        </div>
-
-        {/* Conteúdo */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h4 className={`text-sm font-semibold ${config.color} truncate`}>
-              {config.label}
-            </h4>
-            {processingTime && status === 'completed' && (
-              <span className="text-xs text-slate-500">
-                {(processingTime / 1000).toFixed(1)}s
-              </span>
-            )}
-          </div>
-
-          <p className="text-xs text-slate-600 truncate" title={fileName}>
-            {fileName}
-          </p>
-
-          {/* Mensagem de erro */}
-          {status === 'error' && error && (
-            <p className="text-xs text-red-600 mt-2 line-clamp-2">
-              {error}
-            </p>
-          )}
-
-          {/* Indicador de progresso textual */}
-          {(status === 'uploading' || status === 'processing') && (
-            <div className="flex items-center gap-2 mt-2">
-              <div className="flex-1 bg-slate-200 rounded-full h-1.5">
-                <div 
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    status === 'uploading' ? 'bg-blue-500' : 'bg-purple-500'
-                  }`}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <span className="text-xs text-slate-500 font-medium">
-                {progress}%
-              </span>
-            </div>
-          )}
-
-          {/* Mensagem de sucesso */}
-          {status === 'completed' && (
-            <p className="text-xs text-green-600 mt-1 font-medium">
-              ✓ Dados extraídos com sucesso
-            </p>
-          )}
-        </div>
+      {/* Icon */}
+      <div className={`flex-shrink-0 ${isError ? 'text-red-500' : 'text-slate-400'}`}>
+        {status === 'idle' && <Clock className="w-4 h-4" />}
+        {status === 'uploading' && <Upload className="w-4 h-4 animate-pulse" />}
+        {status === 'processing' && <span className="loading loading-spinner loading-sm text-slate-400" />}
+        {status === 'completed' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+        {status === 'error' && <AlertCircle className="w-4 h-4" />}
       </div>
 
-      {/* Pulse animation para processing */}
-      {status === 'processing' && (
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute inset-0 bg-purple-200 opacity-20 animate-pulse" />
-        </div>
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <span className={`text-xs font-medium ${isError ? 'text-red-700' : 'text-slate-600'}`}>
+          {label}
+        </span>
+        {status === 'error' && error && (
+          <p className="text-xs text-red-500 mt-0.5 line-clamp-1">{error}</p>
+        )}
+      </div>
+
+      {/* Processing time (completed only) */}
+      {status === 'completed' && processingTime && (
+        <span className="text-[11px] text-slate-400 flex-shrink-0 tabular-nums">
+          {(processingTime / 1000).toFixed(1)}s
+        </span>
       )}
     </div>
   );
 };
 
 /**
- * Componente compacto para exibir apenas o status inline
+ * Badge compacto inline para status OCR
  */
 export const OcrStatusBadge: React.FC<{
   status: OcrStatus;
   compact?: boolean;
 }> = ({ status, compact = false }) => {
   const statusConfig = {
-    idle: { icon: Clock, label: 'Aguardando', color: 'bg-slate-100 text-slate-600' },
-    uploading: { icon: Upload, label: 'Enviando', color: 'bg-blue-100 text-blue-700' },
-    processing: { icon: Loader2, label: 'Processando', color: 'bg-purple-100 text-purple-700' },
-    completed: { icon: CheckCircle2, label: 'Concluído', color: 'bg-green-100 text-green-700' },
-    error: { icon: AlertCircle, label: 'Erro', color: 'bg-red-100 text-red-700' },
+    idle: { icon: Clock, label: 'Aguardando', color: 'bg-slate-100 text-slate-500' },
+    uploading: { icon: '', label: 'Enviando', color: 'bg-slate-100 text-slate-600' },
+    processing: { icon: '', label: 'Processando', color: 'bg-slate-100 text-slate-600' },
+    completed: { icon: CheckCircle2, label: 'Concluido', color: 'bg-emerald-50 text-emerald-600' },
+    error: { icon: AlertCircle, label: 'Erro', color: 'bg-red-50 text-red-600' },
   };
 
   const config = statusConfig[status];
@@ -170,10 +103,12 @@ export const OcrStatusBadge: React.FC<{
   const isAnimating = status === 'uploading' || status === 'processing';
 
   return (
-    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${config.color}`}>
-      <Icon className={`w-3 h-3 ${isAnimating ? 'animate-spin' : ''}`} />
+    <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium ${config.color}`}>
+      {isAnimating
+        ? <Icon className="w-3 h-3" />
+        : <span className={`loading loading-spinner loading-sm ${config.color}`} />
+    }
       {!compact && <span>{config.label}</span>}
     </div>
   );
 };
-

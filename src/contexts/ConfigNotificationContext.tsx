@@ -1,10 +1,11 @@
-import React, { createContext, useState, useEffect, type ReactNode } from 'react';
+import React, { createContext, useState, useEffect, type ReactNode, useContext } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { settingsService } from '@/services/settings.service';
 import { webhooksService } from '@/services/webhooks.service';
 import type { DocumentTemplate, WebhookToken } from '@/types/settings.types';
+import { Button } from '@/components/Button';
 
 export interface ConfigNotificationContextType {
   missingConfigs: string[];
@@ -30,24 +31,16 @@ export const ConfigNotificationProvider: React.FC<{ children: ReactNode }> = ({ 
     const missing: string[] = [];
 
     try {
-      // Check API Key
-      if (!user.docsalesApiKey || user.docsalesApiKey.trim() === '') {
-        missing.push('DocSales API Key');
-      }
-
-      // Check Folder ID
-      if (!user.folderId || user.folderId.trim() === '') {
-        missing.push('Folder ID');
-      }
-
-      // Check User Email
+      // Check Account Settings (API key / folder / email default)
       try {
-        const settings = await settingsService.getUserSettings();
-        if (!settings.docsalesUserEmail || settings.docsalesUserEmail.trim() === '') {
-          missing.push('Email do DocSales');
-        }
+        const account = await settingsService.getAccount();
+        if (!account.docsalesApiKey || account.docsalesApiKey.trim() === '') missing.push('DocSales API Key');
+        if (!account.folderId || account.folderId.trim() === '') missing.push('Folder ID');
+        if (!account.defaultDocsalesUserEmail || account.defaultDocsalesUserEmail.trim() === '') missing.push('Email do DocSales');
       } catch (error) {
         console.error('Erro ao verificar configurações do usuário:', error);
+        missing.push('DocSales API Key');
+        missing.push('Folder ID');
         missing.push('Email do DocSales');
       }
 
@@ -125,13 +118,14 @@ export const ConfigNotificationProvider: React.FC<{ children: ReactNode }> = ({ 
                   </Link>
                 </p>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                icon={<X className="w-3.5 h-3.5" />}
+                size="sm"
                 onClick={() => setIsDismissed(true)}
-                className="cursor-pointer text-yellow-600 hover:text-yellow-800 transition-colors"
-                title="Dispensar"
-              >
-                <X className="w-5 h-5" />
-              </button>
+                className="tooltip tooltip-left text-yellow-600 hover:text-yellow-800 transition-colors"
+                data-tip="Dispensar"
+              />
             </div>
           </div>
         </div>
@@ -142,10 +136,9 @@ export const ConfigNotificationProvider: React.FC<{ children: ReactNode }> = ({ 
 };
 
 export const useConfigNotification = () => {
-  const context = React.useContext(ConfigNotificationContext);
+  const context = useContext(ConfigNotificationContext);
   if (context === undefined) {
     throw new Error('useConfigNotification must be used within a ConfigNotificationProvider');
   }
   return context;
 };
-

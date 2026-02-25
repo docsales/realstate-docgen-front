@@ -134,14 +134,23 @@ export class DocumentChecklistService {
 
   /**
    * Remove documentos duplicados (considera id + de como chave única)
+   * Se 'de' não existir, usa apenas o id
    */
   private removeDuplicateDocuments(documents: DocumentModel[]): DocumentModel[] {
     const seen = new Map<string, DocumentModel>();
     
     documents.forEach(doc => {
-      const key = `${doc.id}_${doc.de}`;
+      // Criar chave única - se 'de' não existir, usar apenas o id
+      const key = doc.de ? `${doc.id}_${doc.de}` : doc.id;
+      
       if (!seen.has(key)) {
         seen.set(key, doc);
+      } else {
+        // Se já existe, mesclar obrigatório (priorizar true)
+        const existing = seen.get(key)!;
+        if (doc.obrigatorio && !existing.obrigatorio) {
+          seen.set(key, doc);
+        }
       }
     });
 

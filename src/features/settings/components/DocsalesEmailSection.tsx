@@ -49,13 +49,13 @@ export function DocsalesEmailSection({ initialValue, onSave }: DocsalesEmailSect
 
         <div className="flex items-center gap-3">
           <Button
+            variant="primary"
             onClick={handleSave}
             disabled={isSaving || value.length === 0}
-            variant="primary"
             isLoading={isSaving}
+            icon={<Save className="w-4 h-4" />}
             className="bg-[#ef0474] text-white border-none rounded-sm hover:bg-[#d00366] transition-colors"
           >
-            <Save className="w-4 h-4" />
             {isSaving ? 'Salvando...' : 'Salvar'}
           </Button>
 

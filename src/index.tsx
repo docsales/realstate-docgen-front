@@ -15,7 +15,31 @@ if (!rootElement) {
 }
 
 const root = createRoot(rootElement);
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutos
+      gcTime: 10 * 60 * 1000, // 10 minutos (cacheTime foi renomeado)
+      retry: (failureCount, error: any) => {
+        if (error?.response?.status >= 400 && error?.response?.status < 500) {
+          if (error?.response?.status === 408 || error?.response?.status === 429) {
+            return failureCount < 2;
+          }
+          return false;
+        }
+        // Retry até 3x para erros 5xx e rede
+        return failureCount < 3;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      refetchOnWindowFocus: false, // Evita refetch excessivo
+      networkMode: 'online', // Pausa queries quando offline
+    },
+    mutations: {
+      retry: false,
+      networkMode: 'online',
+    },
+  },
+});
 
 root.render(
   <StrictMode>
