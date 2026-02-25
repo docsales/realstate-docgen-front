@@ -53,13 +53,14 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               {title}
             </h3>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<X className="w-3.5 h-3.5" />}
             onClick={onClose}
-            className="cursor-pointer text-slate-400 hover:text-slate-600 transition-colors"
             disabled={isLoading}
-          >
-            <X className="w-5 h-5" />
-          </button>
+            className="transition-colors"
+          />
         </div>
 
         {/* Body */}

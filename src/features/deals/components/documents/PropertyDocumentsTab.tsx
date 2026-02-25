@@ -6,6 +6,7 @@ import { AlertBanner } from './AlertBanner';
 import type { ConsolidatedChecklist } from '@/types/checklist.types';
 import { generateFileId } from '@/utils/generateFileId';
 import { ocrService } from '@/services/ocr.service';
+import { Button } from '@/components/Button';
 
 interface PropertyDocumentsTabProps {
 	propertyState: PropertyState;
@@ -33,7 +34,9 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 	const deedLabel = deedCountClamped === 1 ? '1 matrícula' : `${deedCountClamped} matrículas`;
 	
 	// Obter documentos da API ou fallback para array vazio
-	const requiredDocuments = checklist?.imovel.documentos || [];
+	const allDocuments = checklist?.imovel.documentos || [];
+	const mandatoryDocuments = allDocuments.filter(d => d.obrigatorio);
+	const optionalDocuments = allDocuments.filter(d => !d.obrigatorio);
 	const alerts = checklist?.imovel.alertas || [];
 
 	const handleFileUpload = (files: File[], documentType: string) => {
@@ -113,9 +116,9 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 
 	return (
 		<div className="space-y-6">
-			<div className="flex items-center gap-3 mb-6">
-				<Home className="w-6 h-6 text-primary" />
-				<h3 className="text-xl font-bold text-slate-800">Documentos do Imóvel</h3>
+			<div className="flex items-center gap-2 mb-4">
+				<Home className="w-4 h-4 text-slate-400" />
+				<h3 className="text-sm font-semibold text-slate-700">Documentos do Imovel</h3>
 			</div>
 
 			{/* Erro de vinculação */}
@@ -125,12 +128,13 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 					<div className="flex-1">
 						<p className="text-sm text-red-800">{linkError}</p>
 					</div>
-					<button
+					<Button
+						variant="link"
+						size="sm"
+						icon={<X className="w-4 h-4" />}
 						onClick={() => setLinkError(null)}
-						className="cursor-pointer text-red-400 hover:text-red-600 transition-colors"
-					>
-						<X className="w-4 h-4" />
-					</button>
+						className="text-red-400 hover:text-red-600 transition-colors"
+					/>
 				</div>
 			)}
 
@@ -139,35 +143,31 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 				<AlertBanner alerts={alerts} />
 			)}
 
-			{/* Informações do imóvel */}
-			<div className="bg-gradient-to-r from-purple-50 to-purple-100 px-4 py-3 rounded-lg border border-purple-200">
-				<h4 className="font-bold text-purple-900">Informações do Imóvel</h4>
-				<div className="text-sm text-purple-700 mt-1 flex flex-wrap gap-x-4 gap-y-1">
-					<span>Tipo: {propertyType === 'urbano' ? 'Urbano' : 'Rural'}</span>
-					<span>•</span>
-					<span>Situação: {propertyState.replace('_', ' ')}</span>
-					{deedCountClamped > 1 && (
-						<>
-							<span>•</span>
-							<span>{deedLabel}</span>
-						</>
-					)}
+			{/* Informacoes do imovel */}
+			<div className="flex items-center justify-between px-1 py-2 border-b border-slate-100">
+				<div>
+					<h4 className="font-semibold text-sm text-slate-800">Informacoes do Imovel</h4>
+					<div className="text-xs text-slate-400 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+						<span>{propertyType === 'urbano' ? 'Urbano' : 'Rural'}</span>
+						<span>{propertyState.replace('_', ' ')}</span>
+						{deedCountClamped > 1 && <span>{deedLabel}</span>}
+					</div>
 				</div>
 				{deedCountClamped > 1 && (
-					<div className="mt-2 text-sm font-semibold text-purple-900">
-						Faça upload de <span className="underline">{deedLabel}</span> (campo aceita até 5 documentos).
-					</div>
+					<p className="text-xs text-slate-500">
+						Envie {deedLabel}
+					</p>
 				)}
 			</div>
 
-			{/* Lista de documentos obrigatórios */}
+			{/* Mandatory documents */}
 			<div className="space-y-3">
-				{requiredDocuments.length > 0 ? (
-					requiredDocuments.map((doc) => {
+				{mandatoryDocuments.length > 0 ? (
+					mandatoryDocuments.map((doc) => {
 						const isMatricula = doc.id === 'MATRICULA';
 						const extraHint =
 							deedCountClamped > 1 && isMatricula
-								? `\n\nObrigatório: envie ${deedLabel}.`
+								? `\n\nEnvie ${deedLabel}.`
 								: '';
 
 						return (
@@ -189,10 +189,36 @@ export const PropertyDocumentsTab: React.FC<PropertyDocumentsTabProps> = ({
 				) : (
 					<div className="text-center py-12 text-slate-500">
 						<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
-						<p className="text-sm text-slate-500">Carregando documentos necessários...</p>
+						<p className="text-sm text-slate-500">Carregando documentos necessarios...</p>
 					</div>
 				)}
 			</div>
+
+			{/* Optional documents */}
+			{optionalDocuments.length > 0 && (
+				<div className="space-y-3">
+					<p className="text-[11px] uppercase tracking-wide font-medium text-slate-400 mt-4 mb-1">Opcionais</p>
+					{optionalDocuments.map((doc) => {
+						const isMatricula = doc.id === 'MATRICULA';
+						return (
+							<DocumentRequirementItem
+								key={`${doc.id}_opt`}
+								documentId={doc.id}
+								documentName={doc.nome}
+								description={doc.observacao || undefined}
+								uploadedFiles={propertyFiles}
+								allFiles={propertyFiles}
+								onFileUpload={handleFileUpload}
+								onRemoveFile={onRemoveFile}
+								onLinkExistingFile={handleLinkExistingFile}
+								linkingFileId={linkingFileId}
+								maxFiles={isMatricula ? deedCountClamped : 5}
+								isOptional
+							/>
+						);
+					})}
+				</div>
+			)}
 		</div>
 	);
 };

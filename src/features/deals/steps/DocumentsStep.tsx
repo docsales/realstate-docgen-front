@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/Button';
-import { AlertTriangle, ArrowLeft, ArrowRight, RefreshCcw, RotateCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, RefreshCcw } from 'lucide-react';
 import type { UploadedFile, DealConfig, Person } from '@/types/types';
 import { BuyerDocumentsTab } from '../components/documents/BuyerDocumentsTab';
 import { SellerDocumentsTab } from '../components/documents/SellerDocumentsTab';
@@ -9,6 +9,7 @@ import { ProposalDocumentsTab } from '../components/documents/ProposalDocumentsT
 import { documentChecklistService } from '../services/document-checklist.service';
 import type { ConsolidatedChecklist, ChecklistRequestDTO } from '@/types/checklist.types';
 import { ChecklistSummary } from '../components/documents/ChecklistSummary';
+import { DocumentStatusPanel } from '../components/documents/DocumentStatusPanel';
 import { useOcr } from '@/hooks/useOcr';
 import { useRemoveDocumentFromDeal } from '../hooks/useDeals';
 import { useCoupleValidation } from '../hooks/useCoupleValidation';
@@ -468,7 +469,7 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 	}, [dealId]);
 
 	const validationGate = useCallback(() => {
-		return { canContinue: true, message: 'Validação desabilitada temporariamente' };
+		return { canContinue: true, message: '' };
 	}, [])
 
 	// Código original
@@ -746,84 +747,23 @@ export const DocumentsStep: React.FC<DocumentsStepProps> = ({
 
 	return (
 		<div className="space-y-6 animate-in fade-in duration-500">
-			{/* Checklist Summary */}
+			{/* Block 1 - Checklist Summary (static info: mandatory count, complexity, deadline) */}
 			{checklist && (
 				<ChecklistSummary
 					checklist={checklist}
-					uploadedFiles={files}
 					config={config}
 				/>
 			)}
 
-			{/* Status Panel */}
-			{files.length > 0 && (ocrStats.processing > 0 || ocrStats.uploading > 0 || ocrStats.completed > 0) && (
-				<div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200 rounded-2xl p-6 shadow-lg backdrop-blur-sm">
-					<div className="flex items-center justify-between mb-4">
-						<div className="flex items-center gap-3">
-							<div className="relative">
-								<div className="w-4 h-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-pulse"></div>
-								<div className="absolute inset-0 w-4 h-4 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full animate-ping opacity-75"></div>
-							</div>
-							<h3 className="font-bold text-lg text-slate-800">Status dos Documentos</h3>
-						</div>
+			{/* Block 2 - Document Status (dynamic: uploaded, processing, completed, errors + progress bar) */}
+			<DocumentStatusPanel
+				files={files}
+				ocrStats={ocrStats}
+				isCheckingStatus={isCheckingStatus}
+				onManualRefresh={handleManualRefresh}
+			/>
 
-						{/* Botão de refresh manual */}
-						{ocrStats.processing > 0 && (
-							<button
-								onClick={handleManualRefresh}
-								disabled={isCheckingStatus}
-								className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-indigo-50 rounded-md border border-indigo-300 shadow-sm transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-								title="Atualizar status"
-							>
-								<RotateCw className={`w-4 h-4 text-indigo-600 ${isCheckingStatus ? 'animate-spin' : ''}`} />
-								<span className="text-sm font-semibold text-indigo-800">
-									{isCheckingStatus ? 'Atualizando...' : 'Atualizar'}
-								</span>
-							</button>
-						)}
-					</div>
-
-					<div className="grid grid-cols-5 gap-4">
-						<div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 text-center border border-slate-200 shadow-sm">
-							<div className="text-3xl font-bold text-slate-800 mb-1">{ocrStats.total}</div>
-							<div className="text-xs font-medium text-slate-600 uppercase tracking-wide">Total</div>
-						</div>
-						<div className="bg-blue-50/80 backdrop-blur-sm rounded-xl p-4 text-center border border-blue-200 shadow-sm">
-							<div className="text-3xl font-bold text-blue-700 mb-1">{ocrStats.uploading}</div>
-							<div className="text-xs font-medium text-blue-600 uppercase tracking-wide">Enviando</div>
-						</div>
-						<div className="bg-gradient-to-br from-purple-50 to-indigo-50 backdrop-blur-sm rounded-xl p-4 text-center border border-purple-200 shadow-sm relative overflow-hidden">
-							{ocrStats.processing > 0 && (
-								<div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 to-indigo-400/20 animate-pulse"></div>
-							)}
-							<div className="text-3xl font-bold text-purple-700 mb-1 flex items-center justify-center gap-2 relative z-10">
-								{ocrStats.processing}
-								{ocrStats.processing > 0 && (
-									<div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-								)}
-							</div>
-							<div className="text-xs font-medium text-purple-600 uppercase tracking-wide relative z-10">Processando</div>
-						</div>
-						<div className="bg-green-50/80 backdrop-blur-sm rounded-xl p-4 text-center border border-green-200 shadow-sm">
-							<div className="text-3xl font-bold text-green-700 mb-1">{ocrStats.completed}</div>
-							<div className="text-xs font-medium text-green-600 uppercase tracking-wide">Concluído</div>
-						</div>
-						<div className="bg-red-50/80 backdrop-blur-sm rounded-xl p-4 text-center border border-red-200 shadow-sm">
-							<div className="text-3xl font-bold text-red-700 mb-1">{ocrStats.error}</div>
-							<div className="text-xs font-medium text-red-600 uppercase tracking-wide">Erro</div>
-						</div>
-					</div>
-
-					{isOcrProcessing && (
-						<div className="mt-4 flex items-center gap-3 text-sm text-slate-700 bg-white/60 backdrop-blur-sm rounded-lg px-4 py-2 border border-indigo-200">
-							<div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-							<span className="font-medium">Processando seus documentos...</span>
-						</div>
-					)}
-				</div>
-			)}
-
-			{/* Tabs Navigation */}
+				{/* Tabs Navigation */}
 			<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
 				<div ref={documentsTabRef} className="border-b border-slate-200 bg-slate-50/30">
 					<div className="flex">

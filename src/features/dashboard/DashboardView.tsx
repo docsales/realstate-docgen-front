@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/Button';
-import { FilePlus, Search, CheckCircle2, Clock, Grid, List, Loader2, AlertCircle, X, Calendar, FileText, Hourglass } from 'lucide-react';
+import { FilePlus, Search, CheckCircle2, Clock, Grid, List, AlertCircle, X, Calendar, FileText, Hourglass } from 'lucide-react';
 import type { DealStatus, Signatory } from '@/types/types';
 import { useDealsInfinite } from '../deals/hooks/useDeals';
 import { UtilsService } from '@/services/utils.service';
@@ -171,8 +171,11 @@ export const DashboardView: React.FC = () => {
           <h1 className="text-3xl font-bold text-slate-800">Meus Contratos</h1>
           <p className="text-slate-500">Gerencie e acompanhe o status de suas negociações.</p>
         </div>
-        <Button onClick={() => navigate('/deals/new')} className="btn btn-md">
-          <FilePlus className="w-5 h-5" />
+        <Button
+          variant="primary"
+          icon={<FilePlus className="w-5 h-5" />}
+          onClick={() => navigate('/deals/new')}
+        >
           Novo Contrato
         </Button>
       </div>
@@ -192,18 +195,12 @@ export const DashboardView: React.FC = () => {
 
         {/* View Toggle Pill */}
         <div className="flex bg-slate-200 p-1 rounded-full border border-slate-300">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`cursor-pointer flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Grid className="w-4 h-4" /> Cards
-          </button>
-          <button
-            onClick={() => setViewMode('table')}
-            className={`cursor-pointer flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === 'table' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <List className="w-4 h-4" /> Tabela
-          </button>
+          <Button variant="link" size="sm" icon={<Grid className="w-4 h-4" />} onClick={() => setViewMode('grid')} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === 'grid' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+            Cards
+          </Button>
+          <Button variant="link" size="sm" icon={<List className="w-4 h-4" />} onClick={() => setViewMode('table')} className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewMode === 'table' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+            Tabela
+          </Button>
         </div>
       </div>
 
@@ -247,7 +244,7 @@ export const DashboardView: React.FC = () => {
       {/* Empty state quando não encontra localmente */}
       {searchTerm && localFilteredDeals.length === 0 && !serverSearchTerm && allDeals.length > 0 && (
         <div className="text-center py-8 text-slate-500 bg-slate-50 border border-slate-200 rounded-lg">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
+          <span className="loading loading-spinner loading-md text-primary mx-auto mb-2" />
           <p>Nenhum contrato encontrado localmente.</p>
           <p className="text-sm">Buscando no servidor...</p>
         </div>

@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { UploadCloud, FileCheck, X } from 'lucide-react';
 import type { UploadedFile } from '@/types/types';
+import { Button } from '@/components/Button';
 
 interface DocumentUploadProps {
 	onFilesSelected: (files: File[]) => void;
@@ -45,9 +46,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
 			</div>
 			<h4 className="text-lg font-semibold text-slate-800">Arraste seus documentos aqui</h4>
 			<p className="text-slate-500 mt-2">Suporta PDF, JPG, PNG (Max {maxSize}MB)</p>
-			<button className="mt-6 text-sm px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 pointer-events-none">
+			<Button variant="secondary" size="sm" className="mt-6 text-sm px-4 py-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 pointer-events-none">
 				Selecionar Arquivos
-			</button>
+			</Button>
 		</div>
 	);
 };
@@ -71,10 +72,10 @@ export const DocumentList: React.FC<DocumentListProps> = ({ files, onRemove }) =
 					>
 						<div className="flex items-center gap-3 flex-1">
 							<div className={`p-2 rounded-lg ${f.validated === true
-									? 'bg-green-100 text-green-700'
-									: f.validated === false
-										? 'bg-red-100 text-red-700'
-										: 'bg-slate-100 text-slate-600'
+								? 'bg-green-100 text-green-700'
+								: f.validated === false
+									? 'bg-red-100 text-red-700'
+									: 'bg-slate-100 text-slate-600'
 								}`}>
 								<FileCheck className="w-5 h-5" />
 							</div>
@@ -84,16 +85,10 @@ export const DocumentList: React.FC<DocumentListProps> = ({ files, onRemove }) =
 									<span>{(f.file.size / 1024 / 1024).toFixed(2)} MB</span>
 									<span>•</span>
 									<span className="text-primary font-semibold">{f.type}</span>
-									{f.validated === true && (
-										<>
-											<span>•</span>
-											<span className="text-green-600 font-semibold">Validado</span>
-										</>
-									)}
 									{f.validated === false && (
 										<>
 											<span>•</span>
-											<span className="text-red-600 font-semibold">Erro na validação</span>
+											<span className="text-red-600 font-semibold">Erro na validacao</span>
 										</>
 									)}
 								</div>
@@ -102,12 +97,13 @@ export const DocumentList: React.FC<DocumentListProps> = ({ files, onRemove }) =
 								)}
 							</div>
 						</div>
-						<button
+						<Button
+							variant="link"
+							size="sm"
+							icon={<X className="w-5 h-5" />}
 							onClick={() => onRemove(f.id)}
-							className="cursor-pointer text-red-500 hover:text-red-700 ml-4"
-						>
-							<X className="w-5 h-5" />
-						</button>
+							className="text-red-500 hover:text-red-700 ml-4"
+						/>
 					</div>
 				))}
 			</div>

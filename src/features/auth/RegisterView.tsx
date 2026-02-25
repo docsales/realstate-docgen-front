@@ -114,11 +114,11 @@ export const RegisterView: React.FC<{ onNavigateToLogin?: () => void }> = () => 
           </Button>
         </form>
 
-        <div className="mt-6 text-center text-sm">
+        <div className="mt-6 text-center text-sm flex justify-center items-center gap-2">
           <span className="text-slate-500">Já tem uma conta? </span>
-          <button onClick={() => navigate('/login')} className="cursor-pointer text-primary font-semibold hover:underline">
+          <Button variant="link" onClick={() => navigate('/login')} className="m-0 p-0 text-primary font-semibold hover:underline">
             Faça Login
-          </button>
+          </Button>
         </div>
       </div>
     </div>

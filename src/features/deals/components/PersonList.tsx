@@ -171,11 +171,11 @@ export const PersonList: React.FC<PersonListProps> = ({
         </div>
         {showAddButton && (
           <Button
+            variant="secondary"
             onClick={handleAddPerson}
+            icon={<Plus className="w-4 h-4" />}
             className="flex items-center gap-2 btn-md"
-            variant='ghost'
           >
-            <Plus className="w-4 h-4" />
             Adicionar
           </Button>
         )}
@@ -203,13 +203,14 @@ export const PersonList: React.FC<PersonListProps> = ({
         <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-200">
           <Users className="w-12 h-12 mx-auto text-slate-300 mb-2" />
           <p className="text-slate-500">Nenhuma pessoa adicionada</p>
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={handleAddPerson}
+            icon={<Plus className="w-4 h-4" />}
             className="mt-3 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-colors"
           >
             Adicionar Pessoa
-          </button>
+          </Button>
         </div>
       )}
     </div>

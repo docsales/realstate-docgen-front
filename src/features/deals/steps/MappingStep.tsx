@@ -28,6 +28,7 @@ import type {
 import { dealsService } from '../services/deals.service';
 import { UtilsService } from '@/services/utils.service';
 import { IAMappingLoader } from '../components/IAMappingLoader';
+import { Button } from '@/components/Button';
 
 interface MappingStepProps {
   mappings: Record<string, MappingValue>;
@@ -956,7 +957,9 @@ export const MappingStep: React.FC<MappingStepProps> = ({
               `}
               placeholder="Digite ou arraste um valor..."
             />
-            <button
+            <Button
+              variant="link"
+              size="sm"
               onClick={() => {
                 onMap(fieldId, null, 'manual');
                 // Remover da lista de pré-mapeados ao limpar
@@ -968,20 +971,23 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                   });
                 }
               }}
-              className="cursor-pointer text-red-400 hover:text-red-600 p-1 z-10 relative flex-shrink-0 transition-colors"
-              title="Remover mapeamento"
+              className="tooltip tooltip-left text-red-400 hover:text-red-600 p-1 z-10 relative flex-shrink-0 transition-colors"
+              data-tip="Remover mapeamento"
             >
-              <Trash className="w-4 h-4" />
-            </button>
+              <span className="text-red-400 hover:text-red-600 p-1 z-10 relative flex-shrink-0 transition-colors">
+                <Trash className="w-4 h-4" />
+              </span>
+            </Button>
           </div>
         ) : (
           <div className={`h-8 flex items-center text-sm italic transition-colors pointer-events-none ${isActive ? 'text-primary font-medium' : 'text-slate-400'}`}>
             {isActive ? 'Soltar para mapear!' : 'Arraste uma variável ou clique aqui...'}
           </div>
-        )}
+        )
+        }
 
         {isActive && <div className="absolute inset-0 bg-blue-400/5 pointer-events-none rounded-lg animate-pulse" />}
-      </div>
+      </div >
     );
   };
 
@@ -1166,8 +1172,9 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  icon={<Copy className="w-4 h-4" />}
                   className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors"
                   onClick={async () => {
                     const text =
@@ -1189,17 +1196,16 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                     }
                   }}
                 >
-                  <Copy className="w-4 h-4" />
                   {hasCopiedExpanded ? 'Copiado!' : 'Copiar'}
-                </button>
-                <button
-                  type="button"
-                  className="cursor-pointer p-2 hover:bg-slate-200 rounded-md text-slate-600"
+                </Button>
+                <Button
+                  variant="link"
+                  size="sm"
+                  icon={<X className="w-4 h-4" />}
+                  className="tooltip tooltip-bottom p-2 hover:bg-slate-200 rounded-md text-slate-600"
                   onClick={() => setExpandedOcrItem(null)}
-                  title="Fechar"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                  data-tip="Fechar"
+                />
               </div>
             </div>
 
@@ -1240,13 +1246,16 @@ export const MappingStep: React.FC<MappingStepProps> = ({
                 </p>
 
                 {/* Botão para expandir/recolher lista */}
-                <button
+                <Button
+                  variant="link"
+                  size="sm"
+                  icon={<ChevronRight className="w-4 h-4 transition-transform duration-300 ${isAiBannerExpanded ? 'rotate-90' : ''}" />}
                   onClick={() => setIsAiBannerExpanded(!isAiBannerExpanded)}
-                  className="cursor-pointer text-xs font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-1 transition-colors"
+                  className="tooltip tooltip-bottom text-xs font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-1 transition-colors"
+                  data-tip={isAiBannerExpanded ? 'Ocultar detalhes' : 'Ver todos os mapeamentos'}
                 >
-                  <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${isAiBannerExpanded ? 'rotate-90' : ''}`} />
                   {isAiBannerExpanded ? 'Ocultar detalhes' : 'Ver todos os mapeamentos'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1317,26 +1326,32 @@ export const MappingStep: React.FC<MappingStepProps> = ({
             {/* Botões de ação */}
             <div className="flex items-center gap-3">
               {/* Botão de re-processar pré-mapeamentos (sempre visível) */}
-              <button
+              <Button
+                variant="link"
+                size="sm"
                 onClick={handleReprocessPreMappings}
                 disabled={isLoadingVariables || isReprocessing}
-                className="cursor-pointer flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-700 bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border border-purple-300 rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Re-extrai propostas com prompts atualizados e recalcula pré-mapeamentos. Use após alterações em prompts/schemas no backend."
+                className="tooltip tooltip-bottom relative p-0"
+                data-tip="Re-extrai propostas com prompts atualizados e recalcula pré-mapeamentos. Use após alterações em prompts/schemas no backend."
               >
-                <RotateCcw className={`w-4 h-4 ${isReprocessing ? 'animate-spin' : ''}`} />
-                {isReprocessing ? 'Re-processando...' : 'Re-processar IA'}
-              </button>
+                <span className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-700 bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border border-purple-300 rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isReprocessing ? <span className="loading loading-spinner loading-sm" aria-hidden="true" /> : <RotateCcw className="w-4 h-4" />}
+                  {isReprocessing ? 'Re-processando...' : 'Re-processar IA'}
+                </span>
+              </Button>
 
               {/* Botão de refresh variáveis (ação manual) */}
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<RefreshCw className="w-4 h-4 ${isRefreshingVariables ? 'animate-spin' : ''}" />}
                 onClick={handleRefreshVariables}
                 disabled={isLoadingVariables || isRefreshingVariables}
                 className="cursor-pointer flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Atualizar variáveis do template"
               >
-                <RefreshCw className={`w-4 h-4 ${isRefreshingVariables ? 'animate-spin' : ''}`} />
                 {isRefreshingVariables ? 'Atualizando...' : 'Atualizar'}
-              </button>
+              </Button>
             </div>
           </div>
 

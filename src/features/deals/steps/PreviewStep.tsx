@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Button } from '../../../components/Button';
-import { ArrowRight, CheckCircle2, ExternalLink, FilePenLine, FileText, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink, FilePenLine, FileText, RefreshCw } from 'lucide-react';
 import type { GeneratePreviewResponse } from '@/types/types';
 import { useDeal, useStartPreviewJob } from '../hooks/useDeals';
 import { DocumentWritingLoader } from '../components/DocumentWritingLoader';
@@ -14,9 +14,10 @@ interface PreviewStepProps {
 	dealName: string;
 	mappedCount: number;
 	onGenerate: () => void;
+	onBack?: () => void;
 }
 
-export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mappedCount, onGenerate }) => {
+export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mappedCount, onGenerate, onBack }) => {
 	const { data: deal, isLoading, refetch: refetchDeal } = useDeal(dealId);
 	const startPreviewJobMutation = useStartPreviewJob();
 	const [status, setStatus] = useState<'idle' | 'generating' | 'done'>('idle');
@@ -258,35 +259,68 @@ export const PreviewStep: React.FC<PreviewStepProps> = ({ dealId, dealName, mapp
 			)}
 
 			{status === 'done' && (
-				<div className="bg-white p-8 rounded-2xl shadow-lg border border-green-100 max-w-lg w-full text-center space-y-6">
-					<div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
-						<CheckCircle2 className="w-8 h-8 text-green-600" />
-					</div>
-					<div>
-						<h3 className="text-2xl font-bold text-slate-800">Preview Gerado!</h3>
-						<p className="text-slate-500 mt-2">Seu documento foi criado com sucesso. Você pode visualizá-lo e editá-lo antes de enviar.</p>
+				<div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-lg w-full space-y-6">
+					{/* Success header */}
+					<div className="text-center space-y-2">
+						<div className="bg-green-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
+							<CheckCircle2 className="w-6 h-6 text-green-600" />
+						</div>
+						<h3 className="text-xl font-bold text-slate-800">Preview gerado com sucesso</h3>
+						<p className="text-sm text-slate-500">Revise o documento e avance quando estiver pronto.</p>
 					</div>
 
-					<div className="flex gap-4 flex-col">
-						<Button variant="secondary" className="w-full flex items-center gap-2 justify-center" onClick={() => window.open(preview?.edit_url, '_blank')}>
-							<ExternalLink className="w-4 h-4" />
-							<span>Abrir no Google Docs</span>
+					{/* Primary action: Open document */}
+					<button
+						type="button"
+						onClick={() => window.open(preview?.edit_url, '_blank')}
+						className="cursor-pointer w-full flex items-center gap-4 p-4 rounded-xl border-2 border-primary/20 bg-blue-50/50 hover:bg-blue-50 hover:border-primary/40 transition-all group"
+					>
+						<div className="flex-shrink-0 w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+							<FileText className="w-6 h-6 text-primary" />
+						</div>
+						<div className="flex-1 text-left">
+							<p className="text-sm font-semibold text-slate-800">Abrir documento</p>
+							<p className="text-xs text-slate-500 mt-0.5">Visualizar e editar no Google Docs</p>
+						</div>
+						<ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-primary transition-colors flex-shrink-0" />
+					</button>
+
+					{/* Divider */}
+					<div className="border-t border-slate-100" />
+
+					{/* Navigation actions */}
+					<div className="flex flex-col gap-3">
+						{/* Main CTA: Advance to signatories */}
+						<Button onClick={onGenerate} icon={<ArrowRight className="w-5 h-5" />} iconPosition="right">
+							Avancar para Signatarios
 						</Button>
-						<Button
-							variant="secondary"
-							className="w-full flex items-center gap-2 justify-center"
-							onClick={() => handleGenerate(true)}
-							disabled={startPreviewJobMutation.isPending}
-						>
-							<RefreshCw className={`w-4 h-4 ${startPreviewJobMutation.isPending ? 'animate-spin' : ''}`} />
-							<span>Regerar Preview</span>
-						</Button>
-						<Button onClick={onGenerate} className="w-full justify-center flex items-center gap-2">
-							<span>Avançar para Signatários</span>
-							<ArrowRight className="w-4 h-4" />
-						</Button>
+
+						{/* Secondary actions row */}
+						<div className="flex items-center gap-2">
+							{onBack && (
+								<Button
+									variant="ghost"
+									size="md"
+									icon={<ArrowLeft className="w-3.5 h-3.5" />}
+									onClick={onBack}
+									className="flex-1"
+								>
+									Ajustar variaveis
+								</Button>
+							)}
+							<Button
+								variant="ghost"
+								size="md"
+								icon={<RefreshCw className="w-3.5 h-3.5" />}
+								className="flex-1"
+								onClick={() => handleGenerate(true)}
+								isLoading={startPreviewJobMutation.isPending}
+								disabled={startPreviewJobMutation.isPending}
+							>
+								Regerar documento
+							</Button>
+						</div>
 					</div>
-					<p className="text-xs text-slate-400">Nota: O documento abre em nova aba.</p>
 				</div>
 			)}
 

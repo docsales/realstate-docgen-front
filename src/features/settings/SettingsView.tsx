@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Settings as SettingsIcon } from 'lucide-react';
 import { settingsService } from '../../services/settings.service';
@@ -16,6 +17,7 @@ import { DocsalesEmailSection } from './components/DocsalesEmailSection';
 import { TemplatesSection } from './components/TemplatesSection';
 import { TemplateForm } from './components/TemplateForm';
 import { WebhooksSection } from './components/WebhooksSection';
+import { Button } from '@/components/Button';
 
 export function SettingsView() {
   const navigate = useNavigate();
@@ -129,13 +131,15 @@ export function SettingsView() {
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <button
+          <Button
+            variant="link"
+            size="sm"
             onClick={() => navigate('/dashboard')}
-            className="cursor-pointer flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-4 transition-colors"
+            icon={<ArrowLeft className="w-5 h-5" />}
+            className="flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-4 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
             Voltar
-          </button>
+          </Button>
           <div className="flex items-center gap-3">
             <SettingsIcon className="w-8 h-8 text-[#ef0474]" />
             <div>
@@ -167,14 +171,16 @@ export function SettingsView() {
         </div>
       </div>
 
-      {/* Template Form Modal */}
-      {showTemplateForm && (
-        <TemplateForm
-          template={editingTemplate}
-          onSave={handleSaveTemplate}
-          onClose={() => setShowTemplateForm(false)}
-        />
-      )}
+      {/* Template Form Modal (portal no body para garantir visibilidade) */}
+      {showTemplateForm &&
+        createPortal(
+          <TemplateForm
+            template={editingTemplate}
+            onSave={handleSaveTemplate}
+            onClose={() => setShowTemplateForm(false)}
+          />,
+          document.body
+        )}
     </div>
   );
 }

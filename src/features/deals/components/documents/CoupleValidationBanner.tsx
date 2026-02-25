@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle2, AlertTriangle, Info, RefreshCw, XCircle } from 'lucide-react';
 import { useCoupleValidation } from '../../hooks/useCoupleValidation';
 import { useCoupleValidationSocket } from '../../hooks/useCoupleValidationSocket';
+import { Button } from '@/components/Button';
 
 interface CoupleValidationBannerProps {
   dealId: string;
@@ -106,23 +107,16 @@ export const CoupleValidationBanner: React.FC<CoupleValidationBannerProps> = ({
               )}
             </div>
           </div>
-          <button
+          <Button
+            variant="link"
+            icon={<RefreshCw className="w-4 h-4" />}
             onClick={handleValidate}
+            isLoading={validateCouple.isPending || isValidating}
             disabled={validateCouple.isPending || isValidating}
-            className="cursor-pointer px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium whitespace-nowrap"
+            className="text-blue-600 hover:text-blue-800 transition-colors"
           >
-            {(validateCouple.isPending || isValidating) ? (
-              <>
-                <span className="loading loading-spinner loading-sm" />
-                Validando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4" />
-                Validar Casal
-              </>
-            )}
-          </button>
+            Validar Casal
+          </Button>
         </div>
       </div>
     );
@@ -190,16 +184,16 @@ export const CoupleValidationBanner: React.FC<CoupleValidationBannerProps> = ({
           )}
 
           <div className="flex items-center justify-between">
-            <button
+            <Button
+              variant="link"
+              icon={<RefreshCw className="w-4 h-4" />}
               onClick={handleValidate}
+              isLoading={validateCouple.isPending || isValidating}
               disabled={validateCouple.isPending || isValidating}
-              className="cursor-pointer text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-blue-600 hover:text-blue-800 transition-colors"
             >
-              <RefreshCw className={`w-4 h-4 ${(validateCouple.isPending || isValidating) ? 'animate-spin' : ''}`} />
-              {(validateCouple.isPending || isValidating)
-                ? 'Validando...'
-                : `Revalidar ${manualAttempts > 0 ? `(${manualAttempts} tentativa${manualAttempts > 1 ? 's' : ''})` : ''}`}
-            </button>
+              Revalidar {manualAttempts > 0 ? `(${manualAttempts} tentativa${manualAttempts > 1 ? 's' : ''})` : ''}
+            </Button>
             {lastError && (
               <p className="text-xs text-red-600 flex items-center gap-1">
                 <XCircle className="w-3 h-3" />

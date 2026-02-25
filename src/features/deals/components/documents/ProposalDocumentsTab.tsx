@@ -4,6 +4,7 @@ import type { UploadedFile } from '@/types/types';
 import { DocumentRequirementItem } from './DocumentRequirementItem';
 import type { ConsolidatedChecklist } from '@/types/checklist.types';
 import { generateFileId } from '@/utils/generateFileId';
+import { Button } from '@/components/Button';
 
 interface ProposalDocumentsTabProps {
 	uploadedFiles: UploadedFile[];
@@ -38,9 +39,10 @@ export const ProposalDocumentsTab: React.FC<ProposalDocumentsTabProps> = ({
 
 	return (
 		<div className="space-y-6">
-			<div className="flex items-center gap-3 mb-6">
-				<FileText className="w-6 h-6 text-primary" />
-				<h3 className="text-xl font-bold text-slate-800">Proposta Comercial</h3>
+			<div className="flex items-center gap-2 mb-4">
+				<FileText className="w-4 h-4 text-slate-400" />
+				<h3 className="text-sm font-semibold text-slate-700">Proposta Comercial</h3>
+				<span className="text-[10px] uppercase tracking-wide font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Opcional</span>
 			</div>
 
 			{/* Erro de vinculação */}
@@ -50,34 +52,33 @@ export const ProposalDocumentsTab: React.FC<ProposalDocumentsTabProps> = ({
 					<div className="flex-1">
 						<p className="text-sm text-red-800">{linkError}</p>
 					</div>
-					<button
+					<Button
+						variant="link"
+						size="sm"
+						icon={<X className="w-4 h-4" />}
 						onClick={() => setLinkError(null)}
-						className="cursor-pointer text-red-400 hover:text-red-600 transition-colors"
-					>
-						<X className="w-4 h-4" />
-					</button>
+						className="text-red-400 hover:text-red-600 transition-colors"
+					/>
 				</div>
 			)}
 
-			<div className="bg-gradient-to-r from-amber-50 to-amber-100 px-4 py-3 rounded-lg border border-amber-200">
-				<h4 className="font-bold text-amber-900">O que enviar</h4>
-				<p className="text-sm text-amber-800 mt-1">
-					Envie a proposta comercial (PDF/Imagem) ou prints de conversa (WhatsApp/e-mail) contendo os termos
-					da negociação. O sistema cuidará do resto automaticamente para apoiar o mapeamento das variáveis
+			<div className="px-1 py-2 border-b border-slate-100">
+				<p className="text-xs text-slate-400">
+					Envie a proposta comercial (PDF/Imagem) ou prints de conversa (WhatsApp/e-mail) contendo os termos da negociacao.
 				</p>
 			</div>
 
-			{/* Lista de documentos obrigatórios */}
 			<div className="space-y-3">
 				<DocumentRequirementItem
 					documentId="PROPOSTA_COMERCIAL"
 					documentName="Proposta Comercial"
-					description="Pode ser formulário, e-mail, WhatsApp, manuscrito digitalizado, etc. O OCR é agnóstico ao formato."
+					description="Pode ser formulario, e-mail, WhatsApp, manuscrito digitalizado, etc."
 					uploadedFiles={proposalFiles}
 					allFiles={proposalFiles}
 					onFileUpload={handleFileUpload}
 					onRemoveFile={onRemoveFile}
 					maxFiles={5}
+					isOptional
 				/>
 			</div>
 		</div>

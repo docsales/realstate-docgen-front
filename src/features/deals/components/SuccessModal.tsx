@@ -42,12 +42,13 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close Button */}
-          <button
+          <Button
+            variant="link"
+            size="sm"
+            icon={<X className="w-5 h-5" />}
             onClick={onClose}
             className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          />
 
           {/* Success Icon with Animation */}
           <motion.div
@@ -94,10 +95,10 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
               {onOpenPreview && (
                 <Button
                   onClick={onOpenPreview}
-                  className="w-full flex items-center justify-center gap-2"
+                  icon={<ExternalLink className="w-4 h-4" />}
+                  className="w-full"
                 >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Abrir no Google Docs</span>
+                  Abrir no Google Docs
                 </Button>
               )}
 

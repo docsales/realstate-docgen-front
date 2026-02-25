@@ -8,6 +8,7 @@ import type { ConsolidatedChecklist } from '@/types/checklist.types';
 import { generateFileId } from '@/utils/generateFileId';
 import { ocrService } from '@/services/ocr.service';
 import { getCoupleMembers } from '@/types/types';
+import { Button } from '@/components/Button';
 
 interface SellerDocumentsTabProps {
 	sellers: Person[];
@@ -115,9 +116,9 @@ export const SellerDocumentsTab: React.FC<SellerDocumentsTabProps> = ({
 
 	return (
 		<div className="space-y-6">
-			<div className="flex items-center gap-3 mb-6">
-				<UserCheck className="w-6 h-6 text-primary" />
-				<h3 className="text-xl font-bold text-slate-800">Documentos dos Vendedores</h3>
+			<div className="flex items-center gap-2 mb-4">
+				<UserCheck className="w-4 h-4 text-slate-400" />
+				<h3 className="text-sm font-semibold text-slate-700">Documentos dos Vendedores</h3>
 			</div>
 
 			{/* Erro de vinculação */}
@@ -127,12 +128,13 @@ export const SellerDocumentsTab: React.FC<SellerDocumentsTabProps> = ({
 					<div className="flex-1">
 						<p className="text-sm text-red-800">{linkError}</p>
 					</div>
-					<button
+					<Button
+						variant="link"
+						size="sm"
+						icon={<X className="w-4 h-4" />}
 						onClick={() => setLinkError(null)}
-						className="cursor-pointer text-red-400 hover:text-red-600 transition-colors"
-					>
-						<X className="w-4 h-4" />
-					</button>
+						className="text-red-400 hover:text-red-600 transition-colors"
+					/>
 				</div>
 			)}
 
@@ -165,46 +167,46 @@ export const SellerDocumentsTab: React.FC<SellerDocumentsTabProps> = ({
 							const sellerSpecificFiles = sellerFiles.filter(f => f.personId === member.id);
 							const isSpouse = member.isSpouse || false;
 							const expectedDe = isSpouse ? 'conjuge' : 'titular';
-							const sellerDocuments = requiredDocuments.filter(doc => 
+							const allDocsForMember = requiredDocuments.filter(doc => 
 								!doc.de || doc.de === expectedDe
 							);
-							const validatedCount = sellerDocuments.filter(doc => {
+							const mandatoryDocs = allDocsForMember.filter(doc => doc.obrigatorio);
+							const optionalDocs = allDocsForMember.filter(doc => !doc.obrigatorio);
+							const validatedMandatory = mandatoryDocs.filter(doc => {
 								const relatedFiles = sellerSpecificFiles.filter(f => f.type === doc.id);
 								return relatedFiles.length > 0 && relatedFiles.every(f => f.validated === true);
 							}).length;
 
 							result.push(
-								<div key={member.id} className="space-y-4 border-b-2 border-slate-100 last:border-b-0">
+								<div key={member.id} className="space-y-3">
 									{/* Header do vendedor */}
-									<div className={`bg-gradient-to-r ${member.coupleId ? 'from-pink-50 to-pink-100 border-pink-200' : 'from-blue-50 to-blue-100 border-blue-200'} px-4 py-3 rounded-lg border shadow-sm`}>
-										<div className="flex items-center justify-between">
-											<div className="flex items-center gap-2">
-												{member.coupleId && (
-													<Heart className="w-4 h-4 text-pink-600" />
-												)}
-												<div>
-													<h4 className={`font-bold text-lg ${member.coupleId ? 'text-pink-900' : 'text-blue-900'}`}>
-														Vendedor {++displayIndex} {member.isSpouse ? '(Cônjuge)' : ''}
-													</h4>
-													<p className={`text-sm mt-1 ${member.coupleId ? 'text-pink-700' : 'text-blue-700'}`}>
-														{member.personType === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
-														{member.maritalState && ` • ${member.maritalState.replace('_', ' ')}`}
-													</p>
-												</div>
+									<div className="flex items-center justify-between px-1 py-2 border-b border-slate-100">
+										<div className="flex items-center gap-2">
+											{member.coupleId && (
+												<Heart className="w-3.5 h-3.5 text-slate-400" />
+											)}
+											<div>
+												<h4 className="font-semibold text-sm text-slate-800">
+													Vendedor {++displayIndex} {member.isSpouse ? '(Conjuge)' : ''}
+												</h4>
+												<p className="text-xs text-slate-400 mt-0.5">
+													{member.personType === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica'}
+													{member.maritalState && ` - ${member.maritalState.replace('_', ' ')}`}
+												</p>
 											</div>
-											<div className="text-right">
-												<div className={`text-2xl font-bold ${member.coupleId ? 'text-pink-900' : 'text-blue-900'}`}>
-													{validatedCount}/{sellerDocuments.length}
-												</div>
-												<div className={`text-xs ${member.coupleId ? 'text-pink-700' : 'text-blue-700'}`}>documentos</div>
-											</div>
+										</div>
+										<div className="text-right">
+											<span className="text-sm font-bold text-slate-800 tabular-nums">
+												{validatedMandatory}/{mandatoryDocs.length}
+											</span>
+											<span className="text-xs text-slate-400 ml-1">obrigatorios</span>
 										</div>
 									</div>
 
-									{/* Documentos obrigatórios deste vendedor */}
+									{/* Mandatory documents */}
 									<div className="space-y-3 pl-2">
-										{sellerDocuments.length > 0 ? (
-											sellerDocuments.map((doc) => (
+										{mandatoryDocs.length > 0 ? (
+											mandatoryDocs.map((doc) => (
 												<DocumentRequirementItem
 													key={`${doc.id}_${doc.de || 'generic'}_${member.id}`}
 													documentId={doc.id}
@@ -222,10 +224,33 @@ export const SellerDocumentsTab: React.FC<SellerDocumentsTabProps> = ({
 										) : (
 											<div className="text-center py-12 text-slate-500">
 												<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
-												<p className="text-sm text-slate-500">Carregando documentos necessários...</p>
+												<p className="text-sm text-slate-500">Carregando documentos necessarios...</p>
 											</div>
 										)}
 									</div>
+
+									{/* Optional documents */}
+									{optionalDocs.length > 0 && (
+										<div className="space-y-3 pl-2">
+											<p className="text-[11px] uppercase tracking-wide font-medium text-slate-400 mt-4 mb-1">Opcionais</p>
+											{optionalDocs.map((doc) => (
+												<DocumentRequirementItem
+													key={`${doc.id}_${doc.de || 'generic'}_${member.id}_opt`}
+													documentId={doc.id}
+													documentName={doc.nome}
+													description={doc.observacao}
+													uploadedFiles={sellerSpecificFiles}
+													allFiles={sellerFiles}
+													onFileUpload={handleFileUpload}
+													onRemoveFile={onRemoveFile}
+													onLinkExistingFile={handleLinkExistingFile}
+													personId={member.id}
+													linkingFileId={linkingFileId}
+													isOptional
+												/>
+											))}
+										</div>
+									)}
 								</div>
 							);
 						});
@@ -250,41 +275,41 @@ export const SellerDocumentsTab: React.FC<SellerDocumentsTabProps> = ({
 						const sellerSpecificFiles = sellerFiles.filter(f => f.personId === seller.id);
 						const isSpouse = seller.isSpouse || false;
 						const expectedDe = isSpouse ? 'conjuge' : 'titular';
-						const sellerDocuments = requiredDocuments.filter(doc => 
+						const allDocsForSeller = requiredDocuments.filter(doc => 
 							!doc.de || doc.de === expectedDe
 						);
-						const validatedCount = sellerDocuments.filter(doc => {
+						const mandatoryDocs = allDocsForSeller.filter(doc => doc.obrigatorio);
+						const optionalDocs = allDocsForSeller.filter(doc => !doc.obrigatorio);
+						const validatedMandatory = mandatoryDocs.filter(doc => {
 							const relatedFiles = sellerSpecificFiles.filter(f => f.type === doc.id);
 							return relatedFiles.length > 0 && relatedFiles.every(f => f.validated === true);
 						}).length;
 
 						result.push(
-							<div key={seller.id} className="space-y-4 border-b-2 border-slate-100 last:border-b-0">
+							<div key={seller.id} className="space-y-3">
 								{/* Header do vendedor */}
-								<div className="bg-gradient-to-r from-blue-50 to-blue-100 px-4 py-3 rounded-lg border border-blue-200 shadow-sm">
-									<div className="flex items-center justify-between">
-										<div>
-											<h4 className="font-bold text-blue-900 text-lg">
-												Vendedor {++displayIndex}
-											</h4>
-											<p className="text-sm text-blue-700 mt-1">
-												{seller.personType === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
-												{seller.maritalState && ` • ${seller.maritalState.replace('_', ' ')}`}
-											</p>
-										</div>
-										<div className="text-right">
-											<div className="text-2xl font-bold text-blue-900">
-												{validatedCount}/{sellerDocuments.length}
-											</div>
-											<div className="text-xs text-blue-700">documentos</div>
-										</div>
+								<div className="flex items-center justify-between px-1 py-2 border-b border-slate-100">
+									<div>
+										<h4 className="font-semibold text-sm text-slate-800">
+											Vendedor {++displayIndex}
+										</h4>
+										<p className="text-xs text-slate-400 mt-0.5">
+											{seller.personType === 'PF' ? 'Pessoa Fisica' : 'Pessoa Juridica'}
+											{seller.maritalState && ` - ${seller.maritalState.replace('_', ' ')}`}
+										</p>
+									</div>
+									<div className="text-right">
+										<span className="text-sm font-bold text-slate-800 tabular-nums">
+											{validatedMandatory}/{mandatoryDocs.length}
+										</span>
+										<span className="text-xs text-slate-400 ml-1">obrigatorios</span>
 									</div>
 								</div>
 
-								{/* Documentos obrigatórios deste vendedor */}
+								{/* Mandatory documents */}
 								<div className="space-y-3 pl-2">
-									{sellerDocuments.length > 0 ? (
-										sellerDocuments.map((doc) => (
+									{mandatoryDocs.length > 0 ? (
+										mandatoryDocs.map((doc) => (
 											<DocumentRequirementItem
 												key={`${doc.id}_${doc.de || 'generic'}_${seller.id}`}
 												documentId={doc.id}
@@ -302,10 +327,33 @@ export const SellerDocumentsTab: React.FC<SellerDocumentsTabProps> = ({
 									) : (
 										<div className="text-center py-12 text-slate-500">
 											<span className="loading loading-spinner loading-lg w-12 h-12 text-[#ef0474] mx-auto mb-4"></span>
-											<p className="text-sm text-slate-500">Carregando documentos necessários...</p>
+											<p className="text-sm text-slate-500">Carregando documentos necessarios...</p>
 										</div>
 									)}
 								</div>
+
+								{/* Optional documents */}
+								{optionalDocs.length > 0 && (
+									<div className="space-y-3 pl-2">
+										<p className="text-[11px] uppercase tracking-wide font-medium text-slate-400 mt-4 mb-1">Opcionais</p>
+										{optionalDocs.map((doc) => (
+											<DocumentRequirementItem
+												key={`${doc.id}_${doc.de || 'generic'}_${seller.id}_opt`}
+												documentId={doc.id}
+												documentName={doc.nome}
+												description={doc.observacao}
+												uploadedFiles={sellerSpecificFiles}
+												allFiles={sellerFiles}
+												onFileUpload={handleFileUpload}
+												onRemoveFile={onRemoveFile}
+												onLinkExistingFile={handleLinkExistingFile}
+												personId={seller.id}
+												linkingFileId={linkingFileId}
+												isOptional
+											/>
+										))}
+									</div>
+								)}
 							</div>
 						);
 					}
