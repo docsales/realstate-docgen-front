@@ -184,6 +184,10 @@ export const getCoupleMembers = (coupleId: string, people: Person[]): Person[] =
   return people.filter(p => p.coupleId === coupleId);
 };
 
+export const isPersonCouple = (person: Person): boolean => {
+  return !!person.coupleId && !!person.maritalState && (person.maritalState === 'casado' || person.maritalState === 'uniao_estavel');
+};
+
 export const CONTRACT_FIELDS = [
   { id: 'seller_name', label: 'Nome do Vendedor' },
   { id: 'seller_cpf', label: 'CPF do Vendedor' },
