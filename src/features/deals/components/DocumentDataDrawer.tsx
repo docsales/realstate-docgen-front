@@ -2,6 +2,7 @@ import React from 'react';
 import { X, FileText, Download, ExternalLink, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { DealDocument } from '@/types/types';
 import { Button } from '@/components/Button';
+import { DocumentVariablesView } from './DocumentVariablesView';
 
 interface DocumentDataDrawerProps {
   document: DealDocument | null;
@@ -61,148 +62,6 @@ function getStatusBadge(status: string) {
 }
 
 // -------------------------------------------------------------------
-// Smart variable rendering
-// -------------------------------------------------------------------
-
-// Known sections with friendly labels
-const SECTION_LABELS: Record<string, string> = {
-  titular: 'Titular',
-  conjuge: 'Conjuge',
-  conjuge_1: 'Conjuge 1',
-  conjuge_2: 'Conjuge 2',
-  imovel: 'Imovel',
-  matricula: 'Matricula',
-  aquisicao: 'Aquisicao',
-  status_juridico: 'Status Juridico',
-  validacao: 'Validacao',
-  endereco: 'Endereco',
-  documento: 'Documento',
-};
-
-// Known field labels
-const FIELD_LABELS: Record<string, string> = {
-  nome_completo: 'Nome completo',
-  cpf: 'CPF',
-  rg: 'RG',
-  data_nascimento: 'Data de nascimento',
-  filiacao: 'Filiacao',
-  orgao_emissor: 'Orgao emissor',
-  data_emissao: 'Data de emissao',
-  nome: 'Nome',
-  cpf_cnpj: 'CPF/CNPJ',
-  endereco_completo: 'Endereco completo',
-  cep: 'CEP',
-  bairro: 'Bairro',
-  cidade: 'Cidade',
-  estado: 'Estado',
-  numero: 'Numero',
-  cartorio: 'Cartorio',
-  area_terreno_m2: 'Area do terreno (m2)',
-  area_construida_m2: 'Area construida (m2)',
-  valor_transacao: 'Valor da transacao',
-  situacao: 'Situacao',
-  onus_ativos: 'Onus ativos',
-  alertas: 'Alertas',
-  data_casamento: 'Data do casamento',
-  regime_bens: 'Regime de bens',
-  nacionalidade: 'Nacionalidade',
-  profissao: 'Profissao',
-  estado_civil: 'Estado civil',
-  sexo: 'Sexo',
-  naturalidade: 'Naturalidade',
-  mes_referencia: 'Mes de referencia',
-  tipo_documento: 'Tipo de documento',
-};
-
-function formatFieldLabel(key: string): string {
-  return FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function renderValue(value: unknown): React.ReactNode {
-  if (value === null || value === undefined) return <span className="text-slate-400 italic">--</span>;
-  if (typeof value === 'boolean') return value ? 'Sim' : 'Nao';
-  if (typeof value === 'number') return String(value);
-  if (typeof value === 'string') return value || <span className="text-slate-400 italic">--</span>;
-  if (Array.isArray(value)) {
-    if (value.length === 0) return <span className="text-slate-400 italic">Nenhum</span>;
-    return (
-      <ul className="list-disc list-inside space-y-0.5">
-        {value.map((item, i) => (
-          <li key={i} className="text-sm text-slate-700">
-            {typeof item === 'object' ? JSON.stringify(item) : String(item)}
-          </li>
-        ))}
-      </ul>
-    );
-  }
-  if (typeof value === 'object') {
-    // Render nested object as section
-    return (
-      <div className="space-y-1.5 pl-3 border-l-2 border-slate-100">
-        {Object.entries(value as Record<string, unknown>).map(([k, v]) => (
-          <div key={k}>
-            <span className="text-xs text-slate-500">{formatFieldLabel(k)}</span>
-            <div className="text-sm text-slate-700">{renderValue(v)}</div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  return String(value);
-}
-
-function VariablesSection({ variables }: { variables: Record<string, any> }) {
-  // Group into known sections (objects) and flat fields
-  const sections: { key: string; label: string; data: Record<string, unknown> }[] = [];
-  const flatFields: { key: string; value: unknown }[] = [];
-
-  Object.entries(variables).forEach(([key, value]) => {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      sections.push({
-        key,
-        label: SECTION_LABELS[key] || formatFieldLabel(key),
-        data: value as Record<string, unknown>,
-      });
-    } else {
-      flatFields.push({ key, value });
-    }
-  });
-
-  return (
-    <div className="space-y-5">
-      {/* Flat fields first */}
-      {flatFields.length > 0 && (
-        <div className="space-y-3">
-          {flatFields.map(({ key, value }) => (
-            <div key={key}>
-              <p className="text-xs text-slate-500 mb-0.5">{formatFieldLabel(key)}</p>
-              <div className="text-sm text-slate-800 font-medium">{renderValue(value)}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Named sections */}
-      {sections.map(({ key, label, data }) => (
-        <div key={key} className="bg-slate-50 rounded-lg p-4">
-          <p className="text-xs uppercase tracking-wide font-semibold text-slate-500 mb-3">
-            {label}
-          </p>
-          <div className="space-y-3">
-            {Object.entries(data).map(([fieldKey, fieldValue]) => (
-              <div key={fieldKey}>
-                <p className="text-xs text-slate-500 mb-0.5">{formatFieldLabel(fieldKey)}</p>
-                <div className="text-sm text-slate-800 font-medium">{renderValue(fieldValue)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// -------------------------------------------------------------------
 // Main drawer component
 // -------------------------------------------------------------------
 
@@ -236,7 +95,7 @@ export const DocumentDataDrawer: React.FC<DocumentDataDrawerProps> = ({
             className="drawer-overlay"
             onClick={(e) => { e.preventDefault(); onClose(); }}
           />
-          <div className="w-full max-w-md bg-white border-l border-slate-200">
+          <div className="w-full max-w-md min-w-0 bg-white border-l border-slate-200 overflow-x-hidden flex flex-col h-full">
             {document ? (
               <>
                 {/* Header */}
@@ -290,13 +149,13 @@ export const DocumentDataDrawer: React.FC<DocumentDataDrawerProps> = ({
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto p-5">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-5">
                   {hasVariables ? (
                     <>
                       <p className="text-xs uppercase tracking-wide font-semibold text-slate-400 mb-4">
                         Dados extraidos
                       </p>
-                      <VariablesSection variables={document.variables!} />
+                      <DocumentVariablesView variables={document.variables!} />
                     </>
                   ) : document.status === 'OCR_PROCESSING' ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -324,6 +183,17 @@ export const DocumentDataDrawer: React.FC<DocumentDataDrawerProps> = ({
                       </p>
                     </div>
                   )}
+                </div>
+
+                {/* Footer (mobile-friendly close) */}
+                <div className="p-4 border-t border-slate-200 flex-shrink-0 bg-white">
+                  <Button
+                    variant="secondary"
+                    className="w-full justify-center"
+                    onClick={(e) => { e.preventDefault(); onClose(); }}
+                  >
+                    Fechar
+                  </Button>
                 </div>
               </>
             ) : (

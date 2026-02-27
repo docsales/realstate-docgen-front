@@ -514,7 +514,7 @@ export const NewDealWizard: React.FC = () => {
 
     // Salvar configurações ao avançar da etapa 1 quando o deal já existe
     if (step === 1 && dealId) {
-      setIsCreatingDeal(true);
+      setIsSaving(true);
       try {
         await updateDealMutation.mutateAsync({
           dealId,
@@ -539,10 +539,10 @@ export const NewDealWizard: React.FC = () => {
         console.error('❌ Erro ao salvar configurações:', error);
         setSaveError(error?.response?.data?.message || 'Erro ao salvar configurações. Tente novamente.');
         setTimeout(() => setSaveError(null), 5000);
-        setIsCreatingDeal(false);
+        setIsSaving(false);
         return;
       } finally {
-        setIsCreatingDeal(false);
+        setIsSaving(false);
       }
     }
 
@@ -776,6 +776,20 @@ export const NewDealWizard: React.FC = () => {
     }
   }
 
+  const saveContinueButtonText = () => {
+    if (step == 1 && isSaving) return 'Salvando configurações...';
+    if (isCreatingDeal) return 'Criando proposta...';
+    if (isSavingMappings) return 'Salvando variáveis...';
+
+    return step === 5 ? 'Finalizar e Enviar' : 'Continuar';
+  }
+
+  const saveButtonText = () => {
+    if (isSaving) return 'Salvando...';
+    if (saveSuccess) return 'Salvo!'
+    return 'Salvar'
+  }
+
   const setStepAndNavigate = (step: number, overrideDealId?: string | null) => {
     setStep(step);
     const effectiveId = getEffectiveDealId(overrideDealId);
@@ -1006,7 +1020,7 @@ export const NewDealWizard: React.FC = () => {
           )}
 
           <div className="flex justify-between items-center">
-            <Button variant="ghost" onClick={step === 1 ? () => navigate('/dashboard') : prevStep}>
+            <Button variant="secondary" icon={<ArrowLeft className="w-4 h-4" />} onClick={step === 1 ? () => navigate('/dashboard') : prevStep}>
               {step === 1 ? 'Cancelar' : 'Voltar'}
             </Button>
 
@@ -1024,19 +1038,7 @@ export const NewDealWizard: React.FC = () => {
                   disabled={isSaving || !currentStepValid}
                   className={`${isSaving ? 'opacity-50' : ''} ${saveSuccess ? '!bg-green-50 !border-green-500 !text-green-700' : ''}`}
                 >
-                  {isSaving ? (
-                    <>
-                      Salvando...
-                    </>
-                  ) : saveSuccess ? (
-                    <>
-                      Salvo!
-                    </>
-                  ) : (
-                    <>
-                      Salvar
-                    </>
-                  )}
+                  {saveButtonText()}
                 </Button>
               )}
 
@@ -1063,26 +1065,14 @@ export const NewDealWizard: React.FC = () => {
               ) : step !== 4 && (
                 <Button
                   onClick={step === 5 ? handleFinish : nextStep}
-                  disabled={!currentStepValid || isCreatingDeal || isSavingMappings}
-                  isLoading={isCreatingDeal || isSavingMappings}
+                  disabled={!currentStepValid || isCreatingDeal || isSaving || isSavingMappings}
+                  isLoading={isCreatingDeal || isSaving || isSavingMappings}
                   variant="primary"
                   icon={step === 5 ? <Send className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
                   iconPosition="right"
                   className={!currentStepValid ? 'opacity-50 grayscale' : ''}
                 >
-                  {isCreatingDeal ? (
-                    <>
-                      Criando proposta...
-                    </>
-                  ) : isSavingMappings ? (
-                    <>
-                      Salvando variáveis...
-                    </>
-                  ) : (
-                    <>
-                      {step === 5 ? 'Finalizar e Enviar' : 'Continuar'}
-                    </>
-                  )}
+                  {saveContinueButtonText()}
                 </Button>
               )}
             </div>

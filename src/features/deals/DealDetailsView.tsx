@@ -9,6 +9,7 @@ import { SignerCard } from './components/SignerCard';
 import { DealContextBanner } from './components/DealContextBanner';
 import { DocumentCategorizedList } from './components/DocumentCategorizedList';
 import { DocumentDataDrawer } from './components/DocumentDataDrawer';
+import { DocumentVariablesView } from './components/DocumentVariablesView.tsx';
 
 /* ------------------------------------------------------------------ */
 /*  Marital-state label helper                                         */
@@ -59,6 +60,21 @@ export const DealDetailsView: React.FC = () => {
 			case 'CANCELED': return <span className="bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase w-fit">Cancelado</span>;
 			case 'REJECTED': return <span className="bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase w-fit">Rejeitado</span>;
 			default: return <span className="bg-gray-100 text-gray-700 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase w-fit">{status}</span>;
+		}
+	};
+
+	const getDocumentStatusBadge = (status?: string) => {
+		if (!status) return null;
+		switch (status) {
+			case 'EXTRACTED':
+			case 'OCR_DONE':
+				return <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Processado</span>;
+			case 'OCR_PROCESSING':
+				return <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">Processando</span>;
+			case 'ERROR':
+				return <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">Erro</span>;
+			default:
+				return <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5">Pendente</span>;
 		}
 	};
 
@@ -179,6 +195,126 @@ export const DealDetailsView: React.FC = () => {
 	};
 
 	const contractSections = getContractFieldsSections();
+	const matriculaDocs = (dealData.documents || []).filter((doc: any) => doc?.documentType === 'MATRICULA');
+
+	const getDeep = (obj: any, path: string[]) => {
+		return path.reduce<any>((acc, key) => (acc != null ? acc[key] : undefined), obj);
+	};
+
+	const toDisplayText = (value: any): string | null => {
+		if (value === null || value === undefined) return null;
+		if (typeof value === 'string') return value.trim() ? value : null;
+		if (typeof value === 'number') return String(value);
+		if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+
+		if (typeof value === 'object') {
+			// Common “string-like” fields
+			const enderecoCompleto = value.endereco_completo || value.enderecoCompleto;
+			if (typeof enderecoCompleto === 'string' && enderecoCompleto.trim()) return enderecoCompleto;
+
+			const nome = value.nome || value.name;
+			if (typeof nome === 'string' && nome.trim()) return nome;
+
+			const numero = value.numero || value.number;
+			if (typeof numero === 'string' && numero.trim()) return numero;
+			if (typeof numero === 'number') return String(numero);
+
+			// Address object pieces
+			const logradouro = typeof value.logradouro === 'string' ? value.logradouro : undefined;
+			const numeroEndereco = value.numero_endereco ?? value.numeroEndereco ?? value.numero;
+			const complemento = typeof value.complemento === 'string' ? value.complemento : undefined;
+			const bairro = typeof value.bairro === 'string' ? value.bairro : undefined;
+			const cidade = typeof value.cidade === 'string' ? value.cidade : undefined;
+			const estado = typeof value.estado === 'string' ? value.estado : undefined;
+			const uf = typeof value.uf === 'string' ? value.uf : undefined;
+
+			if (logradouro || numeroEndereco || complemento || bairro || cidade || estado || uf) {
+				const parts: string[] = [];
+				const firstLine = [logradouro, numeroEndereco != null ? String(numeroEndereco) : null]
+					.filter(Boolean)
+					.join(', ');
+				if (firstLine) parts.push(firstLine);
+				if (complemento) parts.push(complemento);
+				const secondLine = [bairro, cidade].filter(Boolean).join(', ');
+				if (secondLine) parts.push(secondLine);
+				const region = [uf || estado].filter(Boolean).join('');
+				if (region) parts.push(region);
+				return parts.join(' - ');
+			}
+
+			return null;
+		}
+
+		return null;
+	};
+
+	const getMatriculaInfo = (doc: any) => {
+		const vars = doc?.variables;
+
+		const numero =
+			toDisplayText(getDeep(vars, ['matricula', 'numero'])) ||
+			toDisplayText(getDeep(vars, ['matricula', 'numero_matricula'])) ||
+			toDisplayText(getDeep(vars, ['dados_matricula', 'numero'])) ||
+			toDisplayText(getDeep(vars, ['dados_matricula', 'matricula', 'numero'])) ||
+			toDisplayText(getDeep(vars, ['dados_matricula', 'matricula', 'numero_matricula'])) ||
+			null;
+
+		const endereco =
+			toDisplayText(getDeep(vars, ['dados_matricula', 'imovel', 'endereco_completo'])) ||
+			toDisplayText(getDeep(vars, ['dados_matricula', 'imovel', 'endereco'])) ||
+			toDisplayText(getDeep(vars, ['imovel', 'endereco', 'endereco_completo'])) ||
+			toDisplayText(getDeep(vars, ['imovel', 'endereco_completo'])) ||
+			toDisplayText(getDeep(vars, ['imovel', 'endereco'])) ||
+			toDisplayText(getDeep(vars, ['endereco_completo'])) ||
+			null;
+
+		const cartorio =
+			toDisplayText(getDeep(vars, ['dados_matricula', 'cartorio', 'nome'])) ||
+			toDisplayText(getDeep(vars, ['matricula', 'cartorio', 'nome'])) ||
+			toDisplayText(getDeep(vars, ['dados_matricula', 'cartorio'])) ||
+			toDisplayText(getDeep(vars, ['matricula', 'cartorio'])) ||
+			null;
+
+		return { numero, endereco, cartorio };
+	};
+
+	const handleListRegistries = () => {
+		return (
+			<div className="space-y-2">
+				{matriculaDocs.map((doc: any, idx: number) => {
+					const info = getMatriculaInfo(doc);
+
+					const primaryLabel = info.numero
+						? `Matrícula ${info.numero}`
+						: (doc?.originalFilename ? String(doc.originalFilename) : `Matrícula ${idx + 1}`);
+
+					const secondaryParts = [info.endereco, info.cartorio].filter(Boolean);
+					const secondaryLabel =
+						secondaryParts.length > 0 ? secondaryParts.join(' • ') : null;
+
+					return (
+						<div key={doc?.id || `${doc?.originalFilename || 'matricula'}_${idx}`} className="flex items-center gap-2.5">
+							<div className="bg-slate-100 p-1.5 rounded-full">
+								<FileText className="w-3.5 h-3.5 text-slate-400" />
+							</div>
+							<div className="flex-1 min-w-0">
+								<span className="text-sm font-medium text-slate-800 block truncate">
+									{primaryLabel}
+								</span>
+								{secondaryLabel ? (
+									<span className="text-xs text-slate-500 block truncate">
+										{secondaryLabel}
+									</span>
+								) : (
+									<span className="text-xs text-slate-400 italic">Sem informações extraídas</span>
+								)}
+							</div>
+						</div>
+					);
+				})}
+			</div>
+		);
+	};
 
 	const formatFieldLabel = (key: string): string => {
 		return key
@@ -214,7 +350,7 @@ export const DealDetailsView: React.FC = () => {
 			}, 150);
 			return;
 		}
-		
+
 		setContractModalSection(section);
 		modal.showModal();
 	}
@@ -298,25 +434,31 @@ export const DealDetailsView: React.FC = () => {
 							<div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
 								<div className="flex items-center gap-2">
 									<Home className="w-4 h-4 text-slate-400" />
-									<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{"Imovel"}</span>
+									<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+										{`Imóvel${matriculaDocs.length > 0 ? ` (Matrícula${matriculaDocs.length > 1 ? 's' : ''}: ${matriculaDocs.length})` : ''}`}
+									</span>
 								</div>
-								{contractSections?.['Imóvel'] && (
+								{(contractSections?.['Imóvel'] || matriculaDocs.length > 0) && (
 									<Button variant="link" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => handleToggleDetailsModal('Imóvel')} className="text-xs text-slate-400 hover:text-slate-700 font-medium flex items-center gap-1 transition-colors">
 										Detalhes
 									</Button>
 								)}
 							</div>
 							<div className="p-4">
-								<div className="grid grid-cols-2 gap-3">
-									<div>
-										<span className="text-xs text-slate-400 block mb-0.5">{"Endereco"}</span>
-										<span className="text-sm text-slate-800 font-medium">{deal.address}</span>
+								{matriculaDocs.length > 0 ? (
+									handleListRegistries()
+								) : (
+									<div className="grid grid-cols-2 gap-3">
+										<div>
+											<span className="text-xs text-slate-400 block mb-0.5">{"Endereço"}</span>
+											<span className="text-sm text-slate-800 font-medium">{deal.address || 'Não informado'}</span>
+										</div>
+										<div>
+											<span className="text-xs text-slate-400 block mb-0.5">{"Matrícula"}</span>
+											<span className="text-sm text-slate-800 font-bold">{deal.matricula || 'Não informado'}</span>
+										</div>
 									</div>
-									<div>
-										<span className="text-xs text-slate-400 block mb-0.5">{"Matricula"}</span>
-										<span className="text-sm text-slate-800 font-bold">{deal.matricula}</span>
-									</div>
-								</div>
+								)}
 							</div>
 						</div>
 
@@ -440,7 +582,6 @@ export const DealDetailsView: React.FC = () => {
 								</div>
 							</div>
 						</div>
-
 					</div>
 				</div>
 
@@ -482,7 +623,7 @@ export const DealDetailsView: React.FC = () => {
 					type="radio"
 					name="deal_details_tabs"
 					className={`tab px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'signers' ? 'bg-white text-slate-800' : 'text-slate-500 hover:bg-white/90 hover:text-slate-400'}`}
-					aria-label={"Signatários"}
+					aria-label="Signatários"
 					onChange={() => setActiveTab('signers')}
 				/>
 				<div className="tab-content bg-white rounded-b-xl border border-slate-200 shadow-sm p-4">
@@ -503,7 +644,8 @@ export const DealDetailsView: React.FC = () => {
 						<div className="space-y-3">
 							{dealData.signers?.map((signer: Signatory) => (
 								<SignerCard
-									key={signer.id} signer={signer}
+									key={signer.id}
+									signer={signer}
 									dealStatus={dealData.status}
 									canRemove={dealData.status === 'DRAFT'}
 									onRemove={removeSigner}
@@ -567,7 +709,17 @@ export const DealDetailsView: React.FC = () => {
 			/>
 
 			{/* Modal de detalhes do contrato por seção */}
-			<dialog id="details_modal" className="modal ">
+			<dialog
+				id="details_modal"
+				className="modal "
+				onClick={(e) => {
+					if (e.target === e.currentTarget) handleToggleDetailsModal(null, true);
+				}}
+				onCancel={(e) => {
+					e.preventDefault();
+					handleToggleDetailsModal(null, true);
+				}}
+			>
 				<div className="modal-box bg-white max-w-2xl max-h-[80vh] overflow-y-auto">
 					<div className="modal-header">
 						{/* Header */}
@@ -587,14 +739,55 @@ export const DealDetailsView: React.FC = () => {
 					</div>
 					{/* Body */}
 					<div className="flex-1 overflow-y-auto p-5">
-						<div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200">
-							{(contractSections?.[contractModalSection as string] as { key: string; value: string }[])?.map(({ key, value }, idx) => (
-								<div key={idx} className="flex items-start gap-3 p-3 px-4">
-									<span className="text-xs text-slate-400 font-mono min-w-[150px] pt-0.5 break-all">{formatFieldLabel(key)}</span>
-									<span className="text-sm text-slate-800 flex-1 break-words">{value || '-'}</span>
-								</div>
-							))}
-						</div>
+						{contractModalSection === 'Imóvel' && matriculaDocs.length > 0 ? (
+							<div className="space-y-3">
+								{matriculaDocs.map((doc: any, idx: number) => {
+									const info = getMatriculaInfo(doc);
+									const title = info.numero
+										? `Matrícula ${info.numero}`
+										: (doc?.originalFilename ? String(doc.originalFilename) : `Matrícula ${idx + 1}`);
+
+									return (
+										<div key={doc?.id || `${doc?.originalFilename || 'matricula'}_${idx}`} className="collapse collapse-arrow bg-white border border-slate-200 rounded-xl">
+											<input type="checkbox" />
+											<div className="collapse-title px-4 py-3 pr-12">
+												<div className="flex items-center justify-between gap-3">
+													<div className="min-w-0">
+														<p className="text-sm font-semibold text-slate-800 truncate">{title}</p>
+														{info.endereco ? (
+															<p className="text-xs text-slate-500 truncate">{info.endereco}</p>
+														) : doc?.originalFilename ? (
+															<p className="text-xs text-slate-500 truncate">{String(doc.originalFilename)}</p>
+														) : null}
+													</div>
+													<div className="flex-shrink-0">
+														{getDocumentStatusBadge(doc?.status)}
+													</div>
+												</div>
+											</div>
+											<div className="collapse-content px-4 pb-4">
+												{doc?.variables && Object.keys(doc.variables).length > 0 ? (
+													<div className="bg-slate-50 rounded-xl border border-slate-200 p-4 overflow-x-hidden">
+														<DocumentVariablesView variables={doc.variables} />
+													</div>
+												) : (
+													<p className="text-xs text-slate-500 italic">Nenhum dado extraído para esta matrícula.</p>
+												)}
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						) : (
+							<div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200">
+								{(contractSections?.[contractModalSection as string] as { key: string; value: string }[])?.map(({ key, value }, idx) => (
+									<div key={idx} className="flex items-start gap-3 p-3 px-4">
+										<span className="text-xs text-slate-400 font-mono min-w-[150px] pt-0.5 break-all">{formatFieldLabel(key)}</span>
+										<span className="text-sm text-slate-800 flex-1 break-words">{value || '-'}</span>
+									</div>
+								))}
+							</div>
+						)}
 					</div>
 
 					{/* Footer */}

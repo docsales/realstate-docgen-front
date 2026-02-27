@@ -7,7 +7,7 @@ import { CoupleValidationBanner } from './CoupleValidationBanner';
 import type { ConsolidatedChecklist } from '@/types/checklist.types';
 import { generateFileId } from '@/utils/generateFileId';
 import { ocrService } from '@/services/ocr.service';
-import { getCoupleMembers } from '@/types/types';
+import { getCoupleMembers, isPersonCouple } from '@/types/types';
 import { Button } from '@/components/Button';
 
 interface BuyerDocumentsTabProps {
@@ -153,12 +153,10 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 
 				buyers.forEach((buyer, _) => {
 					// Se já processamos este casal, pular
-					if (buyer.coupleId && processedCouples.has(buyer.coupleId)) {
-						return;
-					}
+					if (buyer.coupleId && processedCouples.has(buyer.coupleId)) return;
 
-					// Se tem coupleId, processar todo o casal
-					if (buyer.coupleId) {
+					// Se tem coupleId e é casado ou união estável, processar todo o casal
+					if (buyer.coupleId && isPersonCouple(buyer)) {
 						processedCouples.add(buyer.coupleId);
 						const coupleMembers = getCoupleMembers(buyer.coupleId, buyers);
 						const titular = coupleMembers.find(m => !m.isSpouse);
@@ -166,7 +164,7 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 						
 						coupleMembers.forEach((member) => {
 							const buyerSpecificFiles = buyerFiles.filter(f => f.personId === member.id);
-							const isSpouse = member.isSpouse || false;
+							const isSpouse = isPersonCouple(member) ? true : false;
 							const expectedDe = isSpouse ? 'conjuge' : 'titular';
 							const allDocsForMember = requiredDocuments.filter(doc =>
 								!doc.de || doc.de === expectedDe
@@ -274,7 +272,7 @@ export const BuyerDocumentsTab: React.FC<BuyerDocumentsTabProps> = ({
 					} else {
 						// Processar comprador solteiro
 						const buyerSpecificFiles = buyerFiles.filter(f => f.personId === buyer.id);
-						const isSpouse = buyer.isSpouse || false;
+						const isSpouse = isPersonCouple(buyer) ? true : false;
 						const expectedDe = isSpouse ? 'conjuge' : 'titular';
 						const allDocsForBuyer = requiredDocuments.filter(doc =>
 							!doc.de || doc.de === expectedDe
