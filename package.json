@@ -33,6 +33,6 @@
     "daisyui": "^5.5.8",
     "sass-embedded": "^1.93.3",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^6.4.2"
   }
 }
