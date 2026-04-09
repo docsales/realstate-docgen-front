@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/Button';
-import { FilePlus, Search, CheckCircle2, Clock, Grid, List, AlertCircle, X, Calendar, FileText, Hourglass } from 'lucide-react';
-import type { DealStatus, Signatory } from '@/types/types';
-import { useDealsInfinite } from '../deals/hooks/useDeals';
+import { FilePlus, Search, CheckCircle2, Clock, Grid, List, AlertCircle, X, Calendar, FileText, Hourglass, MoreVertical, Trash2 } from 'lucide-react';
+import type { Deal, DealStatus, Signatory } from '@/types/types';
+import { useDealsInfinite, useDeleteDeal } from '../deals/hooks/useDeals';
 import { UtilsService } from '@/services/utils.service';
 import { useAuth } from '@/hooks/useAuth';
+import { ConfirmModal } from '@/components/ConfirmModal';
 
 export const DashboardView: React.FC = () => {
   const navigate = useNavigate();
@@ -13,6 +14,8 @@ export const DashboardView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [serverSearchTerm, setServerSearchTerm] = useState<string | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [dealToDelete, setDealToDelete] = useState<Deal | null>(null);
+  const deleteDealMutation = useDeleteDeal();
 
   // Refs para infinite scroll
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -275,6 +278,21 @@ export const DashboardView: React.FC = () => {
                 >
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-xs font-mono text-slate-400">#{deal.id.padStart(5, '0')}</span>
+                    <div className="dropdown dropdown-end" onClick={(e) => e.stopPropagation()}>
+                      <button tabIndex={0} role="button" className="btn btn-ghost btn-xs opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                      <ul tabIndex={0} className="dropdown-content menu bg-white rounded-box z-[100] w-36 p-1 shadow border border-slate-100 text-sm">
+                        <li>
+                          <button
+                            className="text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            onClick={() => setDealToDelete(deal)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Excluir
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
                   </div>
 
                   <div className="flex flex-col md:flex-row justify-between gap-4">
@@ -335,13 +353,14 @@ export const DashboardView: React.FC = () => {
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Signatários</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Status</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Data</th>
+                    <th className="px-6 py-4"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {dealsToDisplay.map(deal => (
                     <tr
                       key={deal.id}
-                      className="hover:bg-slate-50 cursor-pointer transition-colors"
+                      className="hover:bg-slate-50 cursor-pointer transition-colors group"
                       onClick={() => navigate(`/deals/${deal.id}`)}
                     >
                       <td className="px-6 py-4 text-xs font-mono text-slate-400">
@@ -358,6 +377,23 @@ export const DashboardView: React.FC = () => {
                       <td className="px-6 py-4">{getStatusBadge(deal.status)}</td>
                       <td className="px-6 py-4 text-slate-500 text-sm">
                         {new Date(deal.createdAt).toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="dropdown dropdown-end">
+                          <button tabIndex={0} role="button" className="btn btn-ghost btn-xs opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          <ul tabIndex={0} className="dropdown-content menu bg-white rounded-box z-[100] w-36 p-1 shadow border border-slate-100 text-sm">
+                            <li>
+                              <button
+                                className="text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                onClick={() => setDealToDelete(deal)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
+                              </button>
+                            </li>
+                          </ul>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -377,6 +413,23 @@ export const DashboardView: React.FC = () => {
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={dealToDelete !== null}
+        onClose={() => setDealToDelete(null)}
+        onConfirm={() => {
+          if (dealToDelete) {
+            deleteDealMutation.mutate(dealToDelete.id, {
+              onSuccess: () => setDealToDelete(null),
+            });
+          }
+        }}
+        title="Excluir contrato"
+        message={`Tem certeza que deseja excluir "${dealToDelete?.name}"? Todos os documentos e dados do contrato serão removidos permanentemente.`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        confirmButtonVariant="danger"
+        isLoading={deleteDealMutation.isPending}
+      />
     </div>
   );
 };

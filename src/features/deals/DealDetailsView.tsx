@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, FileText, Home, Users, DollarSign, User, Edit, AlertCircle, AlertTriangle, X, Eye } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { useDeal, useRemoveSignatoryFromDeal } from './hooks/useDeals';
+import { useDeal, useRemoveSignatoryFromDeal, useRemoveDocumentFromDeal } from './hooks/useDeals';
 import type { DealStatus, DealDocument, Signatory } from '../../types/types';
 import { mergeDealData } from './utils/extractDealData';
 import { SignerCard } from './components/SignerCard';
@@ -31,6 +31,7 @@ export const DealDetailsView: React.FC = () => {
 
 	const [removeSignerLoading, setRemoveSignerLoading] = useState(false);
 	const removeSignatoryMutation = useRemoveSignatoryFromDeal();
+	const removeDocumentMutation = useRemoveDocumentFromDeal();
 
 	const [activeTab, setActiveTab] = useState<'data' | 'docs' | 'signers' | 'validations'>('data');
 	const [selectedDoc, setSelectedDoc] = useState<DealDocument | null>(null);
@@ -606,6 +607,8 @@ export const DealDetailsView: React.FC = () => {
 						<DocumentCategorizedList
 							documents={deal.docs}
 							onSelectDocument={(doc) => setSelectedDoc(doc)}
+							onDeleteDocument={(doc) => removeDocumentMutation.mutate({ dealId: deal.id, documentId: doc.id })}
+							isDeletingDocument={removeDocumentMutation.isPending}
 						/>
 					) : (
 						<div className="p-6 text-center">

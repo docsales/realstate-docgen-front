@@ -99,6 +99,13 @@ export class DealsService {
   }
 
   /**
+   * Deleta um deal e todos os seus dados
+   */
+  async deleteDeal(dealId: string): Promise<void> {
+    await server.api.delete(`/deal/${dealId}`);
+  }
+
+  /**
    * Busca propriedades de documentos (mantido para compatibilidade)
    */
   async getProperties() {
