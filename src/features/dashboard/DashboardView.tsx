@@ -279,7 +279,7 @@ export const DashboardView: React.FC = () => {
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-xs font-mono text-slate-400">#{deal.id.padStart(5, '0')}</span>
                     <div className="dropdown dropdown-end" onClick={(e) => e.stopPropagation()}>
-                      <button tabIndex={0} role="button" className="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button tabIndex={0} role="button" className="btn btn-ghost btn-xs opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       <ul tabIndex={0} className="dropdown-content menu bg-white rounded-box z-[100] w-36 p-1 shadow border border-slate-100 text-sm">
@@ -380,7 +380,7 @@ export const DashboardView: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="dropdown dropdown-end">
-                          <button tabIndex={0} role="button" className="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button tabIndex={0} role="button" className="btn btn-ghost btn-xs opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                             <MoreVertical className="w-4 h-4" />
                           </button>
                           <ul tabIndex={0} className="dropdown-content menu bg-white rounded-box z-[100] w-36 p-1 shadow border border-slate-100 text-sm">
