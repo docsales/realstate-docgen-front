@@ -181,6 +181,23 @@ export function useRemoveSignatoryFromDeal() {
 }
 
 /**
+ * Hook para deletar um deal
+ */
+export function useDeleteDeal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (dealId: string) => dealsService.deleteDeal(dealId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: dealKeys.lists() });
+    },
+    onError: (error: any) => {
+      console.error('❌ Erro ao deletar deal:', error.message);
+    },
+  });
+}
+
+/**
  * Hook para gerar preview do contrato
  */
 export function useGeneratePreview() {

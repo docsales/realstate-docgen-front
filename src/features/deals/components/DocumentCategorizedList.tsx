@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   FileText,
   CheckCircle2,
@@ -11,13 +11,18 @@ import {
   Users,
   Home,
   Receipt,
+  MoreVertical,
+  Trash2,
 } from 'lucide-react';
 import type { DealDocument } from '@/types/types';
 import { Button } from '@/components/Button';
+import { ConfirmModal } from '@/components/ConfirmModal';
 
 interface DocumentCategorizedListProps {
   documents: DealDocument[];
   onSelectDocument: (doc: DealDocument) => void;
+  onDeleteDocument?: (doc: DealDocument) => void;
+  isDeletingDocument?: boolean;
 }
 
 // -------------------------------------------------------------------
@@ -90,7 +95,11 @@ function getStatusBadge(status: string) {
 export const DocumentCategorizedList: React.FC<DocumentCategorizedListProps> = ({
   documents,
   onSelectDocument,
+  onDeleteDocument,
+  isDeletingDocument = false,
 }) => {
+  const [docToDelete, setDocToDelete] = useState<DealDocument | null>(null);
+
   // Group by category
   const grouped = new Map<string, DealDocument[]>();
   documents.forEach((doc) => {
@@ -109,105 +118,149 @@ export const DocumentCategorizedList: React.FC<DocumentCategorizedListProps> = (
   });
 
   return (
-    <div>
-      {sortedCategories.map((category) => {
-        const docs = grouped.get(category) || [];
-        const cfg = CATEGORY_CONFIG[category] || {
-          label: category,
-          icon: <FileText className="w-4 h-4" />,
-        };
+    <>
+      <div>
+        {sortedCategories.map((category) => {
+          const docs = grouped.get(category) || [];
+          const cfg = CATEGORY_CONFIG[category] || {
+            label: category,
+            icon: <FileText className="w-4 h-4" />,
+          };
 
-        return (
-          <div key={category}>
-            {/* Category header */}
-            <div className="flex items-center gap-2 px-6 py-3 bg-slate-50 border-b border-slate-100">
-              <span className="text-slate-400">{cfg.icon}</span>
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {cfg.label}
-              </span>
-              <span className="text-[11px] text-slate-400 ml-auto tabular-nums">
-                {docs.length}
-              </span>
-            </div>
-
-            {/* Table header */}
-            <div className="hidden sm:grid sm:grid-cols-[1fr_120px_110px_auto] items-center gap-4 px-6 py-2 border-b border-slate-100 text-[11px] uppercase tracking-wide font-medium text-slate-400">
-              <span>Arquivo</span>
-              <span>Tipo</span>
-              <span>Status</span>
-              <span className="text-right">Acoes</span>
-            </div>
-
-            {/* Document rows */}
-            {docs.map((doc) => (
-              <div
-                key={doc.id}
-                className="grid grid-cols-1 sm:grid-cols-[1fr_120px_110px_auto] items-center gap-2 sm:gap-4 px-6 py-3 border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
-              >
-                {/* Filename */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex-shrink-0 w-8 h-8 rounded bg-blue-50 flex items-center justify-center">
-                    <FileText className="w-4 h-4 text-blue-500" />
-                  </div>
-                  <span className="text-sm font-medium text-slate-700 truncate">
-                    {doc.originalFilename || doc.documentType || 'Documento'}
-                  </span>
-                </div>
-
-                {/* Subcategory */}
-                <span className="text-xs text-slate-500 sm:text-left pl-11 sm:pl-0">
-                  {getSubcategory(doc.documentType)}
+          return (
+            <div key={category}>
+              {/* Category header */}
+              <div className="flex items-center gap-2 px-6 py-3 bg-slate-50 border-b border-slate-100">
+                <span className="text-slate-400">{cfg.icon}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {cfg.label}
                 </span>
+                <span className="text-[11px] text-slate-400 ml-auto tabular-nums">
+                  {docs.length}
+                </span>
+              </div>
 
-                {/* Status */}
-                <div className="pl-11 sm:pl-0">{getStatusBadge(doc.status)}</div>
+              {/* Table header */}
+              <div className="hidden sm:grid sm:grid-cols-[1fr_120px_110px_auto] items-center gap-4 px-6 py-2 border-b border-slate-100 text-[11px] uppercase tracking-wide font-medium text-slate-400">
+                <span>Arquivo</span>
+                <span>Tipo</span>
+                <span>Status</span>
+                <span className="text-right">Acoes</span>
+              </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1 justify-end pl-11 sm:pl-0">
-                  {doc.fileUrl && (
-                    <>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        icon={<ExternalLink className="w-3.5 h-3.5" />}
-                        className="tooltip tooltip-left"
-                        data-tip="Visualizar"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(doc.fileUrl, '_blank');
-                        }}
-                      />
-                      <Button
-                        variant="link"
-                        size="sm"
-                        icon={<Download className="w-3.5 h-3.5" />}
-                        className="tooltip tooltip-left"
-                        data-tip="Baixar"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(doc.fileUrl, '_blank');
-                        }}
-                      />
-                    </>
-                  )}
-                  {(doc.status === 'EXTRACTED' || doc.status === 'OCR_DONE') &&
-                    doc.variables &&
-                    Object.keys(doc.variables).length > 0 && (
+              {/* Document rows */}
+              {docs.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="grid grid-cols-1 sm:grid-cols-[1fr_120px_110px_auto] items-center gap-2 sm:gap-4 px-6 py-3 border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
+                >
+                  {/* Filename */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex-shrink-0 w-8 h-8 rounded bg-blue-50 flex items-center justify-center">
+                      <FileText className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <span className="text-sm font-medium text-slate-700 truncate">
+                      {doc.originalFilename || doc.documentType || 'Documento'}
+                    </span>
+                  </div>
+
+                  {/* Subcategory */}
+                  <span className="text-xs text-slate-500 sm:text-left pl-11 sm:pl-0">
+                    {getSubcategory(doc.documentType)}
+                  </span>
+
+                  {/* Status */}
+                  <div className="pl-11 sm:pl-0">{getStatusBadge(doc.status)}</div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 justify-end pl-11 sm:pl-0">
+                    {doc.fileUrl && (
                       <>
-                        <Button variant="link" size="sm" icon={<Database className="w-3.5 h-3.5" />} className="tooltip tooltip-left" data-tip="Ver dados extraidos" onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                          e.stopPropagation();
-                          onSelectDocument(doc);
-                        }}>
-                          <span className="hidden md:inline">Dados</span>
-                        </Button>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          icon={<ExternalLink className="w-3.5 h-3.5" />}
+                          className="tooltip tooltip-left"
+                          data-tip="Visualizar"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(doc.fileUrl, '_blank');
+                          }}
+                        />
+                        <Button
+                          variant="link"
+                          size="sm"
+                          icon={<Download className="w-3.5 h-3.5" />}
+                          className="tooltip tooltip-left"
+                          data-tip="Baixar"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(doc.fileUrl, '_blank');
+                          }}
+                        />
                       </>
                     )}
+                    {(doc.status === 'EXTRACTED' || doc.status === 'OCR_DONE') &&
+                      doc.variables &&
+                      Object.keys(doc.variables).length > 0 && (
+                        <>
+                          <Button variant="link" size="sm" icon={<Database className="w-3.5 h-3.5" />} className="tooltip tooltip-left" data-tip="Ver dados extraidos" onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            e.stopPropagation();
+                            onSelectDocument(doc);
+                          }}>
+                            <span className="hidden md:inline">Dados</span>
+                          </Button>
+                        </>
+                      )}
+                    {onDeleteDocument && (
+                      <div className="dropdown dropdown-end">
+                        <button
+                          tabIndex={0}
+                          role="button"
+                          className="btn btn-ghost btn-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="w-3.5 h-3.5" />
+                        </button>
+                        <ul tabIndex={0} className="dropdown-content menu bg-white rounded-box z-[100] w-36 p-1 shadow border border-slate-100 text-sm">
+                          <li>
+                            <button
+                              className="text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDocToDelete(doc);
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Excluir
+                            </button>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        );
-      })}
-    </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+
+      <ConfirmModal
+        isOpen={docToDelete !== null}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={() => {
+          if (docToDelete) {
+            onDeleteDocument!(docToDelete);
+            setDocToDelete(null);
+          }
+        }}
+        title="Excluir documento"
+        message={`Tem certeza que deseja excluir "${docToDelete?.originalFilename || docToDelete?.documentType}"? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        confirmButtonVariant="danger"
+        isLoading={isDeletingDocument}
+      />
+    </>
   );
 };
